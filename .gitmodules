@@ -1,0 +1,12 @@
+[submodule "lib/freetype"]
+	path = lib/freetype
+	url = https://github.com/freetype/freetype.git
+[submodule "lib/googletest"]
+	path = lib/googletest
+	url = https://github.com/google/googletest.git
+[submodule "lib/lunasvg"]
+	path = lib/lunasvg
+	url = https://github.com/sammycage/lunasvg.git
+[submodule "lib/yoga"]
+	path = lib/yoga
+	url = https://github.com/facebook/yoga.git
