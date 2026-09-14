@@ -1002,11 +1002,19 @@ void Document::_updateNode(Node& node) {
         }
     }
 
+    auto const& borderEdge = node._layoutState.borderEdge;
+    auto const innerBorderRect = Vec4{
+        (node._layoutState.computedBorderRect.x + borderEdge.left),
+        (node._layoutState.computedBorderRect.y + borderEdge.top),
+        std::max(0.0f, (node._layoutState.computedBorderRect.width - borderEdge.left - borderEdge.right)),
+        std::max(0.0f, (node._layoutState.computedBorderRect.height - borderEdge.top - borderEdge.bottom))
+    };
+
     if (
         (node._overflowX == NodeOverflow::Hidden) ||
         (node._overflowX == NodeOverflow::Scroll)
     ) {
-        auto newClipRect = node._layoutState.computedClipRect.getIntersection(node._layoutState.computedBorderRect);
+        auto newClipRect = node._layoutState.computedClipRect.getIntersection(innerBorderRect);
         node._layoutState.computedClipRect.x = newClipRect.x;
         node._layoutState.computedClipRect.width = newClipRect.width;
     }
@@ -1015,7 +1023,7 @@ void Document::_updateNode(Node& node) {
         (node._overflowY == NodeOverflow::Hidden) ||
         (node._overflowY == NodeOverflow::Scroll)
     ) {
-        auto newClipRect = node._layoutState.computedClipRect.getIntersection(node._layoutState.computedBorderRect);
+        auto newClipRect = node._layoutState.computedClipRect.getIntersection(innerBorderRect);
         node._layoutState.computedClipRect.y = newClipRect.y;
         node._layoutState.computedClipRect.height = newClipRect.height;
     }
