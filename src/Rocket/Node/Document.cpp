@@ -1110,7 +1110,6 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
     auto nodeClipRect = (node._layoutState.computedClipRect * _scale);
     auto nodeBorderRect = (node._layoutState.computedBorderRect * _scale);
     auto scissorRect = std::optional<Vec4>{};
-    auto boxScissorRect = scissorRect;
     auto layerOffset = Vec2{};
     auto layerRect = Vec4{};
     auto layerNeeded = (
@@ -1129,6 +1128,11 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
         parentClipRect.origin += nodeOffset;
         scissorRect = parentClipRect;
     }
+
+    /* The node's own box is clipped by its ancestors only; its own overflow
+       clip applies to its children. Inside a layer the ancestor clip is
+       applied when the layer is composited. */
+    auto boxScissorRect = scissorRect;
 
     if (layerNeeded) {
         auto& paint = node._paintState;

@@ -346,10 +346,10 @@ static void _SetScissor(_RenderPass const& renderPass, std::optional<Vec4> const
     auto scissorInfo = MTLScissorRect{};
 
     if (scissor.has_value()) {
-        auto const left = std::max(0, static_cast<int>(scissor->x));
-        auto const top = std::max(0, static_cast<int>(scissor->y));
-        auto const right = std::min(passWidth, static_cast<int>(scissor->x + scissor->width));
-        auto const bottom = std::min(passHeight, static_cast<int>(scissor->y + scissor->height));
+        auto const left = std::max(0, static_cast<int>(std::roundf(scissor->x)));
+        auto const top = std::max(0, static_cast<int>(std::roundf(scissor->y)));
+        auto const right = std::min(passWidth, static_cast<int>(std::roundf(scissor->x + scissor->width)));
+        auto const bottom = std::min(passHeight, static_cast<int>(std::roundf(scissor->y + scissor->height)));
 
         scissorInfo = MTLScissorRect{
             (NSUInteger)std::min(left, passWidth),
