@@ -1110,6 +1110,7 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
     auto nodeClipRect = (node._layoutState.computedClipRect * _scale);
     auto nodeBorderRect = (node._layoutState.computedBorderRect * _scale);
     auto scissorRect = std::optional<Vec4>{};
+    auto boxScissorRect = scissorRect;
     auto layerOffset = Vec2{};
     auto layerRect = Vec4{};
     auto layerNeeded = (
@@ -1162,6 +1163,7 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
         nodeBorderRect.origin -= layerOffset;
         nodeClipRect.origin -= layerOffset;
         nodeOffset -= layerOffset;
+        boxScissorRect = std::nullopt;
 
         _painter.beginPaint(
             ImagePaintTarget{
@@ -1175,11 +1177,6 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
         return radius.has_value() ? std::optional<float>{ (*radius * _scale) } : std::nullopt;
     };
 
-    /* The node's own box is clipped by its ancestors only; its own overflow
-       clip applies to its children. Inside a layer the ancestor clip is
-       applied when the layer is composited. */
-    auto const ownScissorRect = (layerNeeded ? std::optional<Vec4>{} : scissorRect);
-
     if (node._background) {
         auto const backgroundBrush = *node._background;
         auto const backgroundShape = QuadShape{
@@ -1190,7 +1187,7 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
             .borderBottomLeftRadius = scaledRadius(node._borderBottomLeftRadius),
             .borderBottomRightRadius = scaledRadius(node._borderBottomRightRadius)
         };
-        _painter.paint(backgroundShape, backgroundBrush, { .scissor = ownScissorRect });
+        _painter.paint(backgroundShape, backgroundBrush, { .scissor = boxScissorRect });
     }
 
     if (node._border) {
@@ -1207,7 +1204,7 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
             .rightBorder = (node._layoutState.borderEdge.right * _scale),
             .bottomBorder = (node._layoutState.borderEdge.bottom * _scale)
         };
-        _painter.paint(borderShape, borderBrush, { .scissor = ownScissorRect });
+        _painter.paint(borderShape, borderBrush, { .scissor = boxScissorRect });
     }
 
     auto const text = node._textState.text.get();
@@ -1311,7 +1308,7 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
             .borderBottomLeftRadius = scaledRadius(node._borderBottomLeftRadius),
             .borderBottomRightRadius = scaledRadius(node._borderBottomRightRadius)
         };
-        _painter.paint(foregroundShape, foregroundBrush, { .scissor = ownScissorRect });
+        _painter.paint(foregroundShape, foregroundBrush, { .scissor = boxScissorRect });
     }
 
     if (layerNeeded) {
