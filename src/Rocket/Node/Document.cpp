@@ -44,14 +44,18 @@ Document::Document(Window& window)
     : Node()
     , _window(window)
     , _windowSub()
-    , _mouseState(std::nullopt)
     , _painter()
     , _cursor(Cursor::Default)
     , _hoverNode(nullptr)
     , _activeNode(nullptr)
     , _focusedNode(nullptr)
+    , _mousePosition({ 0.0f, 0.0f })
+    , _mouseButton(Mouse::LeftButton)
+    , _mouseIsDown(false)
+    , _mouseIsDragging(false)
     , _yogaConfig(nullptr)
     , _scale(1.0f)
+    , _isUpdating(false)
     , _needsUpdate(true)
     , _needsRender(true)
     , _caretVisible(true)
@@ -220,12 +224,17 @@ void Document::focusNode(Node* targetNode) {
 void Document::update() {
     PROFILE
 
+    if (_isUpdating == true) {
+        return;
+    }
+
     _invalidateNode(*this);
 
     if (_needsUpdate == false) {
         return;
     }
 
+    _isUpdating = true;
     _needsUpdate = false;
     _needsRender = true;
     _renderList.clear();
@@ -256,6 +265,8 @@ void Document::update() {
         _cursor = cursor;
         _window.setCursor(cursor);
     }
+
+    _isUpdating = false;
 }
 
 void Document::render() {
@@ -263,8 +274,8 @@ void Document::render() {
 
     if (
         (_focusedNode != nullptr) &&
-        _isNodeEditable(*_focusedNode) &&
-        (_focusedNode->_firstChild->_textState.text != nullptr)
+        (_focusedNode->_firstChild->_textState.text != nullptr) &&
+        _isNodeEditable(*_focusedNode)
     ) {
         auto const& text = *_focusedNode->_firstChild->_textState.text;
         auto const phase = ((std::chrono::steady_clock::now() - _caretBlinkStart) / _caretBlinkPeriod);
@@ -327,7 +338,7 @@ std::optional<Document::_InputState> Document::_getInputState() {
     }
 }
 
-Vec2 Document::_textLocalPosition(_InputState const& inputState, Vec2 const& position) const {
+Vec2 Document::_getTextLocalPosition(_InputState const& inputState, Vec2 const& position) const {
     PROFILE
 
     auto const& textLayout = inputState.textNode._layoutState;
@@ -479,29 +490,29 @@ void Document::_mouseMove(Vec2 const& position, KeyModifiers const& modifiers) {
 
     update();
 
-    if (_mouseState.has_value()) {
+    if (_mouseIsDown == true) {
         if (auto inputState = _getInputState()) {
-            inputState->textObject.mouseMove(_textLocalPosition(*inputState, position));
+            inputState->textObject.mouseMove(_getTextLocalPosition(*inputState, position));
             _restartCaretBlink();
             _needsRender = true;
         }
 
         if (_activeNode != nullptr) {
-            auto const translate = (position - _mouseState->position);
+            auto const translate = (position - _mousePosition);
 
-            if (_mouseState->dragging == false) {
+            if (_mouseIsDragging == false) {
                 if (
                     std::fabsf(translate.x) > 2.0f ||
                     std::fabsf(translate.y) > 2.0f
                 ) {
-                    _mouseState->dragging = true;
+                    _mouseIsDragging = true;
                     _activeNode->dispatchEvent(
                         MouseBeginDragNodeEvent(*_activeNode, position, translate, modifiers)
                     );
                 }
             }
 
-            if (_mouseState->dragging == true) {
+            if (_mouseIsDragging == true) {
                 _activeNode->dispatchEvent(
                     MouseDragNodeEvent(*_activeNode, position, translate, modifiers)
                 );
@@ -553,22 +564,21 @@ void Document::_mouseDown(Mouse const& mouse, Vec2 const& position, KeyModifiers
 
     update();
 
-    if (_mouseState.has_value() == true) {
+    if (_mouseIsDown == true) {
         return;
     }
 
     if (mouse == Mouse::LeftButton) {
-        _mouseState = _MouseState{
-            .mouse = mouse,
-            .position = position,
-            .dragging = false
-        };
+        _mousePosition = position;
+        _mouseButton = mouse;
+        _mouseIsDown = true;
+        _mouseIsDragging = false;
 
         _activateNode(_hoverNode);
         focusNode(_hoverNode);
 
         if (auto inputState = _getInputState()) {
-            inputState->textObject.mouseDown(_textLocalPosition(*inputState, position), modifiers.shift, clickCount);
+            inputState->textObject.mouseDown(_getTextLocalPosition(*inputState, position), modifiers.shift, clickCount);
             _restartCaretBlink();
             _needsRender = true;
         }
@@ -583,11 +593,10 @@ void Document::_mouseDown(Mouse const& mouse, Vec2 const& position, KeyModifiers
             );
         }
     } else if (mouse == Mouse::RightButton) {
-        _mouseState = _MouseState{
-            .mouse = mouse,
-            .position = position,
-            .dragging = false
-        };
+        _mousePosition = position;
+        _mouseButton = mouse;
+        _mouseIsDown = true;
+        _mouseIsDragging = false;
 
         if (_hoverNode != nullptr) {
             _hoverNode->dispatchEvent(
@@ -607,17 +616,17 @@ void Document::_mouseUp(Mouse const& mouse, Vec2 const& position, KeyModifiers c
     static thread_local auto _hoverPath  = std::vector<Node*>();
     static thread_local auto _activePath = std::vector<Node*>();
 
-    if (_mouseState.has_value() == false) {
+    if (_mouseIsDown == false) {
         return;
     }
 
-    if (_mouseState->mouse != mouse) {
+    if (_mouseButton != mouse) {
         return;
     }
 
     if (mouse == Mouse::LeftButton) {
         if (auto inputState = _getInputState()) {
-            inputState->textObject.mouseUp(_textLocalPosition(*inputState, position));
+            inputState->textObject.mouseUp(_getTextLocalPosition(*inputState, position));
             _needsRender = true;
         }
 
@@ -626,13 +635,14 @@ void Document::_mouseUp(Mouse const& mouse, Vec2 const& position, KeyModifiers c
                 MouseUpNodeEvent(*_activeNode, mouse, position, modifiers)
             );
 
-            if (_mouseState->dragging == true) {
+            if (_mouseIsDragging == true) {
                 _activeNode->dispatchEvent(
-                    MouseEndDragNodeEvent(*_activeNode, position, position - _mouseState->position, modifiers)
+                    MouseEndDragNodeEvent(*_activeNode, position, position - _mousePosition, modifiers)
                 );
 
                 _needsUpdate = true;
-                _mouseState.reset();
+                _mouseIsDown = false;
+                _mouseIsDragging = false;
                 _activateNode(nullptr);
                 _mouseMove(position, modifiers);
             } else {
@@ -651,11 +661,13 @@ void Document::_mouseUp(Mouse const& mouse, Vec2 const& position, KeyModifiers c
                 }
 
                 _needsUpdate = true;
-                _mouseState.reset();
+                _mouseIsDown = false;
+                _mouseIsDragging = false;
                 _activateNode(nullptr);
             }
         } else {
-            _mouseState.reset();
+            _mouseIsDown = false;
+            _mouseIsDragging = false;
         }
     } else if (mouse == Mouse::RightButton) {
         if (_hoverNode != nullptr) {
@@ -663,9 +675,12 @@ void Document::_mouseUp(Mouse const& mouse, Vec2 const& position, KeyModifiers c
                 MouseUpNodeEvent(*_hoverNode, mouse, position, modifiers)
             );
         }
-        _mouseState.reset();
+
+        _mouseIsDown = false;
+        _mouseIsDragging = false;
     } else {
-        _mouseState.reset();
+        _mouseIsDown = false;
+        _mouseIsDragging = false;
     }
 }
 

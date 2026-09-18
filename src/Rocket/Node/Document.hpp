@@ -108,6 +108,9 @@ public:
      * node chain, and applies it to the window when it changes.
      *
      * No-op unless the document has been invalidated since the last update.
+     * Calling update() re-entrantly (e.g. from an event handler that runs
+     * during an update) is a no-op: changes made during an update invalidate
+     * the nodes they touch as usual, and the next update() picks them up.
      */
     void update();
 
@@ -124,12 +127,6 @@ public:
 
     virtual ~Document();
 private:
-    struct _MouseState {
-        Mouse mouse;
-        Vec2 position;
-        bool dragging;
-    };
-
     struct _InputState {
         Node& boxNode;
         Node& textNode;
@@ -138,14 +135,18 @@ private:
 
     Window& _window;
     Sub<WindowEvent const&> _windowSub;
-    std::optional<_MouseState> _mouseState;
     Painter _painter;
     Cursor _cursor;
     Node* _hoverNode;
     Node* _activeNode;
     Node* _focusedNode;
+    Vec2 _mousePosition;
+    Mouse _mouseButton;
+    bool _mouseIsDown;
+    bool _mouseIsDragging;
     void* _yogaConfig;
     float _scale;
+    bool _isUpdating;
     bool _needsUpdate;
     bool _needsRender;
     bool _caretVisible;
@@ -157,15 +158,15 @@ private:
     > _renderList;
 
     std::optional<_InputState> _getInputState();
-    Vec2 _textLocalPosition(_InputState const&, Vec2 const&) const;
+    Vec2 _getTextLocalPosition(_InputState const&, Vec2 const&) const;
     Node* _findNodeAtPosition(Vec2 const&);
     bool _isNodeFocusable(Node const&) const;
     bool _isNodeEditable(Node const&) const;
-    void _focusNext(bool reverse);
+    void _focusNext(bool);
     void _restartCaretBlink();
     void _mouseWheel(Vec2 const&, KeyModifiers const&);
     void _mouseMove(Vec2 const&, KeyModifiers const&);
-    void _mouseDown(Mouse const&, Vec2 const&, KeyModifiers const&, int clickCount);
+    void _mouseDown(Mouse const&, Vec2 const&, KeyModifiers const&, int);
     void _mouseUp(Mouse const&, Vec2 const&, KeyModifiers const&);
     void _keyDown(Key const&, KeyModifiers const&, std::string const&);
     void _keyUp(Key const&, KeyModifiers const&);
