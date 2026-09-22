@@ -109,7 +109,7 @@ public:
      * follow-up render after the current pass completes; any number of
      * requests within a pass coalesce into that single follow-up. A
      * component that requests an update on every render never settles;
-     * update() stops after 100 passes and returns with the request still
+     * update() stops after 5 passes and returns with the request still
      * pending, so gate such requests (e.g. behind UseEffect).
      *
      * When called outside a render the request currently has no effect,

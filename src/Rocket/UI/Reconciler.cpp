@@ -8,7 +8,7 @@
 namespace Rocket {
 
 auto constexpr _CONTEXT_CAPACITY = 5;
-auto constexpr _MAX_UPDATE_PASSES = 100;
+auto constexpr _MAX_UPDATE_PASSES = 5;
 
 struct Reconciler::_Component {
     std::int64_t type = 0;
