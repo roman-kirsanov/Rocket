@@ -281,7 +281,7 @@ void Document::render() {
         auto const phase = ((std::chrono::steady_clock::now() - _caretBlinkStart) / _caretBlinkPeriod);
         auto const visible = text.isSelectedRange() || ((phase % 2) == 0);
 
-        if (visible != _caretVisible) {
+        if (_caretVisible != visible) {
             _caretVisible = visible;
             _needsRender = true;
         }

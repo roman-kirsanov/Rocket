@@ -8,6 +8,7 @@
 namespace Rocket {
 
 auto constexpr _CONTEXT_CAPACITY = 5;
+auto constexpr _MAX_UPDATE_PASSES = 100;
 
 struct Reconciler::_Component {
     std::int64_t type = 0;
@@ -252,8 +253,14 @@ void Reconciler::_openComponent(std::int64_t type, std::string const& name, std:
         throw std::runtime_error("Reconciler is not updating");
     }
 
+    if ((key.empty() == false) && _checkKeyDuplicate(key)) {
+        throw std::runtime_error(
+            std::format("Component `{}` renders duplicate key `{}` for `{}`", _currentComponent->name, key, name)
+        );
+    }
+
     auto id = (
-        (key.empty() || _checkKeyDuplicate(type, key))
+        key.empty()
             ? (name + std::to_string(_currentComponent->keySeq[type]++))
             : key
     );
@@ -261,7 +268,7 @@ void Reconciler::_openComponent(std::int64_t type, std::string const& name, std:
     auto component = static_cast<_Component*>(nullptr);
 
     for (auto child = _currentComponent->firstChild; child != nullptr; child = child->nextSibling) {
-        if (child->id == id) {
+        if ((child->id == id) && (child->type == type)) {
             component = child;
             break;
         }
@@ -364,7 +371,7 @@ void Reconciler::_unmountComponent(_Component* component) {
     }
 }
 
-bool Reconciler::_checkKeyDuplicate(std::int64_t type, std::string const& key) {
+bool Reconciler::_checkKeyDuplicate(std::string const& key) {
     PROFILE
 
     if (_currentComponent == nullptr) {
@@ -374,7 +381,6 @@ bool Reconciler::_checkKeyDuplicate(std::int64_t type, std::string const& key) {
     for (auto child = _currentComponent->firstChild; child != nullptr; child = child->nextSibling) {
         if (
             (child->revision == _currentComponent->revision) &&
-            (child->type == type) &&
             (child->key == key)
         ) {
             return true;

@@ -60,10 +60,10 @@ enum ReconcilerUpdateMode {
  * Each update() call re-runs the update function; components keep their
  * state across renders, newly rendered components mount, and components
  * absent from a render unmount with their state destroyed. A component is
- * matched among its parent's children by the key alone when keyed (the
- * component type is not checked, so two component types must not share a
- * key under one parent), or by its name plus its ordinal among same-named
- * siblings when keyless. Non-copyable and non-movable.
+ * matched among its parent's children by its type plus its key when keyed,
+ * or by its type plus its ordinal among same-named siblings when keyless.
+ * Rendering two keyed siblings with the same key under one parent throws
+ * std::runtime_error, whatever their types. Non-copyable and non-movable.
  */
 class Reconciler {
 public:
@@ -108,8 +108,9 @@ public:
      * When called during a render, the running update() performs one
      * follow-up render after the current pass completes; any number of
      * requests within a pass coalesce into that single follow-up. A
-     * component that requests an update on every render renders forever —
-     * gate such requests (e.g. behind UseEffect).
+     * component that requests an update on every render never settles;
+     * update() throws std::runtime_error after 100 passes, so gate such
+     * requests (e.g. behind UseEffect).
      *
      * When called outside a render the request currently has no effect,
      * because update() always renders unconditionally; the flag is the
@@ -157,7 +158,7 @@ private:
     void _removeComponentChild(_Component*, _Component*);
     void _removeComponentFromParent(_Component*);
     void _unmountComponent(_Component*);
-    bool _checkKeyDuplicate(std::int64_t type, std::string const& key);
+    bool _checkKeyDuplicate(std::string const& key);
     void _beginUpdate();
     void _endUpdate();
 
@@ -220,7 +221,7 @@ std::string const& UseComponentName();
 /** Returns the current component's key, or an empty string when keyed by position. */
 std::string const& UseComponentKey();
 
-/** Returns the current component's id, unique among its siblings: the key, or — when keyless or the key duplicates a sibling's — name + sequence number. */
+/** Returns the current component's id, unique among same-typed siblings: the key, or — when keyless — name + sequence number. */
 std::string const& UseComponentID();
 
 /** Returns the current component's zero-based position among its parent's children this render. */

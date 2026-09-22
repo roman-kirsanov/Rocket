@@ -123,6 +123,23 @@ static void Fx() {
     }
 }
 
+/* Keys and types. */
+
+static std::string keyedBName;
+
+static void KeyedA(Props const& props) {
+    COMPONENT
+
+    UseState<Tracked>();
+}
+
+static void KeyedB(Props const& props) {
+    COMPONENT
+
+    UseState<int>(0);
+    keyedBName = UseComponentName();
+}
+
 /* Teardown. */
 
 static void Leaf() {
@@ -443,5 +460,60 @@ TEST(Reconciler, MultipleContexts) {
 
         reconciler.update();
         ASSERT_TRUE(seenIntIf == &v1);
+    }
+}
+
+/* Two siblings with one key throw whatever their types; a keyed component
+   never adopts a stale sibling of another type; a render that never settles
+   is cut off and the reconciler recovers. */
+TEST(Reconciler, DuplicateKeysTypes) {
+    /* Same type, same key. */
+    {
+        auto reconciler = Reconciler();
+
+        reconciler.setUpdateFn([] {
+            Item({ .key = "dup" });
+            Item({ .key = "dup" });
+        });
+
+        ASSERT_THROW(reconciler.update(), std::runtime_error);
+    }
+
+    /* Different types, same key. */
+    {
+        auto reconciler = Reconciler();
+
+        reconciler.setUpdateFn([] {
+            KeyedA({ .key = "ok" });
+            KeyedB({ .key = "ok" });
+        });
+
+        ASSERT_THROW(reconciler.update(), std::runtime_error);
+    }
+
+    /* A stale keyed component of another type is not adopted: B gets its
+       own state and name, and A unmounts. */
+    {
+        auto reconciler = Reconciler();
+        auto ctorsBefore = trackedCtor;
+        auto dtorsBefore = trackedDtor;
+        auto renderA = true;
+
+        reconciler.setUpdateFn([&] {
+            if (renderA) {
+                KeyedA({ .key = "ok" });
+            } else {
+                KeyedB({ .key = "ok" });
+            }
+        });
+
+        reconciler.update();
+        ASSERT_TRUE(trackedCtor == ctorsBefore + 1);
+        ASSERT_TRUE(trackedDtor == dtorsBefore);
+
+        renderA = false;
+        reconciler.update();
+        ASSERT_TRUE(keyedBName == "KeyedB");
+        ASSERT_TRUE(trackedDtor == dtorsBefore + 1);
     }
 }

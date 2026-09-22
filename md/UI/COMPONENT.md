@@ -183,9 +183,9 @@ with no props struct (see `example/BeatMaker/App/Project/Project.cpp`).
 
 Matching rules you have to know:
 
-- A keyed component is matched by key alone among its parent's children.
-  The type is not checked, so two component types must never share a key
-  under one parent.
+- A keyed component is matched by type and key among its parent's
+  children. Rendering two siblings with the same key under one parent
+  throws, whatever their types.
 - A keyless component is matched by function name plus its ordinal among
   same-named siblings. Reordering keyless siblings therefore swaps their
   state.
@@ -540,8 +540,8 @@ pointer, so the walk touches one record per level and nothing else.
   `Context(document, ...)` (a test-only shortcut), have no sibling
   bookkeeping and are appended to the document in mount order. Covered by
   `tests/Rocket/UI/Node_Test.cpp`.
-- **Keys and types.** Keyed components are matched by key only; two
-  different component types under one parent must not share a key.
+- **Keys and types.** Keyed components are matched by type and key; two
+  siblings with the same key under one parent throw, whatever their types.
 - **Hooks are positional.** No hook inside a branch or loop, and no early
   return before the last hook.
 - **Handlers outlive renders.** Never capture `props`, or any other local
