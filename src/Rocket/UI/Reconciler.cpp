@@ -115,7 +115,7 @@ void Reconciler::update() {
 
     _isUpdating = true;
 
-    for (;;) {
+    for (auto i = 0; i < _MAX_UPDATE_PASSES; i++) {
         _needsUpdate = false;
 
         _beginUpdate();
