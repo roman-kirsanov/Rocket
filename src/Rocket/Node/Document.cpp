@@ -136,17 +136,15 @@ void Document::scrollNode(Node& node, Vec2 const& wheel) {
     node.getPath(_path);
 
     for (auto pathNode : _path) {
-        auto const& pathLayout = pathNode->_layoutState;
-
         if (
-            pathLayout.scrollOverflow.x > 0.0f &&
+            pathNode->_scrollOverflow.x > 0.0f &&
             pathNode->getOverflowX() == NodeOverflow::Scroll
         ) {
             xOverflowNode = pathNode;
         }
 
         if (
-            pathLayout.scrollOverflow.y > 0.0f &&
+            pathNode->_scrollOverflow.y > 0.0f &&
             pathNode->getOverflowY() == NodeOverflow::Scroll
         ) {
             yOverflowNode = pathNode;
@@ -157,12 +155,12 @@ void Document::scrollNode(Node& node, Vec2 const& wheel) {
     auto const deltaY = (wheel.y * -1.0f);
 
     if (xOverflowNode != nullptr) {
-        xOverflowNode->_layoutState.scrollPosition.x = _SnapToPixelGrid(std::clamp((xOverflowNode->_layoutState.scrollPosition.x + deltaX), 0.0f, xOverflowNode->_layoutState.scrollOverflow.x), _scale);
+        xOverflowNode->_scrollPosition.x = _SnapToPixelGrid(std::clamp((xOverflowNode->_scrollPosition.x + deltaX), 0.0f, xOverflowNode->_scrollOverflow.x), _scale);
         _needsUpdate = true;
     }
 
     if (yOverflowNode != nullptr) {
-        yOverflowNode->_layoutState.scrollPosition.y = _SnapToPixelGrid(std::clamp((yOverflowNode->_layoutState.scrollPosition.y + deltaY), 0.0f, yOverflowNode->_layoutState.scrollOverflow.y), _scale);
+        yOverflowNode->_scrollPosition.y = _SnapToPixelGrid(std::clamp((yOverflowNode->_scrollPosition.y + deltaY), 0.0f, yOverflowNode->_scrollOverflow.y), _scale);
         _needsUpdate = true;
     }
 }
@@ -185,32 +183,32 @@ void Document::focusNode(Node* targetNode) {
 
     if (_focusedNode != focusedNode) {
         if (_focusedNode != nullptr) {
-            _focusedNode->_inputState.isFocused = false;
-            if (_isNodeEditable(*_focusedNode) && _focusedNode->_firstChild->_textState.text != nullptr) {
-                _focusedNode->_firstChild->_textState.text->setEditable(false);
-                _focusedNode->_firstChild->_textState.invalidate = true;
+            _focusedNode->_isFocused = false;
+            if (_isNodeEditable(*_focusedNode) && _focusedNode->_firstChild->_textObject != nullptr) {
+                _focusedNode->_firstChild->_textObject->setEditable(false);
+                _focusedNode->_firstChild->_needsTextUpdate = true;
             }
 
             auto nextOldFocused = _focusedNode;
             while (nextOldFocused != nullptr) {
-                nextOldFocused->_inputState.isFocusedWithin = false;
+                nextOldFocused->_isFocusedWithin = false;
                 nextOldFocused = nextOldFocused->_parent;
             }
         }
 
         if (focusedNode != nullptr) {
-            focusedNode->_inputState.isFocused = true;
+            focusedNode->_isFocused = true;
             if (_isNodeEditable(*focusedNode)) {
-                if (focusedNode->_firstChild->_textState.text == nullptr) {
-                    focusedNode->_firstChild->_textState.text = std::make_unique<Text>();
+                if (focusedNode->_firstChild->_textObject == nullptr) {
+                    focusedNode->_firstChild->_textObject = std::make_unique<Text>();
                 }
-                focusedNode->_firstChild->_textState.text->setEditable(true);
-                focusedNode->_firstChild->_textState.invalidate = true;
+                focusedNode->_firstChild->_textObject->setEditable(true);
+                focusedNode->_firstChild->_needsTextUpdate = true;
             }
 
             auto nextNewFocused = focusedNode;
             while (nextNewFocused != nullptr) {
-                nextNewFocused->_inputState.isFocusedWithin = true;
+                nextNewFocused->_isFocusedWithin = true;
                 nextNewFocused = nextNewFocused->_parent;
             }
         }
@@ -250,7 +248,7 @@ void Document::update() {
 
     _updateNode(*this);
 
-    _renderList[_layoutState.computedZIndex].push_back(this);
+    _renderList[_computedZIndex].push_back(this);
 
     auto cursor = Cursor::Default;
 
@@ -274,10 +272,10 @@ void Document::render() {
 
     if (
         (_focusedNode != nullptr) &&
-        (_focusedNode->_firstChild->_textState.text != nullptr) &&
+        (_focusedNode->_firstChild->_textObject != nullptr) &&
         _isNodeEditable(*_focusedNode)
     ) {
-        auto const& text = *_focusedNode->_firstChild->_textState.text;
+        auto const& text = *_focusedNode->_firstChild->_textObject;
         auto const phase = ((std::chrono::steady_clock::now() - _caretBlinkStart) / _caretBlinkPeriod);
         auto const visible = text.isSelectedRange() || ((phase % 2) == 0);
 
@@ -319,20 +317,20 @@ std::optional<Document::_InputState> Document::_getInputState() {
         auto& textNode = *_focusedNode->_firstChild;
 
         /* the text child may have been swapped since focus: adopt it as the surface */
-        if (textNode._textState.text == nullptr) {
-            textNode._textState.text = std::make_unique<Text>();
-            textNode._textState.text->setString(textNode._content.value_or(""));
-            textNode._textState.invalidate = true;
+        if (textNode._textObject == nullptr) {
+            textNode._textObject = std::make_unique<Text>();
+            textNode._textObject->setString(textNode._content.value_or(""));
+            textNode._needsTextUpdate = true;
             _needsUpdate = true;
         }
 
-        if (textNode._textState.text->getEditable() == false) {
-            textNode._textState.text->setEditable(true);
-            textNode._textState.invalidate = true;
+        if (textNode._textObject->getEditable() == false) {
+            textNode._textObject->setEditable(true);
+            textNode._needsTextUpdate = true;
             _needsUpdate = true;
         }
 
-        return _InputState{ *_focusedNode, textNode, *textNode._textState.text };
+        return _InputState{ *_focusedNode, textNode, *textNode._textObject };
     } else {
         return std::nullopt;
     }
@@ -341,10 +339,8 @@ std::optional<Document::_InputState> Document::_getInputState() {
 Vec2 Document::_getTextLocalPosition(_InputState const& inputState, Vec2 const& position) const {
     PROFILE
 
-    auto const& textLayout = inputState.textNode._layoutState;
-
-    return ((position - (textLayout.computedBorderRect.origin + textLayout.textRect.origin)) * _scale)
-        + Vec2{ inputState.textNode._textState.scrollX, 0.0f };
+    return ((position - (inputState.textNode._computedBorderRectInDocument.origin + inputState.textNode._computedTextRect.origin)) * _scale)
+        + Vec2{ inputState.textNode._textScrollX, 0.0f };
 }
 
 Node* Document::_findNodeAtPosition(Vec2 const& position) {
@@ -365,19 +361,17 @@ Node* Document::_findNodeAtPosition(Vec2 const& position) {
             return;
         }
 
-        auto const& nodeLayout = node->_layoutState;
-
         auto const clipped = (
             (node->_clipped == true) &&
             (node->_parent != nullptr)
         );
 
         if (
-            (clipped == false || position.inRect(node->_parent->_layoutState.computedClipRect)) &&
-            position.inRect(nodeLayout.computedBorderRect)
+            (clipped == false || position.inRect(node->_parent->_computedClipRectInDocument)) &&
+            position.inRect(node->_computedBorderRectInDocument)
         ) {
             if (found != nullptr) {
-                if (found->_layoutState.computedZIndex <= nodeLayout.computedZIndex) {
+                if (found->_computedZIndex <= node->_computedZIndex) {
                     found = node;
                 }
             } else {
@@ -530,7 +524,7 @@ void Document::_mouseMove(Vec2 const& position, KeyModifiers const& modifiers) {
 
             for (auto node : _hoverPath) {
                 if (std::ranges::contains(_newHoverPath, node) == false) {
-                    node->_inputState.isHover = false;
+                    node->_isHover = false;
                     node->dispatchEvent(
                         MouseExitNodeEvent(*node, position, modifiers)
                     );
@@ -539,7 +533,7 @@ void Document::_mouseMove(Vec2 const& position, KeyModifiers const& modifiers) {
 
             for (auto node : _newHoverPath) {
                 if (std::ranges::contains(_hoverPath, node) == false) {
-                    node->_inputState.isHover = true;
+                    node->_isHover = true;
                     node->dispatchEvent(
                         MouseEnterNodeEvent(*node, position, modifiers)
                     );
@@ -877,18 +871,18 @@ void Document::_invalidateNode(Node& node) {
         }
     };
 
-    if (node._layoutState.invalidate == true) {
-        node._layoutState.invalidate = false;
+    if (node._needsLayoutUpdate == true) {
+        node._needsLayoutUpdate = false;
         _needsUpdate = true;
     }
 
-    if (node._textState.invalidate == true) {
-        node._textState.invalidate  = false;
+    if (node._needsTextUpdate == true) {
+        node._needsTextUpdate  = false;
         _invalidateTextObject(node, _invalidateTextObject);
         _needsUpdate = true;
 
         for (auto child = node._firstChild; child != nullptr; child = child->_nextSibling) {
-            child->_textState.invalidate = true;
+            child->_needsTextUpdate = true;
         }
     }
 
@@ -901,21 +895,21 @@ void Document::_cascadeNode(Node& node) {
     PROFILE
 
     if (node._parent != nullptr) {
-        node._textState.fontFamily  = node._fontFamily.value_or(node._parent->_textState.fontFamily);
-        node._textState.fontWeight  = node._fontWeight.value_or(node._parent->_textState.fontWeight);
-        node._textState.fontStyle   = node._fontStyle.value_or(node._parent->_textState.fontStyle);
-        node._textState.fontSize    = node._fontSize.value_or(node._parent->_textState.fontSize);
-        node._textState.textColor   = node._textColor.value_or(node._parent->_textState.textColor);
-        node._textState.markerColor = node._textMarker.value_or(Vec4{ 0.0f, 0.0f, 0.0f, 0.0f });
-        node._textState.lineHeight  = node._lineHeight.value_or(node._parent->_textState.lineHeight);
+        node._computedFontFamily  = node._fontFamily.value_or(node._parent->_computedFontFamily);
+        node._computedFontWeight  = node._fontWeight.value_or(node._parent->_computedFontWeight);
+        node._computedFontStyle   = node._fontStyle.value_or(node._parent->_computedFontStyle);
+        node._computedFontSize    = node._fontSize.value_or(node._parent->_computedFontSize);
+        node._computedTextColor   = node._textColor.value_or(node._parent->_computedTextColor);
+        node._computedMarkerColor = node._textMarker.value_or(Vec4{ 0.0f, 0.0f, 0.0f, 0.0f });
+        node._computedLineHeight  = node._lineHeight.value_or(node._parent->_computedLineHeight);
     } else {
-        node._textState.fontFamily  = node._fontFamily.value_or(TEXT_DEFAULT_FONT_FAMILY);
-        node._textState.fontWeight  = node._fontWeight.value_or(TEXT_DEFAULT_FONT_WEIGHT);
-        node._textState.fontStyle   = node._fontStyle.value_or(TEXT_DEFAULT_FONT_STYLE);
-        node._textState.fontSize    = node._fontSize.value_or(TEXT_DEFAULT_FONT_SIZE);
-        node._textState.textColor   = node._textColor.value_or(TEXT_DEFAULT_COLOR);
-        node._textState.markerColor = node._textMarker.value_or(Vec4{ 0.0f, 0.0f, 0.0f, 0.0f });
-        node._textState.lineHeight  = node._lineHeight.value_or(TEXT_DEFAULT_LINE_HEIGHT);
+        node._computedFontFamily  = node._fontFamily.value_or(TEXT_DEFAULT_FONT_FAMILY);
+        node._computedFontWeight  = node._fontWeight.value_or(TEXT_DEFAULT_FONT_WEIGHT);
+        node._computedFontStyle   = node._fontStyle.value_or(TEXT_DEFAULT_FONT_STYLE);
+        node._computedFontSize    = node._fontSize.value_or(TEXT_DEFAULT_FONT_SIZE);
+        node._computedTextColor   = node._textColor.value_or(TEXT_DEFAULT_COLOR);
+        node._computedMarkerColor = node._textMarker.value_or(Vec4{ 0.0f, 0.0f, 0.0f, 0.0f });
+        node._computedLineHeight  = node._lineHeight.value_or(TEXT_DEFAULT_LINE_HEIGHT);
     }
 
     for (auto child = node._firstChild; child != nullptr; child = child->_nextSibling) {
@@ -940,50 +934,50 @@ void Document::_updateNode(Node& node) {
         ::YGNodeLayoutGetPadding((::YGNode*)node._layoutNode, ::YGEdgeBottom)
     };
 
-    node._layoutState.borderEdge = {
+    node._computedBorderEdge = {
         _SnapBorderToPixelGrid(::YGNodeLayoutGetBorder((::YGNode*)node._layoutNode, ::YGEdgeLeft), _scale),
         _SnapBorderToPixelGrid(::YGNodeLayoutGetBorder((::YGNode*)node._layoutNode, ::YGEdgeTop), _scale),
         _SnapBorderToPixelGrid(::YGNodeLayoutGetBorder((::YGNode*)node._layoutNode, ::YGEdgeRight), _scale),
         _SnapBorderToPixelGrid(::YGNodeLayoutGetBorder((::YGNode*)node._layoutNode, ::YGEdgeBottom), _scale)
     };
 
-    node._layoutState.borderRect = {
+    node._computedBorderRect = {
         ::YGNodeLayoutGetLeft((::YGNode*)node._layoutNode),
         ::YGNodeLayoutGetTop((::YGNode*)node._layoutNode),
         ::YGNodeLayoutGetWidth((::YGNode*)node._layoutNode),
         ::YGNodeLayoutGetHeight((::YGNode*)node._layoutNode)
     };
 
-    if (std::isfinite(node._layoutState.borderRect.x) == false)      node._layoutState.borderRect.x = 0.0f;
-    if (std::isfinite(node._layoutState.borderRect.y) == false)      node._layoutState.borderRect.y = 0.0f;
-    if (std::isfinite(node._layoutState.borderRect.width) == false)  node._layoutState.borderRect.width = 0.0f;
-    if (std::isfinite(node._layoutState.borderRect.height) == false) node._layoutState.borderRect.height = 0.0f;
+    if (std::isfinite(node._computedBorderRect.x) == false)      node._computedBorderRect.x = 0.0f;
+    if (std::isfinite(node._computedBorderRect.y) == false)      node._computedBorderRect.y = 0.0f;
+    if (std::isfinite(node._computedBorderRect.width) == false)  node._computedBorderRect.width = 0.0f;
+    if (std::isfinite(node._computedBorderRect.height) == false) node._computedBorderRect.height = 0.0f;
 
     if (node._offset) {
-        node._layoutState.borderRect.origin.x += _SnapToPixelGrid(node._offset->x, _scale);
-        node._layoutState.borderRect.origin.y += _SnapToPixelGrid(node._offset->y, _scale);
+        node._computedBorderRect.origin.x += _SnapToPixelGrid(node._offset->x, _scale);
+        node._computedBorderRect.origin.y += _SnapToPixelGrid(node._offset->y, _scale);
     }
 
     if (node._transform) {
-        node._layoutState.borderRect.origin.x += _SnapToPixelGrid(node._transform->translateX.match(
+        node._computedBorderRect.origin.x += _SnapToPixelGrid(node._transform->translateX.match(
             [](PixelValue const& pixel) { return pixel.value; },
-            [&](PercentValue const& percent) { return ((percent.value / 100.0f) * node._layoutState.borderRect.width); }
+            [&](PercentValue const& percent) { return ((percent.value / 100.0f) * node._computedBorderRect.width); }
         ), _scale);
-        node._layoutState.borderRect.origin.y += _SnapToPixelGrid(node._transform->translateY.match(
+        node._computedBorderRect.origin.y += _SnapToPixelGrid(node._transform->translateY.match(
             [](PixelValue const& pixel) { return pixel.value; },
-            [&](PercentValue const& percent) { return ((percent.value / 100.0f) * node._layoutState.borderRect.height); }
+            [&](PercentValue const& percent) { return ((percent.value / 100.0f) * node._computedBorderRect.height); }
         ), _scale);
     }
 
-    node._layoutState.marginRect = {
-        (node._layoutState.borderRect.x - margin.left),
-        (node._layoutState.borderRect.y - margin.top),
-        (node._layoutState.borderRect.width + margin.left + margin.right),
-        (node._layoutState.borderRect.height + margin.top + margin.bottom)
+    node._computedMarginRect = {
+        (node._computedBorderRect.x - margin.left),
+        (node._computedBorderRect.y - margin.top),
+        (node._computedBorderRect.width + margin.left + margin.right),
+        (node._computedBorderRect.height + margin.top + margin.bottom)
     };
 
     if ((node._display == NodeDisplay::Text) && (node._textNode != nullptr)) {
-        node._layoutState.textRect = {
+        node._computedTextRect = {
             ::YGNodeLayoutGetLeft((::YGNode*)node._textNode),
             ::YGNodeLayoutGetTop((::YGNode*)node._textNode),
             ::YGNodeLayoutGetWidth((::YGNode*)node._textNode),
@@ -993,67 +987,65 @@ void Document::_updateNode(Node& node) {
 
     auto const contentSize = getSize();
 
-    node._layoutState.computedClipRect = Vec4{ 0.0f, 0.0f, contentSize.width, contentSize.height };
-    node._layoutState.computedBorderRect = node._layoutState.borderRect;
-    node._layoutState.computedMarginRect = node._layoutState.marginRect;
-    node._layoutState.computedZIndex = node._zIndex.value_or(0);
+    node._computedClipRectInDocument = Vec4{ 0.0f, 0.0f, contentSize.width, contentSize.height };
+    node._computedBorderRectInDocument = node._computedBorderRect;
+    node._computedMarginRectInDocument = node._computedMarginRect;
+    node._computedZIndex = node._zIndex.value_or(0);
 
     if (node._parent != nullptr) {
-        auto const& parentLayout = node._parent->_layoutState;
-
-        node._layoutState.computedBorderRect.origin += parentLayout.computedBorderRect.origin;
-        node._layoutState.computedMarginRect.origin += parentLayout.computedBorderRect.origin;
+        node._computedBorderRectInDocument.origin += node._parent->_computedBorderRectInDocument.origin;
+        node._computedMarginRectInDocument.origin += node._parent->_computedBorderRectInDocument.origin;
 
         if (node._position != NodePosition::Fixed) {
-            node._layoutState.computedBorderRect.origin -= parentLayout.scrollPosition;
-            node._layoutState.computedMarginRect.origin -= parentLayout.scrollPosition;
+            node._computedBorderRectInDocument.origin -= node._parent->_scrollPosition;
+            node._computedMarginRectInDocument.origin -= node._parent->_scrollPosition;
         }
 
         if (node._clipped == true) {
-            node._layoutState.computedClipRect = parentLayout.computedClipRect;
+            node._computedClipRectInDocument = node._parent->_computedClipRectInDocument;
         }
 
-        if (node._layoutState.computedZIndex < parentLayout.computedZIndex) {
-            node._layoutState.computedZIndex = parentLayout.computedZIndex;
+        if (node._computedZIndex < node._parent->_computedZIndex) {
+            node._computedZIndex = node._parent->_computedZIndex;
         }
 
-        if (node._layoutState.computedZIndex > parentLayout.computedZIndex) {
-            _renderList[node._layoutState.computedZIndex].push_back(&node);
+        if (node._computedZIndex > node._parent->_computedZIndex) {
+            _renderList[node._computedZIndex].push_back(&node);
         }
     }
 
-    auto const& borderEdge = node._layoutState.borderEdge;
+    auto const& borderEdge = node._computedBorderEdge;
     auto const innerBorderRect = Vec4{
-        (node._layoutState.computedBorderRect.x + borderEdge.left),
-        (node._layoutState.computedBorderRect.y + borderEdge.top),
-        std::max(0.0f, (node._layoutState.computedBorderRect.width - borderEdge.left - borderEdge.right)),
-        std::max(0.0f, (node._layoutState.computedBorderRect.height - borderEdge.top - borderEdge.bottom))
+        (node._computedBorderRectInDocument.x + borderEdge.left),
+        (node._computedBorderRectInDocument.y + borderEdge.top),
+        std::max(0.0f, (node._computedBorderRectInDocument.width - borderEdge.left - borderEdge.right)),
+        std::max(0.0f, (node._computedBorderRectInDocument.height - borderEdge.top - borderEdge.bottom))
     };
 
     if (
         (node._overflowX == NodeOverflow::Hidden) ||
         (node._overflowX == NodeOverflow::Scroll)
     ) {
-        auto newClipRect = node._layoutState.computedClipRect.getIntersection(innerBorderRect);
-        node._layoutState.computedClipRect.x = newClipRect.x;
-        node._layoutState.computedClipRect.width = newClipRect.width;
+        auto newClipRect = node._computedClipRectInDocument.getIntersection(innerBorderRect);
+        node._computedClipRectInDocument.x = newClipRect.x;
+        node._computedClipRectInDocument.width = newClipRect.width;
     }
 
     if (
         (node._overflowY == NodeOverflow::Hidden) ||
         (node._overflowY == NodeOverflow::Scroll)
     ) {
-        auto newClipRect = node._layoutState.computedClipRect.getIntersection(innerBorderRect);
-        node._layoutState.computedClipRect.y = newClipRect.y;
-        node._layoutState.computedClipRect.height = newClipRect.height;
+        auto newClipRect = node._computedClipRectInDocument.getIntersection(innerBorderRect);
+        node._computedClipRectInDocument.y = newClipRect.y;
+        node._computedClipRectInDocument.height = newClipRect.height;
     }
 
     auto scrollMaxX = 0.0f;
     auto scrollMaxY = 0.0f;
     auto contentMinX = 0.0f;
     auto contentMinY = 0.0f;
-    auto contentMaxX = node._layoutState.borderRect.width;
-    auto contentMaxY = node._layoutState.borderRect.height;
+    auto contentMaxX = node._computedBorderRect.width;
+    auto contentMaxY = node._computedBorderRect.height;
 
     for (auto child = node._firstChild; child != nullptr; child = child->_nextSibling) {
         _updateNode(*child);
@@ -1062,26 +1054,24 @@ void Document::_updateNode(Node& node) {
             continue; // fixed children don't contribute to the content box or scrollable area
         }
 
-        auto const& childLayout = child->_layoutState;
-
-        auto childLeft   = childLayout.marginRect.x;
-        auto childTop    = childLayout.marginRect.y;
-        auto childRight  = childLayout.marginRect.getMaxX();
-        auto childBottom = childLayout.marginRect.getMaxY();
+        auto childLeft   = child->_computedMarginRect.x;
+        auto childTop    = child->_computedMarginRect.y;
+        auto childRight  = child->_computedMarginRect.getMaxX();
+        auto childBottom = child->_computedMarginRect.getMaxY();
 
         if (
             (child->_overflowX != NodeOverflow::Hidden) &&
             (child->_overflowX != NodeOverflow::Scroll)
         ) {
-            childLeft  = std::min(childLeft,  (childLayout.borderRect.x + childLayout.contentRect.x));
-            childRight = std::max(childRight, (childLayout.borderRect.x + childLayout.contentRect.getMaxX()));
+            childLeft  = std::min(childLeft,  (child->_computedBorderRect.x + child->_computedContentRect.x));
+            childRight = std::max(childRight, (child->_computedBorderRect.x + child->_computedContentRect.getMaxX()));
         }
         if (
             (child->_overflowY != NodeOverflow::Hidden) &&
             (child->_overflowY != NodeOverflow::Scroll)
         ) {
-            childTop    = std::min(childTop,    (childLayout.borderRect.y + childLayout.contentRect.y));
-            childBottom = std::max(childBottom, (childLayout.borderRect.y + childLayout.contentRect.getMaxY()));
+            childTop    = std::min(childTop,    (child->_computedBorderRect.y + child->_computedContentRect.y));
+            childBottom = std::max(childBottom, (child->_computedBorderRect.y + child->_computedContentRect.getMaxY()));
         }
 
         contentMinX = std::min(contentMinX, childLeft);
@@ -1092,21 +1082,21 @@ void Document::_updateNode(Node& node) {
         scrollMaxY = std::max(scrollMaxY, childBottom);
     }
 
-    node._layoutState.contentRect = {
+    node._computedContentRect = {
         contentMinX,
         contentMinY,
         (contentMaxX - contentMinX),
         (contentMaxY - contentMinY)
     };
 
-    node._layoutState.scrollOverflow = {
-        _SnapToPixelGrid(std::max(0.0f, (scrollMaxX - (node._layoutState.borderRect.width  - node._layoutState.borderEdge.right  - padding.right))), _scale),
-        _SnapToPixelGrid(std::max(0.0f, (scrollMaxY - (node._layoutState.borderRect.height - node._layoutState.borderEdge.bottom - padding.bottom))), _scale)
+    node._scrollOverflow = {
+        _SnapToPixelGrid(std::max(0.0f, (scrollMaxX - (node._computedBorderRect.width  - node._computedBorderEdge.right  - padding.right))), _scale),
+        _SnapToPixelGrid(std::max(0.0f, (scrollMaxY - (node._computedBorderRect.height - node._computedBorderEdge.bottom - padding.bottom))), _scale)
     };
 
-    node._layoutState.scrollPosition = {
-        std::clamp(node._layoutState.scrollPosition.x, 0.0f, node._layoutState.scrollOverflow.x),
-        std::clamp(node._layoutState.scrollPosition.y, 0.0f, node._layoutState.scrollOverflow.y)
+    node._scrollPosition = {
+        std::clamp(node._scrollPosition.x, 0.0f, node._scrollOverflow.x),
+        std::clamp(node._scrollPosition.y, 0.0f, node._scrollOverflow.y)
     };
 }
 
@@ -1117,13 +1107,13 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
         return;
     }
 
-    if (node._layoutState.computedZIndex != zIndex) {
+    if (node._computedZIndex != zIndex) {
         return;
     }
 
     auto nodeOffset = offset;
-    auto nodeClipRect = (node._layoutState.computedClipRect * _scale);
-    auto nodeBorderRect = (node._layoutState.computedBorderRect * _scale);
+    auto nodeClipRect = (node._computedClipRectInDocument * _scale);
+    auto nodeBorderRect = (node._computedBorderRectInDocument * _scale);
     auto scissorRect = std::optional<Vec4>{};
     auto layerOffset = Vec2{};
     auto layerRect = Vec4{};
@@ -1139,7 +1129,7 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
         (node._clipped == true) &&
         (node._parent != nullptr)
     ) {
-        auto parentClipRect = (node._parent->_layoutState.computedClipRect * _scale);
+        auto parentClipRect = (node._parent->_computedClipRectInDocument * _scale);
         parentClipRect.origin += nodeOffset;
         scissorRect = parentClipRect;
     }
@@ -1150,8 +1140,7 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
     auto boxScissorRect = scissorRect;
 
     if (layerNeeded) {
-        auto& paint = node._paintState;
-        auto nodeContentRect = (node._layoutState.contentRect * _scale);
+        auto nodeContentRect = (node._computedContentRect * _scale);
         auto nodeContentOffset = Vec2{
             std::min(0.0f, nodeContentRect.x),
             std::min(0.0f, nodeContentRect.y)
@@ -1173,10 +1162,10 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
         }
 
         if (
-            (paint.layerImage == nullptr) ||
-            (paint.layerImage->getSize() != layerRect.size)
+            (node._layerImage == nullptr) ||
+            (node._layerImage->getSize() != layerRect.size)
         ) {
-            paint.layerImage = std::make_unique<Image>(layerRect.size);
+            node._layerImage = std::make_unique<Image>(layerRect.size);
         }
 
         nodeBorderRect.origin -= layerOffset;
@@ -1186,7 +1175,7 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
 
         _painter.beginPaint(
             ImagePaintTarget{
-                .image = *paint.layerImage,
+                .image = *node._layerImage,
                 .clearColor = COLOR_TRANSPARENT
             }
         );
@@ -1218,15 +1207,15 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
             .borderTopRightRadius = scaledRadius(node._borderTopRightRadius),
             .borderBottomLeftRadius = scaledRadius(node._borderBottomLeftRadius),
             .borderBottomRightRadius = scaledRadius(node._borderBottomRightRadius),
-            .leftBorder = (node._layoutState.borderEdge.left * _scale),
-            .topBorder = (node._layoutState.borderEdge.top * _scale),
-            .rightBorder = (node._layoutState.borderEdge.right * _scale),
-            .bottomBorder = (node._layoutState.borderEdge.bottom * _scale)
+            .leftBorder = (node._computedBorderEdge.left * _scale),
+            .topBorder = (node._computedBorderEdge.top * _scale),
+            .rightBorder = (node._computedBorderEdge.right * _scale),
+            .bottomBorder = (node._computedBorderEdge.bottom * _scale)
         };
         _painter.paint(borderShape, borderBrush, { .scissor = boxScissorRect });
     }
 
-    auto const text = node._textState.text.get();
+    auto const text = node._textObject.get();
 
     if (
         (node._display == NodeDisplay::Text) &&
@@ -1237,10 +1226,10 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
 
         text->setMaxWidth(std::nullopt);
         text->setMaxHeight(std::nullopt);
-        text->setWidth(singleLine ? std::nullopt : std::optional<float>(std::floorf(node._layoutState.textRect.width * _scale)));
-        text->setHeight(std::floorf(node._layoutState.textRect.height * _scale));
+        text->setWidth(singleLine ? std::nullopt : std::optional<float>(std::floorf(node._computedTextRect.width * _scale)));
+        text->setHeight(std::floorf(node._computedTextRect.height * _scale));
 
-        auto const textOrigin = (nodeBorderRect.origin + (node._layoutState.textRect.origin * _scale));
+        auto const textOrigin = (nodeBorderRect.origin + (node._computedTextRect.origin * _scale));
         auto textClipRect = nodeClipRect;
         auto textRect = Vec4{
             Vec2{ std::roundf(textOrigin.x), std::roundf(textOrigin.y) },
@@ -1253,11 +1242,10 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
                and, mirrored, the text's left inset). While it is being
                edited it scrolls horizontally so the caret stays inside that
                slot; unfocused, it shows its start. */
-            auto const& parentLayout = node._parent->_layoutState;
-            auto const inset = (node._layoutState.computedBorderRect.x - parentLayout.computedBorderRect.x - parentLayout.borderEdge.left);
-            auto const visibleMaxX = ((parentLayout.computedBorderRect.getMaxX() - parentLayout.borderEdge.right - inset) * _scale) + nodeOffset.x;
+            auto const inset = (node._computedBorderRectInDocument.x - node._parent->_computedBorderRectInDocument.x - node._parent->_computedBorderEdge.left);
+            auto const visibleMaxX = ((node._parent->_computedBorderRectInDocument.getMaxX() - node._parent->_computedBorderEdge.right - inset) * _scale) + nodeOffset.x;
             auto const visibleWidth = std::max(1.0f, (visibleMaxX - nodeBorderRect.x));
-            auto& scrollX = node._textState.scrollX;
+            auto& scrollX = node._textScrollX;
 
             if (editable) {
                 auto const& caretRect = text->getCaretRect();
@@ -1280,7 +1268,7 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
             auto const clipMaxX = std::min(nodeClipRect.getMaxX(), (nodeBorderRect.x + visibleWidth));
             textClipRect = { clipMinX, nodeClipRect.y, std::max(0.0f, (clipMaxX - clipMinX)), nodeClipRect.height };
         } else {
-            node._textState.scrollX = 0.0f;
+            node._textScrollX = 0.0f;
         }
 
         if (editable) {
@@ -1308,7 +1296,7 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
         ) {
             auto const& caretRect = text->getCaretRect();
             auto const caretShape = QuadShape{ Vec4{ (textRect.origin + caretRect.origin), caretRect.size } };
-            auto const caretBrush = ColorBrush{ .color = node._textState.textColor };
+            auto const caretBrush = ColorBrush{ .color = node._computedTextColor };
             _painter.paint(caretShape, caretBrush, { .scissor = textClipRect });
         }
     }
@@ -1331,13 +1319,11 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
     }
 
     if (layerNeeded) {
-        auto& paint = node._paintState;
-
         _painter.endPaint();
 
         auto const shape = QuadShape{ layerRect };
         auto const brush = ImageBrush{
-            .image = &*paint.layerImage,
+            .image = &*node._layerImage,
             .positionX = ImagePosition::Start,
             .positionY = ImagePosition::Start,
             .filterMag = ImageFilter::Nearest,
@@ -1380,28 +1366,28 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
                 };
 
                 if (
-                    (paint.shadowImage == nullptr) ||
-                    (paint.shadowImage->getSize() != shadowSize)
+                    (node._shadowImage == nullptr) ||
+                    (node._shadowImage->getSize() != shadowSize)
                 ) {
-                    paint.shadowImage = std::make_unique<Image>(shadowSize);
+                    node._shadowImage = std::make_unique<Image>(shadowSize);
                     rebake = true;
                 }
 
                 if (
                     rebake ||
-                    (paint.shadowImageShadow != shadowKey) ||
-                    (paint.shadowImageRadius != radiusKey) ||
-                    (paint.shadowImageScale != _scale) ||
-                    (paint.shadowImageClip != clipKey)
+                    (node._shadowImageShadow != shadowKey) ||
+                    (node._shadowImageRadius != radiusKey) ||
+                    (node._shadowImageScale != _scale) ||
+                    (node._shadowImageClipRect != clipKey)
                 ) {
-                    paint.shadowImageShadow = shadowKey;
-                    paint.shadowImageRadius = radiusKey;
-                    paint.shadowImageScale = _scale;
-                    paint.shadowImageClip = clipKey;
+                    node._shadowImageShadow = shadowKey;
+                    node._shadowImageRadius = radiusKey;
+                    node._shadowImageScale = _scale;
+                    node._shadowImageClipRect = clipKey;
 
                     _painter.beginPaint(
                         ImagePaintTarget{
-                            .image = *paint.shadowImage,
+                            .image = *node._shadowImage,
                             .clearColor = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f }
                         }
                     );
@@ -1419,7 +1405,7 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
 
                 auto const shadowImageShape = QuadShape{ Vec4{ (layerRect.origin - padding + offset), shadowSize } };
                 auto const shadowImageBrush = ImageBrush{
-                    .image = &*paint.shadowImage,
+                    .image = &*node._shadowImage,
                     .positionX = ImagePosition::Start,
                     .positionY = ImagePosition::Start,
                     .filterMag = ImageFilter::Nearest,
@@ -1444,13 +1430,13 @@ void Document::_activateNode(Node* targetNode) {
 
     Node* nextOldActive = _activeNode;
     while (nextOldActive != nullptr) {
-        nextOldActive->_inputState.isActive = false;
+        nextOldActive->_isActive = false;
         nextOldActive = nextOldActive->_parent;
     }
 
     Node* nextNewActive = targetNode;
     while (nextNewActive != nullptr) {
-        nextNewActive->_inputState.isActive = true;
+        nextNewActive->_isActive = true;
         nextNewActive = nextNewActive->_parent;
     }
 

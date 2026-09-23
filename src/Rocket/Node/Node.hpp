@@ -780,50 +780,6 @@ public:
 
     virtual ~Node();
 private:
-    struct _TextState {
-        std::string fontFamily;
-        FontWeight fontWeight;
-        FontStyle fontStyle;
-        float fontSize;
-        Vec4 textColor;
-        Vec4 markerColor;
-        float lineHeight;
-        std::unique_ptr<Text> text;
-        bool invalidate;
-        float scrollX;
-    };
-
-    struct _LayoutState {
-        Vec4 textRect;
-        Vec4 borderEdge;
-        Vec4 borderRect;
-        Vec4 marginRect;
-        Vec4 contentRect;
-        Vec2 scrollOverflow;
-        Vec2 scrollPosition;
-        Vec4 computedBorderRect;
-        Vec4 computedMarginRect;
-        Vec4 computedClipRect;
-        std::int64_t computedZIndex;
-        bool invalidate;
-    };
-
-    struct _PaintState {
-        std::unique_ptr<Image> layerImage;
-        std::unique_ptr<Image> shadowImage;
-        std::optional<Shadow> shadowImageShadow;
-        std::optional<Vec4> shadowImageRadius;
-        std::optional<float> shadowImageScale;
-        std::optional<Vec4> shadowImageClip;
-    };
-
-    struct _InputState {
-        bool isHover;
-        bool isActive;
-        bool isFocused;
-        bool isFocusedWithin;
-    };
-
     Document* _document;
     Node* _parent;
     Node* _firstChild;
@@ -898,13 +854,42 @@ private:
     bool _keyEvents;
     bool _mouseEvents;
     bool _clipped;
+    bool _isHover;
+    bool _isActive;
+    bool _isFocused;
+    bool _isFocusedWithin;
+    float _textScrollX;
+    std::unique_ptr<Text> _textObject;
+    std::string _computedFontFamily;
+    FontWeight _computedFontWeight;
+    FontStyle _computedFontStyle;
+    float _computedFontSize;
+    float _computedLineHeight;
+    Vec4 _computedTextColor;
+    Vec4 _computedMarkerColor;
+    Vec4 _computedTextRect;
+    Vec4 _computedBorderEdge;
+    Vec4 _computedBorderRect;
+    Vec4 _computedMarginRect;
+    Vec4 _computedContentRect;
+    Vec2 _scrollOverflow;
+    Vec2 _scrollPosition;
+    Vec4 _computedBorderRectInDocument;
+    Vec4 _computedMarginRectInDocument;
+    Vec4 _computedClipRectInDocument;
+    std::int64_t _computedZIndex;
+    std::unique_ptr<Image> _layerImage;
+    std::unique_ptr<Image> _shadowImage;
+    std::optional<Shadow> _shadowImageShadow;
+    std::optional<Vec4> _shadowImageRadius;
+    std::optional<float> _shadowImageScale;
+    std::optional<Vec4> _shadowImageClipRect;
+
     void* _layoutNode;
     void* _textNode;
 
-    mutable _TextState _textState;
-    mutable _LayoutState _layoutState;
-    mutable _PaintState _paintState;
-    mutable _InputState _inputState;
+    bool _needsTextUpdate;
+    bool _needsLayoutUpdate;
 
     void _setNodePadding();
     void _setNodeMargin();

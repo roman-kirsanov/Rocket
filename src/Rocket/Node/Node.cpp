@@ -155,12 +155,40 @@ Node::Node()
     , _keyEvents(true)
     , _mouseEvents(true)
     , _clipped(true)
+    , _isHover()
+    , _isActive()
+    , _isFocused()
+    , _isFocusedWithin()
+    , _textScrollX()
+    , _textObject()
+    , _computedFontFamily()
+    , _computedFontWeight()
+    , _computedFontStyle()
+    , _computedFontSize()
+    , _computedLineHeight()
+    , _computedTextColor()
+    , _computedMarkerColor()
+    , _computedTextRect()
+    , _computedBorderEdge()
+    , _computedBorderRect()
+    , _computedMarginRect()
+    , _computedContentRect()
+    , _scrollOverflow()
+    , _scrollPosition()
+    , _computedBorderRectInDocument()
+    , _computedMarginRectInDocument()
+    , _computedClipRectInDocument()
+    , _computedZIndex()
+    , _layerImage()
+    , _shadowImage()
+    , _shadowImageShadow()
+    , _shadowImageRadius()
+    , _shadowImageScale()
+    , _shadowImageClipRect()
     , _layoutNode(nullptr)
     , _textNode(nullptr)
-    , _textState()
-    , _layoutState()
-    , _paintState()
-    , _inputState()
+    , _needsTextUpdate()
+    , _needsLayoutUpdate()
 {
     PROFILE
 
@@ -223,67 +251,67 @@ Node* Node::getNextSibling() const {
 Vec4 const& Node::getComputedBorderRect() const {
     PROFILE
 
-    return _layoutState.computedBorderRect;
+    return _computedBorderRectInDocument;
 }
 
 Vec4 const& Node::getComputedMarginRect() const {
     PROFILE
 
-    return _layoutState.computedMarginRect;
+    return _computedMarginRectInDocument;
 }
 
 Vec4 const& Node::getComputedClipRect() const {
     PROFILE
 
-    return _layoutState.computedClipRect;
+    return _computedClipRectInDocument;
 }
 
 std::int64_t Node::getComputedZIndex() const {
     PROFILE
 
-    return _layoutState.computedZIndex;
+    return _computedZIndex;
 }
 
 std::string const& Node::getComputedFontFamily() const {
     PROFILE
 
-    return _textState.fontFamily;
+    return _computedFontFamily;
 }
 
 FontWeight Node::getComputedFontWeight() const {
     PROFILE
 
-    return _textState.fontWeight;
+    return _computedFontWeight;
 }
 
 FontStyle Node::getComputedFontStyle() const {
     PROFILE
 
-    return _textState.fontStyle;
+    return _computedFontStyle;
 }
 
 float Node::getComputedFontSize() const {
     PROFILE
 
-    return _textState.fontSize;
+    return _computedFontSize;
 }
 
 Vec4 const& Node::getComputedTextColor() const {
     PROFILE
 
-    return _textState.textColor;
+    return _computedTextColor;
 }
 
 Vec4 const& Node::getComputedTextMarker() const {
     PROFILE
 
-    return _textState.markerColor;
+    return _computedMarkerColor;
 }
 
 float Node::getComputedLineHeight() const {
     PROFILE
 
-    return _textState.lineHeight;
+    return _computedLineHeight;
 }
 
 std::optional<NodeDisplay> const& Node::getDisplay() const {
@@ -697,25 +725,25 @@ int Node::getTabIndex() const {
 bool Node::isHover() const {
     PROFILE
 
-    return _inputState.isHover;
+    return _isHover;
 }
 
 bool Node::isActive() const {
     PROFILE
 
-    return _inputState.isActive;
+    return _isActive;
 }
 
 bool Node::isFocused() const {
     PROFILE
 
-    return _inputState.isFocused;
+    return _isFocused;
 }
 
 bool Node::isFocusedWithin() const {
     PROFILE
 
-    return _inputState.isFocusedWithin;
+    return _isFocusedWithin;
 }
 
 void Node::getPath(std::vector<Node*>& path) const {
@@ -737,8 +765,8 @@ void Node::setDisplay(std::optional<NodeDisplay> const& display) {
 
     if (_display != display) {
         _display = display;
-        _textState.invalidate = true;
-        _layoutState.invalidate = true;
+        _needsTextUpdate = true;
+        _needsLayoutUpdate = true;
         _updateLayout();
     }
 }
@@ -748,7 +776,7 @@ void Node::setDirection(std::optional<NodeDirection> const& direction) {
 
     if (_direction != direction) {
         _direction = direction;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
 
         ::YGNodeStyleSetFlexDirection((::YGNode*)_layoutNode, direction.has_value() ? _directionMap[direction.value()] : ::YGFlexDirectionRow);
     }
@@ -759,7 +787,7 @@ void Node::setAlignment(std::optional<NodeAlignment> const& alignment) {
 
     if (_alignment != alignment) {
         _alignment = alignment;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
 
         ::YGNodeStyleSetAlignItems((::YGNode*)_layoutNode, alignment.has_value() ? _alignmentMap[alignment.value()] : ::YGAlignFlexStart);
     }
@@ -770,7 +798,7 @@ void Node::setJustify(std::optional<NodeJustify> const& justify) {
 
     if (_justify != justify) {
         _justify = justify;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
 
         ::YGNodeStyleSetJustifyContent((::YGNode*)_layoutNode, justify.has_value() ? _justifyMap[justify.value()] : ::YGJustifyFlexStart);
     }
@@ -781,7 +809,7 @@ void Node::setOverflowX(std::optional<NodeOverflow> const& overflowX) {
 
     if (_overflowX != overflowX) {
         _overflowX = overflowX;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -790,7 +818,7 @@ void Node::setOverflowY(std::optional<NodeOverflow> const& overflowY) {
 
     if (_overflowY != overflowY) {
         _overflowY = overflowY;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -799,7 +827,7 @@ void Node::setPosition(std::optional<NodePosition> const& position) {
 
     if (_position != position) {
         _position = position;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
 
         ::YGNodeStyleSetPositionType((::YGNode*)_layoutNode, position.has_value() ? _positionMap[position.value()] : ::YGPositionTypeRelative);
     }
@@ -810,7 +838,7 @@ void Node::setSelfAlignment(std::optional<NodeAlignment> const& selfAlignment) {
 
     if (_selfAlignment != selfAlignment) {
         _selfAlignment = selfAlignment;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
 
         ::YGNodeStyleSetAlignSelf((::YGNode*)_layoutNode, selfAlignment.has_value() ? _alignmentMap[selfAlignment.value()] : ::YGAlignAuto);
     }
@@ -821,7 +849,7 @@ void Node::setWidth(std::optional<NodeValue> const& width) {
 
     if (_width != width) {
         _width = width;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
 
         if (width.has_value()) {
             width->match(
@@ -839,7 +867,7 @@ void Node::setHeight(std::optional<NodeValue> const& height) {
 
     if (_height != height) {
         _height = height;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
 
         if (height.has_value()) {
             height->match(
@@ -857,7 +885,7 @@ void Node::setMinWidth(std::optional<NodeValue> const& minWidth) {
 
     if (_minWidth != minWidth) {
         _minWidth = minWidth;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
 
         if (minWidth.has_value()) {
             minWidth->match(
@@ -875,7 +903,7 @@ void Node::setMaxWidth(std::optional<NodeValue> const& maxWidth) {
 
     if (_maxWidth != maxWidth) {
         _maxWidth = maxWidth;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
 
         if (maxWidth.has_value()) {
             maxWidth->match(
@@ -893,7 +921,7 @@ void Node::setMinHeight(std::optional<NodeValue> const& minHeight) {
 
     if (_minHeight != minHeight) {
         _minHeight = minHeight;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
 
         if (minHeight.has_value()) {
             minHeight->match(
@@ -911,7 +939,7 @@ void Node::setMaxHeight(std::optional<NodeValue> const& maxHeight) {
 
     if (_maxHeight != maxHeight) {
         _maxHeight = maxHeight;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
 
         if (maxHeight.has_value()) {
             maxHeight->match(
@@ -929,7 +957,7 @@ void Node::setTop(std::optional<NodeValue> const& top) {
 
     if (_top != top) {
         _top = top;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
 
         if (top.has_value()) {
             top->match(
@@ -947,7 +975,7 @@ void Node::setLeft(std::optional<NodeValue> const& left) {
 
     if (_left != left) {
         _left = left;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
 
         if (left.has_value()) {
             left->match(
@@ -965,7 +993,7 @@ void Node::setRight(std::optional<NodeValue> const& right) {
 
     if (_right != right) {
         _right = right;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
 
         if (right.has_value()) {
             right->match(
@@ -983,7 +1011,7 @@ void Node::setBottom(std::optional<NodeValue> const& bottom) {
 
     if (_bottom != bottom) {
         _bottom = bottom;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
 
         if (bottom.has_value()) {
             bottom->match(
@@ -1001,7 +1029,7 @@ void Node::setPadding(std::optional<NodeValue> const& padding) {
 
     if (_padding != padding) {
         _padding = padding;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
         _setNodePadding();
     }
 }
@@ -1011,7 +1039,7 @@ void Node::setPaddingTop(std::optional<NodeValue> const& paddingTop) {
 
     if (_paddingTop != paddingTop) {
         _paddingTop = paddingTop;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
         _setNodePadding();
     }
 }
@@ -1021,7 +1049,7 @@ void Node::setPaddingLeft(std::optional<NodeValue> const& paddingLeft) {
 
     if (_paddingLeft != paddingLeft) {
         _paddingLeft = paddingLeft;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
         _setNodePadding();
     }
 }
@@ -1031,7 +1059,7 @@ void Node::setPaddingRight(std::optional<NodeValue> const& paddingRight) {
 
     if (_paddingRight != paddingRight) {
         _paddingRight = paddingRight;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
         _setNodePadding();
     }
 }
@@ -1041,7 +1069,7 @@ void Node::setPaddingBottom(std::optional<NodeValue> const& paddingBottom) {
 
     if (_paddingBottom != paddingBottom) {
         _paddingBottom = paddingBottom;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
         _setNodePadding();
     }
 }
@@ -1051,7 +1079,7 @@ void Node::setMargin(std::optional<NodeValue> const& margin) {
 
     if (_margin != margin) {
         _margin = margin;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
         _setNodeMargin();
     }
 }
@@ -1061,7 +1089,7 @@ void Node::setMarginTop(std::optional<NodeValue> const& marginTop) {
 
     if (_marginTop != marginTop) {
         _marginTop = marginTop;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
         _setNodeMargin();
     }
 }
@@ -1071,7 +1099,7 @@ void Node::setMarginLeft(std::optional<NodeValue> const& marginLeft) {
 
     if (_marginLeft != marginLeft) {
         _marginLeft = marginLeft;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
         _setNodeMargin();
     }
 }
@@ -1081,7 +1109,7 @@ void Node::setMarginRight(std::optional<NodeValue> const& marginRight) {
 
     if (_marginRight != marginRight) {
         _marginRight = marginRight;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
         _setNodeMargin();
     }
 }
@@ -1091,7 +1119,7 @@ void Node::setMarginBottom(std::optional<NodeValue> const& marginBottom) {
 
     if (_marginBottom != marginBottom) {
         _marginBottom = marginBottom;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
         _setNodeMargin();
     }
 }
@@ -1101,7 +1129,7 @@ void Node::setGap(std::optional<NodeValue> const& gap) {
 
     if (_gap != gap) {
         _gap = gap;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
         _setNodeGap();
     }
 }
@@ -1111,7 +1139,7 @@ void Node::setGapX(std::optional<NodeValue> const& gapX) {
 
     if (_gapX != gapX) {
         _gapX = gapX;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
         _setNodeGap();
     }
 }
@@ -1121,7 +1149,7 @@ void Node::setGapY(std::optional<NodeValue> const& gapY) {
 
     if (_gapY != gapY) {
         _gapY = gapY;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
         _setNodeGap();
     }
 }
@@ -1131,7 +1159,7 @@ void Node::setBorderWidth(std::optional<float> const& borderWidth) {
 
     if (_borderWidth != borderWidth) {
         _borderWidth = borderWidth;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
         _setNodeBorder();
     }
 }
@@ -1141,7 +1169,7 @@ void Node::setBorderTopWidth(std::optional<float> const& borderTopWidth) {
 
     if (_borderTopWidth != borderTopWidth) {
         _borderTopWidth = borderTopWidth;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
         _setNodeBorder();
     }
 }
@@ -1151,7 +1179,7 @@ void Node::setBorderLeftWidth(std::optional<float> const& borderLeftWidth) {
 
     if (_borderLeftWidth != borderLeftWidth) {
         _borderLeftWidth = borderLeftWidth;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
         _setNodeBorder();
     }
 }
@@ -1161,7 +1189,7 @@ void Node::setBorderRightWidth(std::optional<float> const& borderRightWidth) {
 
     if (_borderRightWidth != borderRightWidth) {
         _borderRightWidth = borderRightWidth;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
         _setNodeBorder();
     }
 }
@@ -1171,7 +1199,7 @@ void Node::setBorderBottomWidth(std::optional<float> const& borderBottomWidth) {
 
     if (_borderBottomWidth != borderBottomWidth) {
         _borderBottomWidth = borderBottomWidth;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
         _setNodeBorder();
     }
 }
@@ -1181,7 +1209,7 @@ void Node::setBorderRadius(std::optional<float> const& borderRadius) {
 
     if (_borderRadius != borderRadius) {
         _borderRadius = borderRadius;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1190,7 +1218,7 @@ void Node::setBorderTopLeftRadius(std::optional<float> const& borderTopLeftRadiu
 
     if (_borderTopLeftRadius != borderTopLeftRadius) {
         _borderTopLeftRadius = borderTopLeftRadius;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1199,7 +1227,7 @@ void Node::setBorderTopRightRadius(std::optional<float> const& borderTopRightRad
 
     if (_borderTopRightRadius != borderTopRightRadius) {
         _borderTopRightRadius = borderTopRightRadius;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1208,7 +1236,7 @@ void Node::setBorderBottomLeftRadius(std::optional<float> const& borderBottomLef
 
     if (_borderBottomLeftRadius != borderBottomLeftRadius) {
         _borderBottomLeftRadius = borderBottomLeftRadius;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1217,7 +1245,7 @@ void Node::setBorderBottomRightRadius(std::optional<float> const& borderBottomRi
 
     if (_borderBottomRightRadius != borderBottomRightRadius) {
         _borderBottomRightRadius = borderBottomRightRadius;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1226,7 +1254,7 @@ void Node::setVisible(std::optional<bool> const& visible) {
 
     if (_visible != visible) {
         _visible = visible;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1235,7 +1263,7 @@ void Node::setZIndex(std::optional<int> const& zIndex) {
 
     if (_zIndex != zIndex) {
         _zIndex = zIndex;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1244,7 +1272,7 @@ void Node::setOffset(std::optional<Vec2> const& offset) {
 
     if (_offset != offset) {
         _offset = offset;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1253,7 +1281,7 @@ void Node::setOpacity(std::optional<float> const& opacity) {
 
     if (_opacity != opacity) {
         _opacity = opacity;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1262,7 +1290,7 @@ void Node::setTransform(std::optional<NodeTransform> const& transform) {
 
     if (_transform != transform) {
         _transform = transform;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1271,8 +1299,8 @@ void Node::setFontFamily(std::optional<std::string> const& fontFamily) {
 
     if (_fontFamily != fontFamily) {
         _fontFamily = fontFamily;
-        _textState.invalidate = true;
-        _layoutState.invalidate = true;
+        _needsTextUpdate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1281,8 +1309,8 @@ void Node::setFontWeight(std::optional<FontWeight> const& fontWeight) {
 
     if (_fontWeight != fontWeight) {
         _fontWeight = fontWeight;
-        _textState.invalidate = true;
-        _layoutState.invalidate = true;
+        _needsTextUpdate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1291,8 +1319,8 @@ void Node::setFontStyle(std::optional<FontStyle> const& fontStyle) {
 
     if (_fontStyle != fontStyle) {
         _fontStyle = fontStyle;
-        _textState.invalidate = true;
-        _layoutState.invalidate = true;
+        _needsTextUpdate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1301,8 +1329,8 @@ void Node::setFontSize(std::optional<float> const& fontSize) {
 
     if (_fontSize != fontSize) {
         _fontSize = fontSize;
-        _textState.invalidate = true;
-        _layoutState.invalidate = true;
+        _needsTextUpdate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1311,8 +1339,8 @@ void Node::setLineHeight(std::optional<float> const& lineHeight) {
 
     if (_lineHeight != lineHeight) {
         _lineHeight = lineHeight;
-        _textState.invalidate = true;
-        _layoutState.invalidate = true;
+        _needsTextUpdate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1321,8 +1349,8 @@ void Node::setTextMarker(std::optional<Vec4> const& textMarker) {
 
     if (_textMarker != textMarker) {
         _textMarker = textMarker;
-        _textState.invalidate = true;
-        _layoutState.invalidate = true;
+        _needsTextUpdate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1331,8 +1359,8 @@ void Node::setTextColor(std::optional<Vec4> const& textColor) {
 
     if (_textColor != textColor) {
         _textColor = textColor;
-        _textState.invalidate = true;
-        _layoutState.invalidate = true;
+        _needsTextUpdate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1341,7 +1369,7 @@ void Node::setBackground(std::optional<Brush> const& background) {
 
     if (_background != background) {
         _background = background;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1350,7 +1378,7 @@ void Node::setForeground(std::optional<Brush> const& foreground) {
 
     if (_foreground != foreground) {
         _foreground = foreground;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1359,7 +1387,7 @@ void Node::setBorder(std::optional<Brush> const& border) {
 
     if (_border != border) {
         _border = border;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1368,9 +1396,9 @@ void Node::setShadow(std::optional<Shadow> const& shadow) {
 
     if (_shadow != shadow) {
         _shadow = shadow;
-        _layoutState.invalidate = true;
-        _paintState.shadowImageShadow = std::nullopt;
-        _paintState.shadowImage = nullptr;
+        _needsLayoutUpdate = true;
+        _shadowImageShadow = std::nullopt;
+        _shadowImage = nullptr;
     }
 }
 
@@ -1379,7 +1407,7 @@ void Node::setCursor(std::optional<Cursor> const& cursor) {
 
     if (_cursor != cursor) {
         _cursor = cursor;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1388,8 +1416,8 @@ void Node::setContent(std::optional<std::string> const& content) {
 
     if (_content != content) {
         _content = content;
-        _textState.invalidate = true;
-        _layoutState.invalidate = true;
+        _needsTextUpdate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1398,16 +1426,16 @@ void Node::setContentEditable(bool editable) {
 
     if (_contentEditable != editable) {
         _contentEditable = editable;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
 
         if (
             (_document != nullptr) &&
             (_document->_focusedNode == this) &&
             (_firstChild != nullptr) &&
-            (_firstChild->_textState.text != nullptr)
+            (_firstChild->_textObject != nullptr)
         ) {
-            _firstChild->_textState.text->setEditable(editable);
-            _firstChild->_textState.invalidate = true;
+            _firstChild->_textObject->setEditable(editable);
+            _firstChild->_needsTextUpdate = true;
         }
     }
 }
@@ -1417,8 +1445,8 @@ void Node::setContentSecure(bool secure) {
 
     if (_contentSecure != secure) {
         _contentSecure = secure;
-        _textState.invalidate = true;
-        _layoutState.invalidate = true;
+        _needsTextUpdate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1433,7 +1461,7 @@ void Node::setTabIndex(int tabIndex) {
 
     if (_tabIndex != tabIndex) {
         _tabIndex = tabIndex;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1442,8 +1470,8 @@ void Node::setSkip(bool skip) {
 
     if (_skip != skip) {
         _skip = skip;
-        _textState.invalidate = true;
-        _layoutState.invalidate = true;
+        _needsTextUpdate = true;
+        _needsLayoutUpdate = true;
         _updateLayout();
     }
 }
@@ -1453,7 +1481,7 @@ void Node::setFlex(bool flex) {
 
     if (_flex != flex) {
         _flex = flex;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
 
         if (flex) {
             ::YGNodeStyleSetFlexGrow((::YGNode*)_layoutNode, 1.0f);
@@ -1472,7 +1500,7 @@ void Node::setKeyEvents(bool keyEvents) {
 
     if (_keyEvents != keyEvents) {
         _keyEvents = keyEvents;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1481,7 +1509,7 @@ void Node::setMouseEvents(bool mouseEvents) {
 
     if (_mouseEvents != mouseEvents) {
         _mouseEvents = mouseEvents;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1490,7 +1518,7 @@ void Node::setClipped(bool clipped) {
 
     if (_clipped != clipped) {
         _clipped = clipped;
-        _layoutState.invalidate = true;
+        _needsLayoutUpdate = true;
     }
 }
 
@@ -1580,8 +1608,8 @@ void Node::insertChild(Node& child, std::int64_t index) {
     }
 
     child._updateLayout();
-    child._textState.invalidate = true;
-    child._layoutState.invalidate = true;
+    child._needsTextUpdate = true;
+    child._needsLayoutUpdate = true;
 }
 
 void Node::removeChild(Node& child) {
@@ -1612,7 +1640,7 @@ void Node::removeChild(Node& child) {
     child._detach();
     child._updateLayout();
 
-    _layoutState.invalidate = true;
+    _needsLayoutUpdate = true;
 }
 
 void Node::removeFromParent() {
@@ -1801,18 +1829,16 @@ void Node::_createTextNode() {
         }
 
         auto const endIndex = _countCodepoints(string);
-        auto const& textState = node._textState;
-
         ranges.insert(ranges.begin() + rangeIndex, TextStyleRange{
             .startIndex = startIndex,
             .endIndex = endIndex,
             .style = TextStyle{
-                .fontFamily = textState.fontFamily,
-                .fontWeight = textState.fontWeight,
-                .fontStyle  = textState.fontStyle,
-                .fontSize   = textState.fontSize,
-                .color      = textState.textColor,
-                .marker     = textState.markerColor
+                .fontFamily = node._computedFontFamily,
+                .fontWeight = node._computedFontWeight,
+                .fontStyle  = node._computedFontStyle,
+                .fontSize   = node._computedFontSize,
+                .color      = node._computedTextColor,
+                .marker     = node._computedMarkerColor
             }
         });
     };
@@ -1825,7 +1851,6 @@ void Node::_createTextNode() {
             return ::YGSize{ 0.0f, 0.0f };
         }
 
-        auto& textState = textNode->_textState;
         auto const parent = textNode->_parent;
         auto const editableParent = (
             (parent != nullptr) &&
@@ -1834,16 +1859,16 @@ void Node::_createTextNode() {
             (parent->_display.value_or(NodeDisplay::Box) == NodeDisplay::Box)
         );
 
-        if (textState.text == nullptr) {
-            textState.text = std::make_unique<Text>();
+        if (textNode->_textObject == nullptr) {
+            textNode->_textObject = std::make_unique<Text>();
 
             /* a text child swapped in under a focused editable box is the editing surface from now on */
             if (editableParent && (textNode->_document != nullptr) && (textNode->_document->_focusedNode == parent)) {
-                textState.text->setEditable(true);
+                textNode->_textObject->setEditable(true);
             }
         }
 
-        textState.text->setMultiLine(editableParent ? std::optional<bool>(parent->_contentMultiLine) : std::nullopt);
+        textNode->_textObject->setMultiLine(editableParent ? std::optional<bool>(parent->_contentMultiLine) : std::nullopt);
 
         auto const scale = (textNode->_document != nullptr) ? textNode->_document->_scale : 1.0f;
 
@@ -1852,36 +1877,36 @@ void Node::_createTextNode() {
 
         _collectFunc(*textNode, string, ranges, _collectFunc);
 
-        textState.text->setScale(scale);
-        textState.text->setSecure(textNode->_contentSecure);
-        textState.text->setString(string);
-        textState.text->setStyles(ranges);
+        textNode->_textObject->setScale(scale);
+        textNode->_textObject->setSecure(textNode->_contentSecure);
+        textNode->_textObject->setString(string);
+        textNode->_textObject->setStyles(ranges);
 
         if (widthMode == ::YGMeasureModeUndefined) {
-            textState.text->setWidth(std::nullopt);
-            textState.text->setMaxWidth(std::nullopt);
+            textNode->_textObject->setWidth(std::nullopt);
+            textNode->_textObject->setMaxWidth(std::nullopt);
         } else if (widthMode == ::YGMeasureModeExactly) {
-            textState.text->setWidth(std::floorf(width * scale));
-            textState.text->setMaxWidth(std::nullopt);
+            textNode->_textObject->setWidth(std::floorf(width * scale));
+            textNode->_textObject->setMaxWidth(std::nullopt);
         } else if (widthMode == ::YGMeasureModeAtMost) {
-            textState.text->setWidth(std::nullopt);
-            textState.text->setMaxWidth(std::floorf(width * scale));
+            textNode->_textObject->setWidth(std::nullopt);
+            textNode->_textObject->setMaxWidth(std::floorf(width * scale));
         }
 
         if (heightMode == ::YGMeasureModeUndefined) {
-            textState.text->setHeight(std::nullopt);
-            textState.text->setMaxHeight(std::nullopt);
+            textNode->_textObject->setHeight(std::nullopt);
+            textNode->_textObject->setMaxHeight(std::nullopt);
         } else if (heightMode == ::YGMeasureModeExactly) {
-            textState.text->setHeight(std::floorf(height * scale));
-            textState.text->setMaxHeight(std::nullopt);
+            textNode->_textObject->setHeight(std::floorf(height * scale));
+            textNode->_textObject->setMaxHeight(std::nullopt);
         } else if (heightMode == ::YGMeasureModeAtMost) {
-            textState.text->setHeight(std::nullopt);
-            textState.text->setMaxHeight(std::floorf(height * scale));
+            textNode->_textObject->setHeight(std::nullopt);
+            textNode->_textObject->setMaxHeight(std::floorf(height * scale));
         }
 
         return ::YGSize{
-            std::ceilf(textState.text->getSize().width / scale),
-            std::ceilf(textState.text->getSize().height / scale)
+            std::ceilf(textNode->_textObject->getSize().width / scale),
+            std::ceilf(textNode->_textObject->getSize().height / scale)
         };
     };
 
@@ -1996,35 +2021,53 @@ void Node::_setNodeBorder() {
 void Node::_resetTextState() {
     PROFILE
 
-    _textState = {
-        .fontFamily = TEXT_DEFAULT_FONT_FAMILY,
-        .fontWeight = TEXT_DEFAULT_FONT_WEIGHT,
-        .fontStyle  = TEXT_DEFAULT_FONT_STYLE,
-        .fontSize   = TEXT_DEFAULT_FONT_SIZE,
-        .textColor  = TEXT_DEFAULT_COLOR,
-        .lineHeight = TEXT_DEFAULT_LINE_HEIGHT,
-        .invalidate = true
-    };
+    _computedFontFamily  = TEXT_DEFAULT_FONT_FAMILY;
+    _computedFontWeight  = TEXT_DEFAULT_FONT_WEIGHT;
+    _computedFontStyle   = TEXT_DEFAULT_FONT_STYLE;
+    _computedFontSize    = TEXT_DEFAULT_FONT_SIZE;
+    _computedTextColor   = TEXT_DEFAULT_COLOR;
+    _computedMarkerColor = {};
+    _computedLineHeight  = TEXT_DEFAULT_LINE_HEIGHT;
+    _textObject          = nullptr;
+    _needsTextUpdate     = true;
+    _textScrollX         = 0.0f;
 }
 
 void Node::_resetLayoutState() {
     PROFILE
 
-    _layoutState = {
-        .invalidate = true
-    };
+    _computedTextRect             = {};
+    _computedBorderEdge           = {};
+    _computedBorderRect           = {};
+    _computedMarginRect           = {};
+    _computedContentRect          = {};
+    _scrollOverflow               = {};
+    _scrollPosition               = {};
+    _computedBorderRectInDocument = {};
+    _computedMarginRectInDocument = {};
+    _computedClipRectInDocument   = {};
+    _computedZIndex               = 0;
+    _needsLayoutUpdate            = true;
 }
 
 void Node::_resetPaintState() {
     PROFILE
 
-    _paintState = {};
+    _layerImage          = nullptr;
+    _shadowImage         = nullptr;
+    _shadowImageShadow   = std::nullopt;
+    _shadowImageRadius   = std::nullopt;
+    _shadowImageScale    = std::nullopt;
+    _shadowImageClipRect = std::nullopt;
 }
 
 void Node::_resetInputState() {
     PROFILE
 
-    _inputState = {};
+    _isHover         = false;
+    _isActive        = false;
+    _isFocused       = false;
+    _isFocusedWithin = false;
 }
 
 } /* namespace Rocket */
