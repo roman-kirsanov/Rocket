@@ -196,7 +196,7 @@ struct NodeProps {
     /** When true, the node is excluded from layout and text measurement. */
     std::optional<bool> skip;
 
-    /** When true, the node grows and shrinks to fill available main-axis space. */
+    /** When true, the node grows and shrinks to fill available main-axis space; sibling flex nodes share it equally, whatever their content. The parent needs a definite main size, or the node collapses to zero (see Node::setFlex). */
     std::optional<bool> flex;
 
     /** Opacity in [0, 1] applied to the node and its subtree. */

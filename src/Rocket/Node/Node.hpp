@@ -679,7 +679,11 @@ public:
 
     /**
      * When true, the node grows and shrinks to fill available space on the
-     * main axis (flex-grow 1, flex-shrink 1).
+     * main axis (flex-grow 1, flex-shrink 1, flex-basis 0, as React
+     * Native's `flex: 1`). Sibling flex nodes share the space equally,
+     * whatever their content. The parent must have a definite main size
+     * (set, stretched, or flex itself): inside a content-sized parent a
+     * flex node has nothing to fill and collapses to zero.
      */
     void setFlex(bool);
 

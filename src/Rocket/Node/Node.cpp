@@ -1484,9 +1484,13 @@ void Node::setFlex(bool flex) {
         _needsLayoutUpdate = true;
 
         if (flex) {
+            /* A zero basis (React Native's `flex: 1`) makes sibling flex
+               nodes share the space equally instead of starting from their
+               content size. The parent must have a definite main size: a
+               flex node inside a content-sized parent collapses to zero. */
             ::YGNodeStyleSetFlexGrow((::YGNode*)_layoutNode, 1.0f);
             ::YGNodeStyleSetFlexShrink((::YGNode*)_layoutNode, 1.0f);
-            ::YGNodeStyleSetFlexBasis((::YGNode*)_layoutNode, ::YGUndefined);
+            ::YGNodeStyleSetFlexBasis((::YGNode*)_layoutNode, 0.0f);
         } else {
             ::YGNodeStyleSetFlexGrow((::YGNode*)_layoutNode, 0.0f);
             ::YGNodeStyleSetFlexShrink((::YGNode*)_layoutNode, 0.0f);

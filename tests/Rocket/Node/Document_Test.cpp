@@ -158,6 +158,76 @@ TEST(Document, LayoutRow) {
     ASSERT_TRUE(b.getComputedBorderRect().width == 540.0f);
 }
 
+/* Layout: sibling flex children split a definite row equally, whatever
+   their content, because flex uses a zero basis. */
+TEST(Document, LayoutFlexSiblingsShareEqually) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto row = Node();
+    row.setWidth(400.0f);
+    row.setDirection(NodeDirection::Horizontal);
+    document.appendChild(row);
+
+    auto a = Node();
+    a.setFlex(true);
+    row.appendChild(a);
+
+    auto aContent = Node();
+    aContent.setWidth(30.0f);
+    aContent.setHeight(10.0f);
+    a.appendChild(aContent);
+
+    auto b = Node();
+    b.setFlex(true);
+    row.appendChild(b);
+
+    auto bContent = Node();
+    bContent.setWidth(300.0f);
+    bContent.setHeight(10.0f);
+    b.appendChild(bContent);
+
+    document.update();
+
+    ASSERT_TRUE(a.getComputedBorderRect().width == 200.0f);
+    ASSERT_TRUE(b.getComputedBorderRect().x == 200.0f);
+    ASSERT_TRUE(b.getComputedBorderRect().width == 200.0f);
+}
+
+/* Layout: a flex child needs a parent with a definite main size. Inside a
+   content-sized column it collapses to the zero basis (React Native's
+   `flex: 1` rule); once the column has a height, the child fills it. */
+TEST(Document, LayoutFlexNeedsDefiniteParent) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto column = Node();
+    column.setWidth(100.0f);
+    column.setDirection(NodeDirection::Vertical);
+    document.appendChild(column);
+
+    auto child = Node();
+    child.setFlex(true);
+    column.appendChild(child);
+
+    auto content = Node();
+    content.setWidth(100.0f);
+    content.setHeight(40.0f);
+    child.appendChild(content);
+
+    document.update();
+    ASSERT_FLOAT_EQ(child.getComputedBorderRect().height, 0.0f);
+    ASSERT_FLOAT_EQ(column.getComputedBorderRect().height, 0.0f);
+
+    column.setHeight(120.0f);
+    document.update();
+    ASSERT_FLOAT_EQ(child.getComputedBorderRect().height, 120.0f);
+}
+
 /* Layout: a percent width resolves against the parent dimension. */
 TEST(Document, LayoutPercentWidth) {
     auto window = Window();
