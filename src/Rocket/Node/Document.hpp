@@ -158,6 +158,7 @@ private:
     > _renderList;
 
     std::optional<_InputState> _getInputState();
+    Node* _getKeyNode();
     Vec2 _getTextLocalPosition(_InputState const&, Vec2 const&) const;
     Node* _findNodeAtPosition(Vec2 const&);
     bool _isNodeFocusable(Node const&) const;

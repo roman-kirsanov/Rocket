@@ -2284,3 +2284,36 @@ TEST(Document, KeyEventPayloadsArriveAsSent) {
     ASSERT_TRUE(meta == true);
     ASSERT_TRUE(upKey == Rocket::Key::KeyQ);
 }
+
+/* A focused node with key events disabled emits no key events and does not
+   edit its text; the key events go to the document instead. */
+TEST(Document, KeyEventsDisabled) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto box = Node();
+    box.setWidth(100.0f);
+    box.setHeight(50.0f);
+    box.setTabIndex(1);
+    box.setKeyEvents(false);
+    document.appendChild(box);
+
+    document.update();
+    document.focusNode(&box);
+
+    auto boxEvents = std::vector<std::string>();
+    auto documentEvents = std::vector<std::string>();
+    auto boxSub = Sub<NodeEvent const&>(box.onEvent, [&](NodeEvent const& event) { boxEvents.push_back(eventName(event)); });
+    auto documentSub = Sub<NodeEvent const&>(document.onEvent, [&](NodeEvent const& event) { documentEvents.push_back(eventName(event)); });
+
+    _ScriptKey(window, Rocket::Key::KeyA, KeyModifiers{}, "a");
+    ASSERT_TRUE(box.isFocused() == true);
+    ASSERT_TRUE(boxEvents.empty());
+    ASSERT_TRUE(documentEvents == std::vector<std::string>({ "keydown", "keyup" }));
+
+    box.setKeyEvents(true);
+    _ScriptKey(window, Rocket::Key::KeyA, KeyModifiers{}, "a");
+    ASSERT_TRUE(boxEvents == std::vector<std::string>({ "keydown", "keyup" }));
+}

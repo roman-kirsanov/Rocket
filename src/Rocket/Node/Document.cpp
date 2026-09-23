@@ -681,7 +681,8 @@ void Document::_mouseUp(Mouse const& mouse, Vec2 const& position, KeyModifiers c
 void Document::_keyDown(Key const& key, KeyModifiers const& modifiers, std::string const& input) {
     PROFILE
 
-    auto& target = (_focusedNode != nullptr) ? *_focusedNode : *this;
+    auto const keyNode = _getKeyNode();
+    auto& target = (keyNode != nullptr) ? *keyNode : *this;
     auto const event = KeyDownNodeEvent(target, key, modifiers, input);
 
     target.dispatchEvent(event);
@@ -692,7 +693,7 @@ void Document::_keyDown(Key const& key, KeyModifiers const& modifiers, std::stri
 
     auto consumed = false;
 
-    if (_focusedNode != nullptr && _getInputState()) {
+    if (keyNode != nullptr && _getInputState()) {
         consumed = _input(key, modifiers, input);
     }
 
@@ -710,15 +711,21 @@ void Document::_keyDown(Key const& key, KeyModifiers const& modifiers, std::stri
 void Document::_keyUp(Key const& key, KeyModifiers const& modifiers) {
     PROFILE
 
-    if (_focusedNode != nullptr) {
-        _focusedNode->dispatchEvent(
-            KeyUpNodeEvent(*_focusedNode, key, modifiers)
+    if (auto keyNode = _getKeyNode()) {
+        keyNode->dispatchEvent(
+            KeyUpNodeEvent(*keyNode, key, modifiers)
         );
     } else {
         dispatchEvent(
             KeyUpNodeEvent(*this, key, modifiers)
         );
     }
+}
+
+Node* Document::_getKeyNode() {
+    PROFILE
+
+    return ((_focusedNode != nullptr) && (_focusedNode->_keyEvents == true)) ? _focusedNode : nullptr;
 }
 
 bool Document::_input(Key const& key, KeyModifiers const& modifiers, std::string const& input) {

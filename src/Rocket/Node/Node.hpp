@@ -103,9 +103,6 @@ struct NodeTransform {
     bool operator!=(NodeTransform const&) const;
 };
 
-class Document;
-class Text;
-
 /**
  * A retained-mode UI tree node.
  *
@@ -146,7 +143,7 @@ public:
     Node& operator=(Node const&) = delete;
 
     /** Returns the Document this node is currently attached to, or nullptr if detached. */
-    Document* getDocument() const;
+    class Document* getDocument() const;
 
     /** Returns the parent node, or nullptr if this is a root node. */
     Node* getParent() const;
@@ -389,7 +386,7 @@ public:
     /** Returns the current value of the flex flag. */
     bool getFlex() const;
 
-    /** Returns the key-event flag (currently unused by the document's key dispatch). */
+    /** Returns whether this node receives key events when focused (default true). */
     bool getKeyEvents() const;
 
     /** Returns whether mouse hit-testing is enabled for this node and its subtree. */
@@ -683,8 +680,10 @@ public:
      */
     void setFlex(bool);
 
-    /** Stores the key-event flag. Currently unused by the document's key
-     *  dispatch — setting it to false does not suppress key events. */
+    /** When true (default), the node receives key events while focused. When
+     *  false, a focused node emits no KeyDownNodeEvent, KeyUpNodeEvent or
+     *  InputNodeEvent and its text is not edited; the key events are
+     *  dispatched on the document instead, and Tab still moves focus. */
     void setKeyEvents(bool);
 
     /** When true (default), this node is mouse hit-testable; when false, the
@@ -859,7 +858,7 @@ private:
     bool _isFocused;
     bool _isFocusedWithin;
     float _textScrollX;
-    std::unique_ptr<Text> _textObject;
+    std::unique_ptr<class Text> _textObject;
     std::string _computedFontFamily;
     FontWeight _computedFontWeight;
     FontStyle _computedFontStyle;
@@ -872,8 +871,6 @@ private:
     Vec4 _computedBorderRect;
     Vec4 _computedMarginRect;
     Vec4 _computedContentRect;
-    Vec2 _scrollOverflow;
-    Vec2 _scrollPosition;
     Vec4 _computedBorderRectInDocument;
     Vec4 _computedMarginRectInDocument;
     Vec4 _computedClipRectInDocument;
@@ -884,6 +881,8 @@ private:
     std::optional<Vec4> _shadowImageRadius;
     std::optional<float> _shadowImageScale;
     std::optional<Vec4> _shadowImageClipRect;
+    Vec2 _scrollOverflow;
+    Vec2 _scrollPosition;
 
     void* _layoutNode;
     void* _textNode;
