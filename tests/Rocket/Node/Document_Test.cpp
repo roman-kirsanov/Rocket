@@ -2342,3 +2342,76 @@ TEST(Document, RemoveChildRemeasuresText) {
     document.update();
     ASSERT_TRUE(text.getComputedBorderRect().width < withSpan);
 }
+
+/* scrollNodeIntoView scrolls the nearest scroll container by the least
+   amount that shows the node in full; a node taller than the container is
+   aligned to its top; a tree without a scroll container is left alone. */
+TEST(Document, ScrollNodeIntoView) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto container = Node();
+    container.setWidth(100.0f);
+    container.setHeight(100.0f);
+    container.setDirection(NodeDirection::Vertical);
+    container.setOverflowY(NodeOverflow::Scroll);
+    document.appendChild(container);
+
+    auto a = Node();
+    auto b = Node();
+    auto c = Node();
+    auto d = Node();
+    for (auto node : { &a, &b, &c }) {
+        node->setWidth(100.0f);
+        node->setHeight(80.0f);
+        container.appendChild(*node);
+    }
+    d.setWidth(100.0f);
+    d.setHeight(300.0f);
+    container.appendChild(d);
+
+    auto inner = Node();
+    inner.setWidth(20.0f);
+    inner.setHeight(20.0f);
+    c.appendChild(inner);
+
+    document.update();
+    ASSERT_TRUE(c.getComputedBorderRect().y == 160.0f);
+
+    /* c ends at 240: scroll down by 140 so its bottom meets the container's. */
+    document.scrollNodeIntoView(c);
+    document.update();
+    ASSERT_TRUE(c.getComputedBorderRect().y == 20.0f);
+
+    /* Already fully visible: nothing moves. */
+    document.scrollNodeIntoView(c);
+    document.update();
+    ASSERT_TRUE(c.getComputedBorderRect().y == 20.0f);
+
+    /* a starts above the viewport: scroll back up by 140. */
+    document.scrollNodeIntoView(a);
+    document.update();
+    ASSERT_TRUE(a.getComputedBorderRect().y == 0.0f);
+
+    /* d is taller than the container: align its top. */
+    document.scrollNodeIntoView(d);
+    document.update();
+    ASSERT_TRUE(d.getComputedBorderRect().y == 0.0f);
+
+    /* A nested node scrolls the first scrollable ancestor, not its parent. */
+    document.scrollNodeIntoView(inner);
+    document.update();
+    ASSERT_TRUE(inner.getComputedBorderRect().y == 0.0f);
+    ASSERT_TRUE(c.getComputedBorderRect().y == 0.0f);
+
+    /* No scroll container above: a no-op. */
+    auto loose = Node();
+    loose.setWidth(10.0f);
+    loose.setHeight(10.0f);
+    document.appendChild(loose);
+    document.scrollNodeIntoView(loose);
+    document.update();
+    ASSERT_TRUE(c.getComputedBorderRect().y == 0.0f);
+}

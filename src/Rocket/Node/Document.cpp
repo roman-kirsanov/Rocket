@@ -165,6 +165,64 @@ void Document::scrollNode(Node& node, Vec2 const& wheel) {
     }
 }
 
+void Document::scrollNodeIntoView(Node& node) {
+    PROFILE
+
+    auto container = static_cast<Node*>(nullptr);
+
+    for (auto ancestor = node._parent; ancestor != nullptr; ancestor = ancestor->_parent) {
+        if (
+            (ancestor->getOverflowX() == NodeOverflow::Scroll) ||
+            (ancestor->getOverflowY() == NodeOverflow::Scroll)
+        ) {
+            container = ancestor;
+            break;
+        }
+    }
+
+    if (container == nullptr) {
+        return;
+    }
+
+    auto const& nodeRect = node._computedBorderRectInDocument;
+    auto const& containerRect = container->_computedBorderRectInDocument;
+    auto const& borderEdge = container->_computedBorderEdge;
+
+    auto const scrollAxis = [&](float nodeMin, float nodeSize, float viewMin, float viewSize, float& position, float overflow) {
+        auto delta = 0.0f;
+
+        if (
+            (nodeSize > viewSize) ||
+            (nodeMin < viewMin)
+        ) {
+            delta = (nodeMin - viewMin);
+        } else if ((nodeMin + nodeSize) > (viewMin + viewSize)) {
+            delta = ((nodeMin + nodeSize) - (viewMin + viewSize));
+        }
+
+        if (delta != 0.0f) {
+            position = _SnapToPixelGrid(std::clamp((position + delta), 0.0f, overflow), _scale);
+            _needsUpdate = true;
+        }
+    };
+
+    if (container->getOverflowX() == NodeOverflow::Scroll) {
+        scrollAxis(
+            nodeRect.x, nodeRect.width,
+            (containerRect.x + borderEdge.left), std::max(0.0f, (containerRect.width - borderEdge.left - borderEdge.right)),
+            container->_scrollPosition.x, container->_scrollOverflow.x
+        );
+    }
+
+    if (container->getOverflowY() == NodeOverflow::Scroll) {
+        scrollAxis(
+            nodeRect.y, nodeRect.height,
+            (containerRect.y + borderEdge.top), std::max(0.0f, (containerRect.height - borderEdge.top - borderEdge.bottom)),
+            container->_scrollPosition.y, container->_scrollOverflow.y
+        );
+    }
+}
+
 void Document::focusNode(Node* targetNode) {
     PROFILE
 
@@ -483,8 +541,6 @@ void Document::_mouseMove(Vec2 const& position, KeyModifiers const& modifiers) {
 
     static thread_local auto _newHoverPath = std::vector<Node*>();
 
-    update();
-
     if (_mouseIsDown == true) {
         if (auto inputState = _getInputState()) {
             inputState->textObject.mouseMove(_getTextLocalPosition(*inputState, position));
@@ -556,8 +612,6 @@ void Document::_mouseMove(Vec2 const& position, KeyModifiers const& modifiers) {
 
 void Document::_mouseDown(Mouse const& mouse, Vec2 const& position, KeyModifiers const& modifiers, int clickCount) {
     PROFILE
-
-    update();
 
     if (_mouseIsDown == true) {
         return;

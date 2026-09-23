@@ -34,7 +34,9 @@ namespace Rocket {
  * repainting on the window's paint event and requesting an update on resize
  * and DPI change. Call update() to recompute layout (it also pushes the
  * resolved cursor to the window) and render() to paint the tree into the
- * window. The Document does not own the window.
+ * window. Input events are hit-tested against the layout of the last
+ * update(), so run update() before dispatching events whenever the tree
+ * has changed. The Document does not own the window.
  *
  * Non-copyable and non-movable (inherited from Node).
  */
@@ -89,6 +91,23 @@ public:
      * @param wheel The wheel delta; the scroll position moves opposite to it (content moves with it).
      */
     void scrollNode(Node& node, Vec2 const& wheel);
+
+    /**
+     * Scrolls the nearest scrollable ancestor of the given node so the node
+     * is fully visible inside it.
+     *
+     * Walks up from the node's parent to the first ancestor with
+     * NodeOverflow::Scroll on either axis and adjusts that container only,
+     * each of its scrollable axes independently: the scroll position moves
+     * by the least amount that brings the node's border box inside the
+     * container's inner border box. A node larger than the container on an
+     * axis is aligned to the container's top-left edge on that axis. Uses
+     * the layout of the last update(), so call update() first if the tree
+     * has changed; the new position takes effect on the next update().
+     *
+     * @param node The node to bring into view.
+     */
+    void scrollNodeIntoView(Node& node);
 
     /**
      * Moves focus to the nearest focusable or editable node at or above the
