@@ -648,9 +648,9 @@ public:
     /**
      * Enables secure text display: every codepoint of the rendered text is
      * masked with a bullet (U+2022) while the content keeps the real string
-     * (see Text::setSecure). Masking reads the flag on the text-display node
-     * that owns the text; the copy/cut guard reads it on the editable box, so
-     * set it on both for an editable field.
+     * (see Text::setSecure). Effective on the text-display node itself or,
+     * for an editable field, on the editable box; either one masks the text
+     * and blocks copy and cut.
      */
     void setContentSecure(bool);
 
@@ -739,7 +739,7 @@ public:
      * Removes child from this node's child list.
      *
      * No-ops if child is not a direct child of this node. Detaches child
-     * and its subtree from the current Document and triggers layout
+     * and its subtree from the current Document and triggers layout/text
      * invalidation on this node.
      */
     void removeChild(Node&);

@@ -272,6 +272,7 @@ void Document::render() {
 
     if (
         (_focusedNode != nullptr) &&
+        (_focusedNode->_firstChild != nullptr) &&
         (_focusedNode->_firstChild->_textObject != nullptr) &&
         _isNodeEditable(*_focusedNode)
     ) {
@@ -823,7 +824,7 @@ bool Document::_input(Key const& key, KeyModifiers const& modifiers, std::string
         } else if ((key == Key::KeyA) && modifiers.meta) {
             inputState->textObject.selectAll();
         } else if ((key == Key::KeyC) && modifiers.meta) {
-            if (inputState->boxNode._contentSecure == false) {
+            if ((inputState->boxNode._contentSecure || inputState->textNode._contentSecure) == false) {
                 auto string = std::string();
                 inputState->textObject.copy(string);
                 if (string.empty() == false) {
@@ -831,7 +832,7 @@ bool Document::_input(Key const& key, KeyModifiers const& modifiers, std::string
                 }
             }
         } else if ((key == Key::KeyX) && modifiers.meta) {
-            if (inputState->boxNode._contentSecure == false) {
+            if ((inputState->boxNode._contentSecure || inputState->textNode._contentSecure) == false) {
                 auto string = std::string();
                 inputState->textObject.cut(string);
                 if (string.empty() == false) {

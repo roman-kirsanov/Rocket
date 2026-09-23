@@ -2317,3 +2317,28 @@ TEST(Document, KeyEventsDisabled) {
     _ScriptKey(window, Rocket::Key::KeyA, KeyModifiers{}, "a");
     ASSERT_TRUE(boxEvents == std::vector<std::string>({ "keydown", "keyup" }));
 }
+
+/* Removing a text span re-measures the text node that contained it. */
+TEST(Document, RemoveChildRemeasuresText) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto text = Node();
+    text.setDisplay(NodeDisplay::Text);
+    text.setContent("hello ");
+    document.appendChild(text);
+
+    auto span = Node();
+    span.setDisplay(NodeDisplay::Text);
+    span.setContent("world, a much longer span");
+    text.appendChild(span);
+
+    document.update();
+    auto const withSpan = text.getComputedBorderRect().width;
+
+    text.removeChild(span);
+    document.update();
+    ASSERT_TRUE(text.getComputedBorderRect().width < withSpan);
+}

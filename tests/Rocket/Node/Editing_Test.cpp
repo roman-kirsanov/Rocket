@@ -513,6 +513,28 @@ TEST(Editing, SecureFieldBlocksCopyAndCutAllowsPaste) {
     });
 }
 
+/* The secure flag is honoured on either node: set on the box it masks the
+   rendered text (bullets measure wider than a run of "i"), and set on the
+   text node it blocks copy just like on the box. */
+TEST(Editing, SecureFlagOnEitherNode) {
+    {
+        auto e = _Editor("iiii");
+        auto const plainWidth = e.text.getComputedBorderRect().width;
+        e.box.setContentSecure(true);
+        e.document.update();
+        EXPECT_GT(e.text.getComputedBorderRect().width, plainWidth);
+    }
+
+    _WithClipboard("sentinel", []{
+        auto e = _Editor("hunter2");
+        e.text.setContentSecure(true);
+        e.focus();
+        e.key(Rocket::Key::KeyA, _Mods(false, true), "a");
+        e.key(Rocket::Key::KeyC, _Mods(false, true), "c");
+        EXPECT_EQ(GetClipboardString(), "sentinel");
+    });
+}
+
 /* ============================ mouse ====================================== */
 
 /* A click places the caret at the glyph under the pointer. */

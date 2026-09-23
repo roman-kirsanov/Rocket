@@ -1640,6 +1640,7 @@ void Node::removeChild(Node& child) {
     child._detach();
     child._updateLayout();
 
+    _needsTextUpdate = true;
     _needsLayoutUpdate = true;
 }
 
@@ -1878,7 +1879,7 @@ void Node::_createTextNode() {
         _collectFunc(*textNode, string, ranges, _collectFunc);
 
         textNode->_textObject->setScale(scale);
-        textNode->_textObject->setSecure(textNode->_contentSecure);
+        textNode->_textObject->setSecure(textNode->_contentSecure || (editableParent && parent->_contentSecure));
         textNode->_textObject->setString(string);
         textNode->_textObject->setStyles(ranges);
 
