@@ -126,8 +126,8 @@ struct NodeTransform {
  */
 class Node {
 public:
-    /** Bubbling-phase event channel. Fires on this node after it and all its
-     *  ancestors have received the capture-phase notification, then propagates
+    /** Bubbling-phase event channel. Fires on this node after the capture
+     *  phase (even when a capture handler stopped propagation), then propagates
      *  upward to the root. */
     Pub<NodeEvent const&> onEvent;
 
@@ -160,19 +160,19 @@ public:
     /** Returns the next sibling, or nullptr if this is the last child. */
     Node* getNextSibling() const;
 
-    /** Returns the most recently computed border-box rectangle, in content coordinates. */
+    /** Returns the most recently computed border-box rectangle, in document coordinates (ancestor scroll applied). */
     Vec4 const& getComputedBorderRect() const;
 
-    /** Returns the most recently computed margin-box rectangle, in content coordinates. */
+    /** Returns the most recently computed margin-box rectangle, in document coordinates (ancestor scroll applied). */
     Vec4 const& getComputedMarginRect() const;
 
-    /** Returns the most recently computed clip rectangle, in content coordinates. */
+    /** Returns the most recently computed clip rectangle that applies to this node's children, in document coordinates; the node's own box is clipped by its parent's. */
     Vec4 const& getComputedClipRect() const;
 
     /** Returns the most recently computed z-index. */
     std::int64_t getComputedZIndex() const;
 
-    /** Returns the most recently computed font family, inherited from ancestors ("" = the font registry's default face). */
+    /** Returns the most recently computed font family, inherited from ancestors ("" = the embedded default face). */
     std::string const& getComputedFontFamily() const;
 
     /** Returns the most recently computed font weight, inherited from ancestors. */
@@ -395,10 +395,10 @@ public:
     /** Returns whether the node is clipped to its ancestor clip rectangle. */
     bool getClipped() const;
 
-    /** Returns the focusability index; any value > 0 makes the node focusable. 0 by default. */
+    /** Returns the focusability index; any value > 0 makes a box node focusable (editable boxes are focusable regardless). 0 by default. */
     int getTabIndex() const;
 
-    /** Returns true if the mouse pointer is currently over this node. */
+    /** Returns true if the mouse pointer is currently over this node or a descendant. Not updated while a mouse button is held. */
     bool isHover() const;
 
     /** Returns true if this node or a descendant is currently being pressed with the left mouse button. */
@@ -502,74 +502,74 @@ public:
      *  Passing std::nullopt clears the padding. */
     void setPadding(std::optional<NodeValue> const&);
 
-    /** Sets the top padding. Passing std::nullopt clears the padding. */
+    /** Sets the top padding. Passing std::nullopt reverts the edge to the shorthand padding, if any. */
     void setPaddingTop(std::optional<NodeValue> const&);
 
-    /** Sets the left padding. Passing std::nullopt clears the padding. */
+    /** Sets the left padding. Passing std::nullopt reverts the edge to the shorthand padding, if any. */
     void setPaddingLeft(std::optional<NodeValue> const&);
 
-    /** Sets the right padding. Passing std::nullopt clears the padding. */
+    /** Sets the right padding. Passing std::nullopt reverts the edge to the shorthand padding, if any. */
     void setPaddingRight(std::optional<NodeValue> const&);
 
-    /** Sets the bottom padding. Passing std::nullopt clears the padding. */
+    /** Sets the bottom padding. Passing std::nullopt reverts the edge to the shorthand padding, if any. */
     void setPaddingBottom(std::optional<NodeValue> const&);
 
     /** Sets the margin for all edges; a per-edge margin, when set, overrides it on that edge.
      *  Passing std::nullopt clears the margin. */
     void setMargin(std::optional<NodeValue> const&);
 
-    /** Sets the top margin. Passing std::nullopt clears the margin. */
+    /** Sets the top margin. Passing std::nullopt reverts the edge to the shorthand margin, if any. */
     void setMarginTop(std::optional<NodeValue> const&);
 
-    /** Sets the left margin. Passing std::nullopt clears the margin. */
+    /** Sets the left margin. Passing std::nullopt reverts the edge to the shorthand margin, if any. */
     void setMarginLeft(std::optional<NodeValue> const&);
 
-    /** Sets the right margin. Passing std::nullopt clears the margin. */
+    /** Sets the right margin. Passing std::nullopt reverts the edge to the shorthand margin, if any. */
     void setMarginRight(std::optional<NodeValue> const&);
 
-    /** Sets the bottom margin. Passing std::nullopt clears the margin. */
+    /** Sets the bottom margin. Passing std::nullopt reverts the edge to the shorthand margin, if any. */
     void setMarginBottom(std::optional<NodeValue> const&);
 
     /** Sets the gap between children on both axes; a per-axis gap, when set, overrides it on that axis.
      *  Passing std::nullopt clears the gap. */
     void setGap(std::optional<NodeValue> const&);
 
-    /** Sets the horizontal (column) gap between children. Passing std::nullopt clears the gap. */
+    /** Sets the horizontal (column) gap between children. Passing std::nullopt reverts to the shorthand gap, if any. */
     void setGapX(std::optional<NodeValue> const&);
 
-    /** Sets the vertical (row) gap between children. Passing std::nullopt clears the gap. */
+    /** Sets the vertical (row) gap between children. Passing std::nullopt reverts to the shorthand gap, if any. */
     void setGapY(std::optional<NodeValue> const&);
 
     /** Sets the border width in pixels for all edges; a per-edge border width, when set, overrides it on that edge.
      *  Passing std::nullopt clears the border. */
     void setBorderWidth(std::optional<float> const&);
 
-    /** Sets the top border width in pixels. Passing std::nullopt clears the border. */
+    /** Sets the top border width in pixels. Passing std::nullopt reverts the edge to the shorthand width, if any. */
     void setBorderTopWidth(std::optional<float> const&);
 
-    /** Sets the left border width in pixels. Passing std::nullopt clears the border. */
+    /** Sets the left border width in pixels. Passing std::nullopt reverts the edge to the shorthand width, if any. */
     void setBorderLeftWidth(std::optional<float> const&);
 
-    /** Sets the right border width in pixels. Passing std::nullopt clears the border. */
+    /** Sets the right border width in pixels. Passing std::nullopt reverts the edge to the shorthand width, if any. */
     void setBorderRightWidth(std::optional<float> const&);
 
-    /** Sets the bottom border width in pixels. Passing std::nullopt clears the border. */
+    /** Sets the bottom border width in pixels. Passing std::nullopt reverts the edge to the shorthand width, if any. */
     void setBorderBottomWidth(std::optional<float> const&);
 
     /** Sets the corner border radius in pixels for all corners; a per-corner radius, when set, overrides it on that corner.
      *  Passing std::nullopt clears the radius. */
     void setBorderRadius(std::optional<float> const&);
 
-    /** Sets the top-left corner border radius in pixels. Passing std::nullopt clears the radius. */
+    /** Sets the top-left corner border radius in pixels. Passing std::nullopt reverts the corner to the shorthand radius, if any. */
     void setBorderTopLeftRadius(std::optional<float> const&);
 
-    /** Sets the top-right corner border radius in pixels. Passing std::nullopt clears the radius. */
+    /** Sets the top-right corner border radius in pixels. Passing std::nullopt reverts the corner to the shorthand radius, if any. */
     void setBorderTopRightRadius(std::optional<float> const&);
 
-    /** Sets the bottom-left corner border radius in pixels. Passing std::nullopt clears the radius. */
+    /** Sets the bottom-left corner border radius in pixels. Passing std::nullopt reverts the corner to the shorthand radius, if any. */
     void setBorderBottomLeftRadius(std::optional<float> const&);
 
-    /** Sets the bottom-right corner border radius in pixels. Passing std::nullopt clears the radius. */
+    /** Sets the bottom-right corner border radius in pixels. Passing std::nullopt reverts the corner to the shorthand radius, if any. */
     void setBorderBottomRightRadius(std::optional<float> const&);
 
     /** Sets the visibility flag. Passing std::nullopt clears the value. */
@@ -603,7 +603,7 @@ public:
     /** Sets the font size in pixels. Passing std::nullopt clears the value and invalidates text. */
     void setFontSize(std::optional<float> const&);
 
-    /** Sets the line height value. Passing std::nullopt clears the value and invalidates text. */
+    /** Sets the line height value. Stored and cascaded but not currently consumed by the text engine. Passing std::nullopt clears the value and invalidates text. */
     void setLineHeight(std::optional<float> const&);
 
     /** Sets the text color (RGBA). Passing std::nullopt clears the value and invalidates text. */
@@ -640,15 +640,17 @@ public:
      * Marks this node as a text-editing surface. Only effective on a box node
      * whose first text-display child holds the edited content; while this box
      * is focused, the document handles caret, selection, and content mutation
-     * on that child, and mouse presses anywhere inside the box drive the
-     * editor.
+     * on that child, and left presses inside the box drive the editor unless
+     * they land on a focusable descendant.
      */
     void setContentEditable(bool);
 
     /**
-     * Enables secure text display on this node: every codepoint of the
-     * rendered text is masked with a bullet (U+2022) while the content keeps
-     * the real string (see Text::setSecure).
+     * Enables secure text display: every codepoint of the rendered text is
+     * masked with a bullet (U+2022) while the content keeps the real string
+     * (see Text::setSecure). Masking reads the flag on the text-display node
+     * that owns the text; the copy/cut guard reads it on the editable box, so
+     * set it on both for an editable field.
      */
     void setContentSecure(bool);
 
@@ -667,8 +669,9 @@ public:
      */
     void setContentMultiLine(bool);
 
-    /** Sets the focusability index: any value > 0 makes the node focusable.
-     *  The value does not currently define a traversal order. */
+    /** Sets the focusability index: any value > 0 makes a box node focusable
+     *  (text nodes are never focusable; editable boxes always are). The value
+     *  does not currently define a traversal order. */
     void setTabIndex(int);
 
     /** When true, this node is excluded from layout and text measurement. */
@@ -690,7 +693,7 @@ public:
      *  node and its whole subtree are excluded from mouse hit-testing. */
     void setMouseEvents(bool);
 
-    /** When true (default), the node is clipped to its ancestor's clip rectangle; when false it starts a new clip path. */
+    /** When true (default), the node is clipped to its parent's clip rectangle; when false it starts a new clip path. */
     void setClipped(bool);
 
     /**
@@ -736,8 +739,8 @@ public:
      * Removes child from this node's child list.
      *
      * No-ops if child is not a direct child of this node. Detaches child
-     * and its subtree from the current Document and triggers layout/text
-     * invalidation.
+     * and its subtree from the current Document and triggers layout
+     * invalidation on this node.
      */
     void removeChild(Node&);
 
@@ -879,8 +882,8 @@ private:
     std::unique_ptr<Image> _shadowImage;
     std::optional<Shadow> _shadowImageShadow;
     std::optional<Vec4> _shadowImageRadius;
-    std::optional<float> _shadowImageScale;
     std::optional<Vec4> _shadowImageClipRect;
+    std::optional<float> _shadowImageScale;
     Vec2 _scrollOverflow;
     Vec2 _scrollPosition;
 

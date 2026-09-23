@@ -11,7 +11,7 @@
 
 namespace Rocket {
 
-/** A layout length expressed as an absolute pixel count. */
+/** A layout length expressed in document points (scaled by the document scale when rendered). */
 struct PixelValue {
     float value;
     bool operator==(PixelValue const&) const;
@@ -19,7 +19,8 @@ struct PixelValue {
 };
 
 /** A layout length expressed as a percentage: of the parent dimension for
-    layout properties, or of the node's own size for NodeTransform translation. */
+    layout properties (gaps resolve against the node's own inner size), or of
+    the node's own size for NodeTransform translation. */
 struct PercentValue {
     float value;
     bool operator==(PercentValue const&) const;

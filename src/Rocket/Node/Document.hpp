@@ -30,10 +30,11 @@ namespace Rocket {
  *
  * Constructing a Document registers it as the tree root, sets up layout, and
  * subscribes to the window's event source, translating window input events
- * (mouse, wheel, keyboard) into node events dispatched through the tree. Call
- * update() to recompute layout and render() to paint the tree into the
- * window. The Document does not own the window and performs no window
- * management of its own.
+ * (mouse, wheel, keyboard) into node events dispatched through the tree,
+ * repainting on the window's paint event and requesting an update on resize
+ * and DPI change. Call update() to recompute layout (it also pushes the
+ * resolved cursor to the window) and render() to paint the tree into the
+ * window. The Document does not own the window.
  *
  * Non-copyable and non-movable (inherited from Node).
  */
@@ -93,8 +94,8 @@ public:
      * Moves focus to the nearest focusable or editable node at or above the
      * given one, blurring whatever held focus before.
      *
-     * Walks up from targetNode until it finds a node with a positive tab index
-     * or an editable node, and focuses that; if the walk reaches the root
+     * Walks up from targetNode until it finds a box node with a positive tab
+     * index or an editable node, and focuses that; if the walk reaches the root
      * without a match, focus is cleared instead. Pass nullptr to blur without
      * focusing anything. Focusing an editable node is what enables its text
      * editing state, and blurring discards the caret and selection.
@@ -118,10 +119,11 @@ public:
      * Renders the node tree into the window.
      *
      * Call update() beforehand to ensure layout is current. No-op unless a
-     * repaint is pending: an update has run, a text-editing mouse
-     * interaction changed the caret or selection, or the caret blink phase
+     * repaint is pending: an update has run, a mouse press, drag or release
+     * happened while an editable node was focused, or the caret blink phase
      * flipped (the caret of a focused editable blinks at 530ms, restarting
-     * visible after every edit or caret move) since the last render.
+     * visible after every handled key, press or focus change) since the last
+     * render.
      */
     void render();
 

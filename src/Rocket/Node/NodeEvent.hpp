@@ -39,9 +39,10 @@ public:
     /**
      * Stops further propagation along the dispatch path.
      *
-     * Once called, no further ancestor receives the event in either phase;
-     * the target node's own bubble-phase listeners still run even when
-     * propagation was stopped during capture.
+     * Once called, no further node on the path receives the event in that
+     * phase (descendants toward the target during capture, ancestors during
+     * bubbling); the target node's own bubble-phase listeners still run even
+     * when propagation was stopped during capture.
      */
     void stopPropagation() const;
 
@@ -90,7 +91,8 @@ private:
 };
 
 /** Fired when the mouse cursor moves over the target node. Not fired while a
-    mouse button is held; during a press or drag only the drag events fire. */
+    mouse button is held; during a left press that hit a node only the drag
+    events fire, and during any other hold nothing fires. */
 class MouseMoveNodeEvent : public NodeEvent {
 public:
     /**
@@ -215,7 +217,9 @@ private:
 
 /** Fired when the left or right mouse button is released. The left-button
     release targets the node that received the press, even if the cursor has
-    since left it, and is not fired when nothing received the press. */
+    since left it, and is not fired when nothing received the press. The
+    right-button release targets the hovered node and is not fired when
+    there is none. */
 class MouseUpNodeEvent : public NodeEvent {
 public:
     /**
@@ -269,7 +273,7 @@ private:
     KeyModifiers _modifiers;
 };
 
-/** Fired when a drag gesture ends on the target node. */
+/** Fired when a drag gesture ends; dispatched on the node that received the press, not the node under the cursor. */
 class MouseEndDragNodeEvent : public NodeEvent {
 public:
     /**
@@ -323,7 +327,7 @@ private:
     KeyModifiers _modifiers;
 };
 
-/** Fired when a keyboard key is pressed; dispatched on the focused node, or on the Document when nothing is focused. */
+/** Fired when a keyboard key is pressed; dispatched on the focused node, or on the Document when nothing is focused or the focused node has key events disabled. */
 class KeyDownNodeEvent : public NodeEvent {
 public:
     /**
@@ -350,7 +354,7 @@ private:
     std::string _input;
 };
 
-/** Fired when a keyboard key is released; dispatched on the focused node, or on the Document when nothing is focused. */
+/** Fired when a keyboard key is released; dispatched on the focused node, or on the Document when nothing is focused or the focused node has key events disabled. */
 class KeyUpNodeEvent : public NodeEvent {
 public:
     /**
