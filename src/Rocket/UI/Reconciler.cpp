@@ -125,9 +125,8 @@ void Reconciler::update() {
                 Context(*this, _updateFn);
             }
         } catch (...) {
+            _abortUpdate();
             _isUpdating = false;
-            _currentComponent = nullptr;
-            _currentReconciler.pop();
             throw;
         }
 
@@ -413,6 +412,13 @@ void Reconciler::_endUpdate() {
     _currentComponent = nullptr;
     _unmountComponent(_rootComponent);
 
+    _currentReconciler.pop();
+}
+
+void Reconciler::_abortUpdate() {
+    PROFILE
+
+    _currentComponent = nullptr;
     _currentReconciler.pop();
 }
 

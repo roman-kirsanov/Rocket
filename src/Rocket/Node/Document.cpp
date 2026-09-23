@@ -883,7 +883,7 @@ void Document::_invalidateNode(Node& node) {
     }
 
     if (node._textState.invalidate == true) {
-        node._textState.invalidate = false;
+        node._textState.invalidate  = false;
         _invalidateTextObject(node, _invalidateTextObject);
         _needsUpdate = true;
 
@@ -901,21 +901,21 @@ void Document::_cascadeNode(Node& node) {
     PROFILE
 
     if (node._parent != nullptr) {
-        node._textState.fontFamily = node._fontFamily.value_or(node._parent->_textState.fontFamily);
-        node._textState.fontWeight = node._fontWeight.value_or(node._parent->_textState.fontWeight);
-        node._textState.fontStyle  = node._fontStyle.value_or(node._parent->_textState.fontStyle);
-        node._textState.fontSize   = node._fontSize.value_or(node._parent->_textState.fontSize);
-        node._textState.textColor  = node._textColor.value_or(node._parent->_textState.textColor);
-        node._textState.marker     = node._textMarker;
-        node._textState.lineHeight = node._lineHeight.value_or(node._parent->_textState.lineHeight);
+        node._textState.fontFamily  = node._fontFamily.value_or(node._parent->_textState.fontFamily);
+        node._textState.fontWeight  = node._fontWeight.value_or(node._parent->_textState.fontWeight);
+        node._textState.fontStyle   = node._fontStyle.value_or(node._parent->_textState.fontStyle);
+        node._textState.fontSize    = node._fontSize.value_or(node._parent->_textState.fontSize);
+        node._textState.textColor   = node._textColor.value_or(node._parent->_textState.textColor);
+        node._textState.markerColor = node._textMarker.value_or(Vec4{ 0.0f, 0.0f, 0.0f, 0.0f });
+        node._textState.lineHeight  = node._lineHeight.value_or(node._parent->_textState.lineHeight);
     } else {
-        node._textState.fontFamily = node._fontFamily.value_or(TEXT_DEFAULT_FONT_FAMILY);
-        node._textState.fontWeight = node._fontWeight.value_or(TEXT_DEFAULT_FONT_WEIGHT);
-        node._textState.fontStyle  = node._fontStyle.value_or(TEXT_DEFAULT_FONT_STYLE);
-        node._textState.fontSize   = node._fontSize.value_or(TEXT_DEFAULT_FONT_SIZE);
-        node._textState.textColor  = node._textColor.value_or(TEXT_DEFAULT_COLOR);
-        node._textState.marker     = node._textMarker;
-        node._textState.lineHeight = node._lineHeight.value_or(TEXT_DEFAULT_LINE_HEIGHT);
+        node._textState.fontFamily  = node._fontFamily.value_or(TEXT_DEFAULT_FONT_FAMILY);
+        node._textState.fontWeight  = node._fontWeight.value_or(TEXT_DEFAULT_FONT_WEIGHT);
+        node._textState.fontStyle   = node._fontStyle.value_or(TEXT_DEFAULT_FONT_STYLE);
+        node._textState.fontSize    = node._fontSize.value_or(TEXT_DEFAULT_FONT_SIZE);
+        node._textState.textColor   = node._textColor.value_or(TEXT_DEFAULT_COLOR);
+        node._textState.markerColor = node._textMarker.value_or(Vec4{ 0.0f, 0.0f, 0.0f, 0.0f });
+        node._textState.lineHeight  = node._lineHeight.value_or(TEXT_DEFAULT_LINE_HEIGHT);
     }
 
     for (auto child = node._firstChild; child != nullptr; child = child->_nextSibling) {

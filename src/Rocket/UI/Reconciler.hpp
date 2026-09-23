@@ -161,6 +161,7 @@ private:
     bool _checkKeyDuplicate(std::string const& key);
     void _beginUpdate();
     void _endUpdate();
+    void _abortUpdate();
 
     friend struct _ComponentScope;
     friend void SetContextAny(std::type_index const&, void*);

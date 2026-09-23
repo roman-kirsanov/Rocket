@@ -190,8 +190,8 @@ public:
     /** Returns the most recently computed text color, inherited from ancestors. */
     Vec4 const& getComputedTextColor() const;
 
-    /** Returns the text marker this node's text is drawn with after the last update: its own, since markers are not inherited. */
-    std::optional<Vec4> const& getComputedTextMarker() const;
+    /** Returns the text marker color this node's text is drawn with after the last update: its own (alpha 0 when unset), since markers are not inherited. */
+    Vec4 const& getComputedTextMarker() const;
 
     /** Returns the most recently computed line height, inherited from ancestors, as a unitless multiplier of the font size. */
     float getComputedLineHeight() const;
@@ -786,7 +786,7 @@ private:
         FontStyle fontStyle;
         float fontSize;
         Vec4 textColor;
-        std::optional<Vec4> marker;
+        Vec4 markerColor;
         float lineHeight;
         std::unique_ptr<Text> text;
         bool invalidate;

@@ -274,10 +274,10 @@ Vec4 const& Node::getComputedTextColor() const {
     return _textState.textColor;
 }
 
-std::optional<Vec4> const& Node::getComputedTextMarker() const {
+Vec4 const& Node::getComputedTextMarker() const {
     PROFILE
 
-    return _textState.marker;
+    return _textState.markerColor;
 }
 
 float Node::getComputedLineHeight() const {
@@ -1812,7 +1812,7 @@ void Node::_createTextNode() {
                 .fontStyle  = textState.fontStyle,
                 .fontSize   = textState.fontSize,
                 .color      = textState.textColor,
-                .marker     = textState.marker
+                .marker     = textState.markerColor
             }
         });
     };
