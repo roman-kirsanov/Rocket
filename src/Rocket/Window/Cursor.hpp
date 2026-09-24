@@ -14,8 +14,9 @@ namespace Rocket {
  *
  * The values follow the CSS cursor keywords. Platforms without a native
  * equivalent for a value substitute the closest available system cursor (on
- * macOS, Help, Progress, Wait, ZoomIn and ZoomOut fall back to the plain
- * arrow). None hides the cursor entirely.
+ * macOS 15 and later, Help, Progress and Wait fall back to the plain arrow,
+ * Cell to the crosshair, and Move and AllScroll to the open hand; every
+ * resize and zoom value has a native cursor). None hides the cursor entirely.
  */
 enum class Cursor {
     Default,

@@ -722,6 +722,12 @@ static std::string _SanitizeKeyInput(NSString* characters) {
 static NSCursor* _CursorConvert(Cursor cursor) {
     PROFILE
 
+    /* Requires macOS 15: the frame, column, row and zoom cursors are the
+       public factories that replaced the deprecated resize* cursors. */
+    auto const frame = [](NSCursorFrameResizePosition position) {
+        return [NSCursor frameResizeCursorFromPosition: position inDirections: NSCursorFrameResizeDirectionsAll];
+    };
+
     switch (cursor) {
         case Cursor::Default:      return [NSCursor arrowCursor];
         case Cursor::ContextMenu:  return [NSCursor contextualMenuCursor];
@@ -740,22 +746,22 @@ static NSCursor* _CursorConvert(Cursor cursor) {
         case Cursor::NotAllowed:   return [NSCursor operationNotAllowedCursor];
         case Cursor::Grab:         return [NSCursor openHandCursor];
         case Cursor::Grabbing:     return [NSCursor closedHandCursor];
-        case Cursor::EResize:      return [NSCursor resizeRightCursor];
-        case Cursor::NResize:      return [NSCursor resizeUpCursor];
-        case Cursor::NEResize:     return [NSCursor resizeUpCursor];            /* approximation: no public diagonal resize cursor */
-        case Cursor::NWResize:     return [NSCursor resizeUpCursor];            /* approximation: no public diagonal resize cursor */
-        case Cursor::SResize:      return [NSCursor resizeDownCursor];
-        case Cursor::SEResize:     return [NSCursor resizeDownCursor];          /* approximation: no public diagonal resize cursor */
-        case Cursor::SWResize:     return [NSCursor resizeDownCursor];          /* approximation: no public diagonal resize cursor */
-        case Cursor::WResize:      return [NSCursor resizeLeftCursor];
-        case Cursor::EWResize:     return [NSCursor resizeLeftRightCursor];
-        case Cursor::NSResize:     return [NSCursor resizeUpDownCursor];
-        case Cursor::NESWResize:   return [NSCursor resizeLeftRightCursor];     /* approximation: no public diagonal resize cursor */
-        case Cursor::ColResize:    return [NSCursor resizeLeftRightCursor];
-        case Cursor::RowResize:    return [NSCursor resizeUpDownCursor];
+        case Cursor::EResize:      return frame(NSCursorFrameResizePositionRight);
+        case Cursor::NResize:      return frame(NSCursorFrameResizePositionTop);
+        case Cursor::NEResize:     return frame(NSCursorFrameResizePositionTopRight);
+        case Cursor::NWResize:     return frame(NSCursorFrameResizePositionTopLeft);
+        case Cursor::SResize:      return frame(NSCursorFrameResizePositionBottom);
+        case Cursor::SEResize:     return frame(NSCursorFrameResizePositionBottomRight);
+        case Cursor::SWResize:     return frame(NSCursorFrameResizePositionBottomLeft);
+        case Cursor::WResize:      return frame(NSCursorFrameResizePositionLeft);
+        case Cursor::EWResize:     return [NSCursor columnResizeCursorInDirections: NSHorizontalDirectionsAll];
+        case Cursor::NSResize:     return [NSCursor rowResizeCursorInDirections: NSVerticalDirectionsAll];
+        case Cursor::NESWResize:   return frame(NSCursorFrameResizePositionBottomLeft);
+        case Cursor::ColResize:    return [NSCursor columnResizeCursorInDirections: NSHorizontalDirectionsAll];
+        case Cursor::RowResize:    return [NSCursor rowResizeCursorInDirections: NSVerticalDirectionsAll];
         case Cursor::AllScroll:    return [NSCursor openHandCursor];            /* approximation: no public all-scroll cursor */
-        case Cursor::ZoomIn:       return [NSCursor arrowCursor];               /* approximation: no public zoom cursor */
-        case Cursor::ZoomOut:      return [NSCursor arrowCursor];               /* approximation: no public zoom cursor */
+        case Cursor::ZoomIn:       return [NSCursor zoomInCursor];
+        case Cursor::ZoomOut:      return [NSCursor zoomOutCursor];
         case Cursor::None:         return nil;
     }
 

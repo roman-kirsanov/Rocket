@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.23)
 
+# macOS 15 (Sequoia) is the minimum: the window cursors use the frame, column,
+# row and zoom cursor factories AppKit added in that release.
+if(NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum macOS version")
+endif()
+
 project(Rocket VERSION 0.1.0 LANGUAGES C CXX)
 
 include(CTest)
