@@ -130,6 +130,8 @@ target_include_directories(Rocket
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/lib/inplace_vector/include
 )
 
 target_link_libraries(Rocket

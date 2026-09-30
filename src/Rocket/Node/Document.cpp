@@ -21,8 +21,9 @@
 
 namespace Rocket {
 
-static constexpr auto _selectionColor = Vec4{ 0.4f, 0.6f, 1.0f, 0.4f };
-static constexpr auto _caretBlinkPeriod = std::chrono::milliseconds(530);
+static auto constexpr _maxUpdatePasses = 5;
+static auto constexpr _selectionColor = Vec4{ 0.4f, 0.6f, 1.0f, 0.4f };
+static auto constexpr _caretBlinkPeriod = std::chrono::milliseconds(530);
 
 static float _SnapToPixelGrid(float value, float scale) {
     return (std::roundf(value * scale) / scale);
@@ -280,46 +281,26 @@ void Document::focusNode(Node* targetNode) {
 void Document::update() {
     PROFILE
 
-    if (_isUpdating == true) {
-        return;
-    }
+    if (_isUpdating == true) return;
+    else _isUpdating = true;
 
     _invalidateNode(*this);
 
-    if (_needsUpdate == false) {
-        return;
-    }
-
-    _isUpdating = true;
-    _needsUpdate = false;
-    _needsRender = true;
-    _renderList.clear();
-
-    _cascadeNode(*this);
-
-    auto const size = getSize();
-
-    ::YGConfigSetPointScaleFactor((::YGConfig*)_yogaConfig, _scale);
-    ::YGNodeStyleSetWidth((::YGNode*)_layoutNode, size.width);
-    ::YGNodeStyleSetHeight((::YGNode*)_layoutNode, size.height);
-    ::YGNodeCalculateLayout((::YGNode*)_layoutNode, size.width, size.height, YGDirectionLTR);
-
-    _updateNode(*this);
-
-    _renderList[_computedZIndex].push_back(this);
-
-    auto cursor = Cursor::Default;
-
-    for (auto node = _hoverNode; node != nullptr; node = node->_parent) {
-        if (node->_cursor.has_value()) {
-            cursor = node->_cursor.value();
-            break;
+    for (auto i = 0; i < _maxUpdatePasses; i++) {
+        if (_needsUpdate == false) break;
+        else {
+            _needsUpdate = false;
+            _needsRender = true;
         }
-    }
 
-    if (_cursor != cursor) {
-        _cursor = cursor;
-        _window.setCursor(cursor);
+        _renderList.clear();
+
+        _cascadeNode(*this);
+        _updateLayout();
+        _updateNode(*this);
+        _updateCursor();
+
+        _renderList[_computedZIndex].push_back(this);
     }
 
     _isUpdating = false;
@@ -1504,6 +1485,35 @@ void Document::_activateNode(Node* targetNode) {
 
     _activeNode = targetNode;
     _needsUpdate = true;
+}
+
+void Document::_updateLayout() {
+    PROFILE
+
+    auto const size = getSize();
+
+    ::YGConfigSetPointScaleFactor((::YGConfig*)_yogaConfig, _scale);
+    ::YGNodeStyleSetWidth((::YGNode*)_layoutNode, size.width);
+    ::YGNodeStyleSetHeight((::YGNode*)_layoutNode, size.height);
+    ::YGNodeCalculateLayout((::YGNode*)_layoutNode, size.width, size.height, YGDirectionLTR);
+}
+
+void Document::_updateCursor() {
+    PROFILE
+
+    auto cursor = Cursor::Default;
+
+    for (auto node = _hoverNode; node != nullptr; node = node->_parent) {
+        if (node->_cursor.has_value()) {
+            cursor = node->_cursor.value();
+            break;
+        }
+    }
+
+    if (_cursor != cursor) {
+        _cursor = cursor;
+        _window.setCursor(cursor);
+    }
 }
 
 } /* namespace Rocket */

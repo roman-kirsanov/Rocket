@@ -199,6 +199,8 @@ private:
     void _updateNode(Node&);
     void _renderNode(Node&, Vec2 const&, int);
     void _activateNode(Node*);
+    void _updateLayout();
+    void _updateCursor();
 
     friend class Node;
 };

@@ -136,13 +136,14 @@ public:
     void update();
 private:
     struct _Component;
+    struct _Context;
 
     ReconcilerUpdateMode _updateMode;
     std::function<void()> _updateFn;
-    _Component* _rootComponent;
     _Component* _currentComponent;
+    _Component* _rootComponent;
     bool _isUpdating;
-    bool _needsUpdate;
+    bool _keepUpdate;
 
     std::any& _useState();
     void* _useContext(std::type_index const&);

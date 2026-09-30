@@ -10,3 +10,6 @@
 [submodule "lib/yoga"]
 	path = lib/yoga
 	url = https://github.com/facebook/yoga.git
+[submodule "lib/inplace_vector"]
+	path = lib/inplace_vector
+	url = https://github.com/TedLyngmo/inplace_vector.git

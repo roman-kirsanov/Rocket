@@ -1,16 +1,27 @@
-#include <array>
-#include <tuple>
 #include <stack>
 #include <stdexcept>
 #include <unordered_map>
+#include <inplace_vector.hpp>
 #include <Rocket/UI/Reconciler.hpp>
 
 namespace Rocket {
 
-auto constexpr _CONTEXT_CAPACITY = 5;
-auto constexpr _MAX_UPDATE_PASSES = 5;
+static auto constexpr _contextCapacity = 5;
+static auto constexpr _maxUpdatePasses = 5;
+
+static auto _reconcilerStack = std::stack<Reconciler*>();
+
+struct Reconciler::_Context {
+    std::type_index typeIndex;
+    void* valuePtr;
+};
 
 struct Reconciler::_Component {
+    _Component* parent = nullptr;
+    _Component* firstChild = nullptr;
+    _Component* lastChild = nullptr;
+    _Component* nextSibling = nullptr;
+    _Component* prevSibling = nullptr;
     std::int64_t type = 0;
     std::int64_t index = 0;
     std::string id;
@@ -21,34 +32,17 @@ struct Reconciler::_Component {
     std::int64_t nextStateIndex = 0;
     std::unordered_map<std::int64_t, std::any> state;
     std::unordered_map<std::int64_t, std::int64_t> keySeq;
-    _Component* parent = nullptr;
-    _Component* firstChild = nullptr;
-    _Component* lastChild = nullptr;
-    _Component* nextSibling = nullptr;
-    _Component* prevSibling = nullptr;
-    std::int64_t contextCount = 0;
-    std::array<
-        std::tuple<std::type_index, void*>,
-        _CONTEXT_CAPACITY
-    > contexts = {
-        std::tuple{ std::type_index(typeid(void)), nullptr },
-        std::tuple{ std::type_index(typeid(void)), nullptr },
-        std::tuple{ std::type_index(typeid(void)), nullptr },
-        std::tuple{ std::type_index(typeid(void)), nullptr },
-        std::tuple{ std::type_index(typeid(void)), nullptr }
-    };
+    lyn::inplace_vector<_Context, _contextCapacity> contexts;
 };
-
-static auto _currentReconciler = std::stack<Reconciler*>();
 
 static Reconciler& _GetCurrentReconciler() {
     PROFILE
 
-    if (_currentReconciler.empty()) {
+    if (_reconcilerStack.empty()) {
         throw std::runtime_error("No reconciler is currently updating");
     }
 
-    return *_currentReconciler.top();
+    return *_reconcilerStack.top();
 }
 
 _ComponentScope::_ComponentScope(std::int64_t type, std::string const& name, std::string const& key) {
@@ -76,10 +70,10 @@ Reconciler::Reconciler()
     : onAfterUpdate()
     , _updateMode(OnUpdate)
     , _updateFn(nullptr)
-    , _rootComponent(new _Component())
     , _currentComponent(nullptr)
+    , _rootComponent(new _Component())
     , _isUpdating(false)
-    , _needsUpdate(false) {}
+    , _keepUpdate(false) {}
 
 ReconcilerUpdateMode Reconciler::getUpdateMode() const {
     PROFILE
@@ -102,21 +96,20 @@ void Reconciler::setUpdateFn(std::function<void()> const& updateFn) {
 void Reconciler::needsUpdate() {
     PROFILE
 
-    _needsUpdate = true;
+    _keepUpdate = true;
 }
 
 void Reconciler::update() {
     PROFILE
 
-    if (_isUpdating == true) {
-        _needsUpdate = true;
-        return;
-    }
+    _keepUpdate = true;
 
-    _isUpdating = true;
+    if (_isUpdating == true) return;
+    else _isUpdating = true;
 
-    for (auto i = 0; i < _MAX_UPDATE_PASSES; i++) {
-        _needsUpdate = false;
+    for (auto i = 0; i < _maxUpdatePasses; i++) {
+        if (_keepUpdate == false) break;
+        else _keepUpdate = false;
 
         _beginUpdate();
 
@@ -125,16 +118,12 @@ void Reconciler::update() {
                 Context(*this, _updateFn);
             }
         } catch (...) {
-            _abortUpdate();
             _isUpdating = false;
+            _abortUpdate();
             throw;
         }
 
         _endUpdate();
-
-        if (_needsUpdate == false) {
-            break;
-        }
     }
 
     _isUpdating = false;
@@ -162,8 +151,7 @@ void* Reconciler::_useContext(std::type_index const& typeIndex) {
     }
 
     for (auto component = _currentComponent; component != nullptr; component = component->parent) {
-        for (auto i = 0llu; i < component->contextCount; i++) {
-            auto const& [ type, pointer ] = component->contexts[i];
+        for (auto const& [ type, pointer ] : component->contexts) {
             if (type == typeIndex) {
                 return pointer;
             }
@@ -228,21 +216,20 @@ void Reconciler::_setContext(std::type_index const& typeIndex, void* pointer) {
 
     auto& component = *_currentComponent;
 
-    for (auto i = 0llu; i < component.contextCount; i++) {
-        auto& [ type, existing ] = component.contexts[i];
+    for (auto& [ type, existing ] : component.contexts) {
         if (type == typeIndex) {
             existing = pointer;
             return;
         }
     }
 
-    if (component.contextCount == _CONTEXT_CAPACITY) {
+    if (component.contexts.size() == _contextCapacity) {
         throw std::runtime_error(
-            std::format("Component `{}` exceeds the limit of {} contexts", component.name, _CONTEXT_CAPACITY)
+            std::format("Component `{}` exceeds the limit of {} contexts", component.name, _contextCapacity)
         );
     }
 
-    component.contexts[(std::size_t)component.contextCount++] = { typeIndex, pointer };
+    component.contexts.push_back({ typeIndex, pointer });
 }
 
 void Reconciler::_openComponent(std::int64_t type, std::string const& name, std::string const& key) {
@@ -286,7 +273,7 @@ void Reconciler::_openComponent(std::int64_t type, std::string const& name, std:
     component->revision = _currentComponent->revision;
     component->nextChildIndex = 0;
     component->nextStateIndex = 0;
-    component->contextCount = 0;
+    component->contexts.clear();
 
     for (auto& entry : component->keySeq) {
         entry.second = 0;
@@ -392,7 +379,7 @@ bool Reconciler::_checkKeyDuplicate(std::string const& key) {
 void Reconciler::_beginUpdate() {
     PROFILE
 
-    _currentReconciler.push(this);
+    _reconcilerStack.push(this);
 
     _rootComponent->revision += 1;
     _rootComponent->nextChildIndex = 0;
@@ -412,14 +399,14 @@ void Reconciler::_endUpdate() {
     _currentComponent = nullptr;
     _unmountComponent(_rootComponent);
 
-    _currentReconciler.pop();
+    _reconcilerStack.pop();
 }
 
 void Reconciler::_abortUpdate() {
     PROFILE
 
     _currentComponent = nullptr;
-    _currentReconciler.pop();
+    _reconcilerStack.pop();
 }
 
 void SetContextAny(std::type_index const& typeIndex, void* pointer) {
