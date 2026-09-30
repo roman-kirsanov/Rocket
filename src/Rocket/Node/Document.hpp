@@ -201,6 +201,7 @@ private:
     void _activateNode(Node*);
     void _updateLayout();
     void _updateCursor();
+    void _updateHover();
 
     friend class Node;
 };

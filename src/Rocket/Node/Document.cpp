@@ -21,7 +21,6 @@
 
 namespace Rocket {
 
-static auto constexpr _maxUpdatePasses = 5;
 static auto constexpr _selectionColor = Vec4{ 0.4f, 0.6f, 1.0f, 0.4f };
 static auto constexpr _caretBlinkPeriod = std::chrono::milliseconds(530);
 
@@ -286,22 +285,23 @@ void Document::update() {
 
     _invalidateNode(*this);
 
-    for (auto i = 0; i < _maxUpdatePasses; i++) {
-        if (_needsUpdate == false) break;
-        else {
-            _needsUpdate = false;
-            _needsRender = true;
-        }
-
-        _renderList.clear();
-
-        _cascadeNode(*this);
-        _updateLayout();
-        _updateNode(*this);
-        _updateCursor();
-
-        _renderList[_computedZIndex].push_back(this);
+    if (_needsUpdate == false) {
+        _isUpdating = false;
+        return;
+    } else {
+        _needsUpdate = false;
+        _needsRender = true;
     }
+
+    _renderList.clear();
+
+    _cascadeNode(*this);
+    _updateLayout();
+    _updateNode(*this);
+    _updateCursor();
+    _updateHover();
+
+    _renderList[_computedZIndex].push_back(this);
 
     _isUpdating = false;
 }
@@ -1514,6 +1514,12 @@ void Document::_updateCursor() {
         _cursor = cursor;
         _window.setCursor(cursor);
     }
+}
+
+void Document::_updateHover() {
+    PROFILE
+
+    ;
 }
 
 } /* namespace Rocket */
