@@ -393,4 +393,26 @@ private:
     std::string _content;
 };
 
+/** Fired on the node that gains keyboard focus. */
+class FocusNodeEvent : public NodeEvent {
+public:
+    /**
+     * A focus event.
+     *
+     * @param node The node that is the target of the event.
+     */
+    FocusNodeEvent(Node& node);
+};
+
+/** Fired on the node that loses keyboard focus. */
+class BlurNodeEvent : public NodeEvent {
+public:
+    /**
+     * A blur event.
+     *
+     * @param node The node that is the target of the event.
+     */
+    BlurNodeEvent(Node& node);
+};
+
 } /* namespace Rocket */

@@ -746,7 +746,7 @@ bool Node::isFocusedWithin() const {
     return _isFocusedWithin;
 }
 
-void Node::getPath(std::vector<Node*>& path) const {
+void Node::getPathFromRoot(std::vector<Node*>& path) const {
     PROFILE
 
     path.clear();
@@ -758,6 +758,18 @@ void Node::getPath(std::vector<Node*>& path) const {
     }
 
     std::reverse(path.begin(), path.end());
+}
+
+void Node::getPathToRoot(std::vector<Node*>& path) const {
+    PROFILE
+
+    path.clear();
+
+    auto next = const_cast<Node*>(this);
+    while (next != nullptr) {
+        path.push_back(next);
+        next = next->_parent;
+    }
 }
 
 void Node::setDisplay(std::optional<NodeDisplay> const& display) {

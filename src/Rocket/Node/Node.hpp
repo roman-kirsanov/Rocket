@@ -416,7 +416,15 @@ public:
      * Clears path first, then appends nodes from the root (index 0) to this
      * node (last index).
      */
-    void getPath(std::vector<Node*>&) const;
+    void getPathFromRoot(std::vector<Node*>&) const;
+
+    /**
+     * Fills path with the ordered ancestor chain from this node up to the root.
+     *
+     * Clears path first, then appends nodes from this node (index 0) to the
+     * root (last index).
+     */
+    void getPathToRoot(std::vector<Node*>&) const;
 
     /**
      * Sets the display mode.

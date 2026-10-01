@@ -178,6 +178,107 @@ private:
         std::vector<Node*>
     > _renderList;
 
+
+    struct _v2_HoverState {
+        Vec2 mousePosition;
+        Node* hoverNode;
+        std::vector<Node*> hoverPath;
+        std::size_t layoutRevision;
+    };
+
+    struct _v2_ActiveState {
+        Node* activeNode;
+        std::vector<Node*> activePath;
+        std::size_t mouseDownRevision1;
+        std::size_t mouseDownRevision2;
+    };
+
+    struct _v2_FocusState {
+        Node* focusedNode;
+        std::vector<Node*> focusedPath;
+        std::size_t mouseDownRevision;
+    };
+
+    struct _v2_DragState {
+        Node* dragNode;
+        Vec2 mousePosition;
+        Vec2 mouseDownPosition;
+    };
+
+    struct _v2_ScrollState {
+        std::size_t mouseWheelRevision;
+    };
+
+    struct _v2_DefaultInputState {
+        Vec2 mousePosition;
+        Vec2 mouseWheel;
+        KeyModifiers modifiers;
+    };
+
+    struct _v2_MouseDownInputState {
+        Mouse mouse;
+        Vec2 mousePosition;
+        Vec2 mouseDownPosition;
+        KeyModifiers modifiers;
+    };
+
+    struct _v2_KeyDownInputState {
+        Key key;
+        KeyModifiers modifiers;
+        std::string input;
+        Vec2 mousePosition;
+    };
+
+    using _v2_InputState = Enum<
+        _v2_DefaultInputState,
+        _v2_MouseDownInputState,
+        _v2_KeyDownInputState
+    >;
+
+    _v2_InputState _v2_inputState;
+    _v2_HoverState _v2_hoverState;
+    _v2_ActiveState _v2_activeState;
+    _v2_FocusState _v2_focusState;
+    _v2_DragState _v2_dragState;
+    _v2_ScrollState _v2_scrollState;
+
+    std::size_t _v2_layoutRevision;
+    std::size_t _v2_mouseDownRevision;
+    std::size_t _v2_mouseWheelRevision;
+    std::size_t _v2_keyDownRevision;
+
+    bool _v2_isUpdating;
+    bool _v2_needsUpdate;
+    bool _v2_needsRender;
+
+    void _v2_handleEvent(WindowEvent const&);
+    void _v2_handleMouseMoveEvent(MouseMoveWindowEvent const&);
+    void _v2_handleMouseEnterEvent(MouseEnterWindowEvent const&);
+    void _v2_handleMouseDownEvent(MouseDownWindowEvent const&);
+    void _v2_handleMouseUpEvent(MouseUpWindowEvent const&);
+    void _v2_handleMouseWheelEvent(MouseWheelWindowEvent const&);
+    void _v2_handleKeyDownEvent(KeyDownWindowEvent const&);
+    void _v2_handleKeyUpEvent(KeyUpWindowEvent const&);
+
+    void _v2_updateHover();
+    void _v2_updateActive();
+    void _v2_updateFocus();
+    void _v2_updateDrag();
+    void _v2_updateScroll();
+    void _v2_updateLayout();
+    void _v2_updateAll();
+    void _v2_renderAll();
+
+    bool _v2_triggerMouseWheel(Vec2 const&, KeyModifiers const&);
+    bool _v2_triggerMouseDown(Mouse, KeyModifiers const&);
+    bool _v2_triggerMouseUp(Mouse, KeyModifiers const&);
+    bool _v2_triggerKeyDown(Key, KeyModifiers const&, std::string const&);
+    bool _v2_triggerKeyUp(Key, KeyModifiers const&);
+
+    void _v2_processInput(Key, KeyModifiers const&, std::string const&);
+    bool _v2_scrollNode(Node&, Vec2 const&);
+
+
     std::optional<_InputState> _getInputState();
     Node* _getKeyNode();
     Vec2 _getTextLocalPosition(_InputState const&, Vec2 const&) const;

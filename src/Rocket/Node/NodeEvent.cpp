@@ -344,4 +344,16 @@ std::string const& InputNodeEvent::getContent() const {
     return _content;
 }
 
+FocusNodeEvent::FocusNodeEvent(Node& node)
+    : NodeEvent(node)
+{
+    PROFILE
+}
+
+BlurNodeEvent::BlurNodeEvent(Node& node)
+    : NodeEvent(node)
+{
+    PROFILE
+}
+
 } /* namespace Rocket */

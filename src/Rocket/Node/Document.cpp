@@ -9,6 +9,7 @@
 #include <cassert>
 #include <memory>
 #include <cmath>
+#include <ranges>
 #include <algorithm>
 #include <optional>
 #include <yoga/Yoga.h>
@@ -133,7 +134,7 @@ void Document::scrollNode(Node& node, Vec2 const& wheel) {
     Node* xOverflowNode = nullptr;
     Node* yOverflowNode = nullptr;
 
-    node.getPath(_path);
+    node.getPathFromRoot(_path);
 
     for (auto pathNode : _path) {
         if (
@@ -557,7 +558,7 @@ void Document::_mouseMove(Vec2 const& position, KeyModifiers const& modifiers) {
             _newHoverPath.clear();
 
             if (newHoverNode != nullptr) {
-                newHoverNode->getPath(_newHoverPath);
+                newHoverNode->getPathFromRoot(_newHoverPath);
             }
 
             for (auto node : _hoverPath) {
@@ -677,8 +678,8 @@ void Document::_mouseUp(Mouse const& mouse, Vec2 const& position, KeyModifiers c
                 _mouseMove(position, modifiers);
             } else {
                 if (auto hoverNode = _findNodeAtPosition(position)) {
-                    _activeNode->getPath(_activePath);
-                    hoverNode->getPath(_hoverPath);
+                    _activeNode->getPathFromRoot(_activePath);
+                    hoverNode->getPathFromRoot(_hoverPath);
 
                     for (auto it = _hoverPath.rbegin(); it != _hoverPath.rend(); ++it) {
                         if (std::ranges::contains(_activePath, *it)) {
@@ -1517,6 +1518,479 @@ void Document::_updateCursor() {
 }
 
 void Document::_updateHover() {
+    PROFILE
+
+    ;
+}
+
+void Document::_v2_handleEvent(WindowEvent const& event) {
+    PROFILE
+
+    if (auto mouseMoveEvent = event.as<MouseMoveWindowEvent>()) {
+        _v2_handleMouseMoveEvent(*mouseMoveEvent);
+        _v2_updateAll();
+    } else if (auto mouseEnterEvent = event.as<MouseEnterWindowEvent>()) {
+        _v2_handleMouseEnterEvent(*mouseEnterEvent);
+        _v2_updateAll();
+    } else if (auto mouseDownEvent = event.as<MouseDownWindowEvent>()) {
+        _v2_handleMouseDownEvent(*mouseDownEvent);
+        _v2_updateAll();
+    } else if (auto mouseUpEvent = event.as<MouseUpWindowEvent>()) {
+        _v2_handleMouseUpEvent(*mouseUpEvent);
+        _v2_updateAll();
+    } else if (auto mouseWheelEvent = event.as<MouseWheelWindowEvent>()) {
+        _v2_handleMouseWheelEvent(*mouseWheelEvent);
+        _v2_updateAll();
+    } else if (auto keyDownEvent = event.as<KeyDownWindowEvent>()) {
+        _v2_handleKeyDownEvent(*keyDownEvent);
+        _v2_updateAll();
+    } else if (auto keyUpEvent = event.as<KeyUpWindowEvent>()) {
+        _v2_handleKeyUpEvent(*keyUpEvent);
+        _v2_updateAll();
+    } else if (event.is<PaintWindowEvent>()) {
+        _v2_updateAll();
+        _v2_renderAll();
+    } else if (
+        event.is<ResizeWindowEvent>() ||
+        event.is<DPIChangeWindowEvent>()
+    ) {
+        _v2_updateAll();
+        _v2_renderAll();
+    }
+}
+
+void Document::_v2_handleMouseMoveEvent(MouseMoveWindowEvent const& event) {
+    PROFILE
+
+    if (auto defaultState = _v2_inputState.as<_v2_DefaultInputState>()) {
+        defaultState->mousePosition = event.getPosition();
+        defaultState->modifiers = event.getModifiers();
+    } else if (auto mouseDownState = _v2_inputState.as<_v2_MouseDownInputState>()) {
+        mouseDownState->mousePosition = event.getPosition();
+        mouseDownState->modifiers = event.getModifiers();
+    } else if (auto keyDownState = _v2_inputState.as<_v2_KeyDownInputState>()) {
+        keyDownState->mousePosition = event.getPosition();
+    }
+}
+
+void Document::_v2_handleMouseEnterEvent(MouseEnterWindowEvent const& event) {
+    PROFILE
+
+    if (auto defaultState = _v2_inputState.as<_v2_DefaultInputState>()) {
+        defaultState->mousePosition = event.getPosition();
+        defaultState->modifiers = event.getModifiers();
+    }
+}
+
+void Document::_v2_handleMouseDownEvent(MouseDownWindowEvent const& event) {
+    PROFILE
+
+    if (auto defaultState = _v2_inputState.as<_v2_DefaultInputState>()) {
+        _v2_mouseDownRevision += 1;
+        _v2_inputState = _v2_MouseDownInputState{
+            .mouse = event.getMouse(),
+            .mousePosition = event.getPosition(),
+            .mouseDownPosition = event.getPosition(),
+            .modifiers = event.getModifiers()
+        };
+        _v2_triggerMouseDown(event.getMouse(), event.getModifiers());
+    }
+}
+
+void Document::_v2_handleMouseUpEvent(MouseUpWindowEvent const& event) {
+    PROFILE
+
+    if (auto mouseDownState = _v2_inputState.as<_v2_MouseDownInputState>()) {
+        _v2_inputState = _v2_DefaultInputState{
+            .mousePosition = event.getPosition(),
+            .modifiers = event.getModifiers()
+        };
+        _v2_triggerMouseUp(event.getMouse(), event.getModifiers());
+    }
+}
+
+void Document::_v2_handleMouseWheelEvent(MouseWheelWindowEvent const& event) {
+    PROFILE
+
+    if (auto defaultState = _v2_inputState.as<_v2_DefaultInputState>()) {
+        defaultState->modifiers = event.getModifiers();
+        auto const defaultPrevented = _v2_triggerMouseWheel(event.getPosition(), event.getModifiers());
+        if (defaultPrevented == false) {
+            defaultState->mouseWheel = event.getPosition();
+            _v2_mouseWheelRevision += 1;
+        }
+    }
+}
+
+void Document::_v2_handleKeyDownEvent(KeyDownWindowEvent const& event) {
+    PROFILE
+
+    if (auto defaultState = _v2_inputState.as<_v2_DefaultInputState>()) {
+        _v2_keyDownRevision += 1;
+        _v2_inputState = _v2_KeyDownInputState{
+            .key = event.getKey(),
+            .modifiers = event.getModifiers(),
+            .input = event.getInput(),
+            .mousePosition = defaultState->mousePosition
+        };
+        auto const defaultPrevented = _v2_triggerKeyDown(event.getKey(), event.getModifiers(), event.getInput());
+        if (defaultPrevented == false) {
+            _v2_processInput(event.getKey(), event.getModifiers(), event.getInput());
+        }
+    }
+}
+
+void Document::_v2_handleKeyUpEvent(KeyUpWindowEvent const& event) {
+    PROFILE
+
+    if (auto keyDownState = _v2_inputState.as<_v2_KeyDownInputState>()) {
+        _v2_inputState = _v2_DefaultInputState{
+            .mousePosition = keyDownState->mousePosition,
+            .modifiers = event.getModifiers()
+        };
+        _v2_triggerKeyUp(event.getKey(), event.getModifiers());
+    }
+}
+
+void Document::_v2_updateHover() {
+    PROFILE
+
+    static thread_local auto hoverPath = std::vector<Node*>();
+    static thread_local auto exitNodes = std::vector<Node*>();
+    static thread_local auto enterNodes = std::vector<Node*>();
+
+    if (auto defaultState = _v2_inputState.as<_v2_DefaultInputState>()) {
+        if (
+            _v2_hoverState.layoutRevision != _v2_layoutRevision ||
+            _v2_hoverState.mousePosition != defaultState->mousePosition
+        ) {
+            _v2_hoverState.layoutRevision = _v2_layoutRevision;
+            _v2_hoverState.mousePosition = defaultState->mousePosition;
+
+            hoverPath.clear();
+            exitNodes.clear();
+            enterNodes.clear();
+
+            auto const modifiers = defaultState->modifiers;
+            auto const position = (_v2_hoverState.mousePosition * (_window.getScale() / _scale));
+
+            auto hoverNode = _findNodeAtPosition(position);
+
+            if (hoverNode != nullptr) {
+                hoverNode->getPathToRoot(hoverPath);
+            }
+
+            for (auto node : _v2_hoverState.hoverPath) {
+                if (std::ranges::contains(hoverPath, node) == false) {
+                    exitNodes.push_back(node);
+                    node->_isHover = false;
+                }
+            }
+
+            for (auto node : hoverPath) {
+                if (std::ranges::contains(_v2_hoverState.hoverPath, node) == false) {
+                    enterNodes.push_back(node);
+                    node->_isHover = true;
+                }
+            }
+
+            for (auto node : exitNodes) {
+                node->dispatchEvent(
+                    MouseExitNodeEvent(*node, position, modifiers)
+                );
+            }
+
+            for (auto node : std::views::reverse(enterNodes)) {
+                node->dispatchEvent(
+                    MouseEnterNodeEvent(*node, position, modifiers)
+                );
+            }
+
+            if (hoverNode != nullptr) {
+                hoverNode->dispatchEvent(
+                    MouseMoveNodeEvent(*hoverNode, position, modifiers)
+                );
+            }
+
+            _v2_hoverState.hoverNode = hoverNode;
+            _v2_hoverState.hoverPath = hoverPath;
+        }
+    }
+}
+
+void Document::_v2_updateActive() {
+    PROFILE
+
+    if (auto mouseDownState = _v2_inputState.as<_v2_MouseDownInputState>()) {
+        if (_v2_activeState.mouseDownRevision1 != _v2_mouseDownRevision) {
+            _v2_activeState.mouseDownRevision1 = _v2_mouseDownRevision;
+
+            if (_v2_hoverState.hoverNode != nullptr) {
+                _v2_activeState.activeNode = _v2_hoverState.hoverNode;
+                _v2_activeState.activeNode->getPathToRoot(_v2_activeState.activePath);
+
+                for (auto node : _v2_activeState.activePath) {
+                    node->_isActive = true;
+                }
+            }
+        }
+    } else if (auto defaultState = _v2_inputState.as<_v2_DefaultInputState>()) {
+        if (_v2_activeState.mouseDownRevision2 != _v2_mouseDownRevision) {
+            _v2_activeState.mouseDownRevision2 = _v2_mouseDownRevision;
+
+            for (auto node : _v2_activeState.activePath) {
+                node->_isActive = false;
+            }
+
+            _v2_activeState.activeNode = nullptr;
+            _v2_activeState.activePath.clear();
+        }
+    }
+}
+
+void Document::_v2_updateFocus() {
+    PROFILE
+
+    static thread_local auto focusPath = std::vector<Node*>();
+
+    if (auto mouseDownState = _v2_inputState.as<_v2_MouseDownInputState>()) {
+        if (_v2_focusState.mouseDownRevision != _v2_mouseDownRevision) {
+            _v2_focusState.mouseDownRevision = _v2_mouseDownRevision;
+
+            auto focusNode = _v2_activeState.activeNode;
+
+            if (focusNode != _v2_focusState.focusedNode) {
+                if (focusNode != nullptr) {
+                    focusNode->_isFocused = true;
+                    focusNode->getPathToRoot(focusPath);
+                } else {
+                    focusPath.clear();
+                }
+
+                if (_v2_focusState.focusedNode != nullptr) {
+                    _v2_focusState.focusedNode->_isFocused = false;
+                }
+
+                for (auto node : _v2_focusState.focusedPath) {
+                    if (std::ranges::contains(focusPath, node) == false) {
+                        node->_isFocusedWithin = false;
+                    }
+                }
+
+                for (auto node : focusPath) {
+                    if (std::ranges::contains(_v2_focusState.focusedPath, node) == false) {
+                        node->_isFocusedWithin = true;
+                    }
+                }
+
+                if (_v2_focusState.focusedNode != nullptr) {
+                    _v2_focusState.focusedNode->dispatchEvent(
+                        BlurNodeEvent(*_v2_focusState.focusedNode)
+                    );
+                }
+
+                if (focusNode != nullptr) {
+                    focusNode->dispatchEvent(
+                        FocusNodeEvent(*focusNode)
+                    );
+                }
+
+                _v2_focusState.focusedNode = focusNode;
+                _v2_focusState.focusedPath = focusPath;
+            }
+        }
+    }
+}
+
+void Document::_v2_updateDrag() {
+    PROFILE
+
+    auto const scale = (_window.getScale() / _scale);
+
+    if (auto mouseDownState = _v2_inputState.as<_v2_MouseDownInputState>()) {
+        if (mouseDownState->mouse == Mouse::LeftButton) {
+            auto const modifiers = mouseDownState->modifiers;
+            auto const position = (mouseDownState->mousePosition * scale);
+            auto const translate = (position - (mouseDownState->mouseDownPosition * scale));
+
+            if (_v2_dragState.dragNode == nullptr) {
+                if (
+                    std::fabsf(translate.x) > 2.0f ||
+                    std::fabsf(translate.y) > 2.0f
+                ) {
+                    if (_v2_activeState.activeNode != nullptr) {
+                        _v2_dragState.dragNode = _v2_activeState.activeNode;
+                        _v2_dragState.mousePosition = mouseDownState->mousePosition;
+                        _v2_dragState.mouseDownPosition = mouseDownState->mouseDownPosition;
+
+                        _v2_dragState.dragNode->dispatchEvent(
+                            MouseBeginDragNodeEvent(*_v2_dragState.dragNode, position, translate, modifiers)
+                        );
+
+                        _v2_dragState.dragNode->dispatchEvent(
+                            MouseDragNodeEvent(*_v2_dragState.dragNode, position, translate, modifiers)
+                        );
+                    }
+                }
+            } else if (_v2_dragState.mousePosition != mouseDownState->mousePosition) {
+                _v2_dragState.mousePosition = mouseDownState->mousePosition;
+                _v2_dragState.dragNode->dispatchEvent(
+                    MouseDragNodeEvent(*_v2_dragState.dragNode, position, translate, modifiers)
+                );
+            }
+        }
+    } else if (auto defaultState = _v2_inputState.as<_v2_DefaultInputState>()) {
+        if (_v2_dragState.dragNode != nullptr) {
+            auto const modifiers = defaultState->modifiers;
+            auto const position = (defaultState->mousePosition * scale);
+            auto const translate = (position - (_v2_dragState.mouseDownPosition * scale));
+
+            _v2_dragState.dragNode->dispatchEvent(
+                MouseEndDragNodeEvent(*_v2_dragState.dragNode, position, translate, modifiers)
+            );
+            _v2_dragState.dragNode = nullptr;
+        }
+    }
+}
+
+void Document::_v2_updateScroll() {
+    PROFILE
+
+    if (auto defaultState = _v2_inputState.as<_v2_DefaultInputState>()) {
+        if (_v2_scrollState.mouseWheelRevision != _v2_mouseWheelRevision) {
+            _v2_scrollState.mouseWheelRevision = _v2_mouseWheelRevision;
+
+            if (_v2_hoverState.hoverNode != nullptr) {
+                if (_v2_scrollNode(*_v2_hoverState.hoverNode, defaultState->mouseWheel)) {
+                    _v2_layoutRevision += 1;
+                    _v2_needsUpdate = true;
+                }
+            }
+        }
+    }
+}
+
+void Document::_v2_updateLayout() {
+    PROFILE
+
+    ;
+}
+
+bool Document::_v2_scrollNode(Node& node, Vec2 const& wheel) {
+    PROFILE
+
+    static thread_local auto scrollPath = std::vector<Node*>();
+
+    Node* xOverflowNode = nullptr;
+    Node* yOverflowNode = nullptr;
+
+    node.getPathFromRoot(scrollPath);
+
+    for (auto scrollNode : scrollPath) {
+        if (
+            scrollNode->_scrollOverflow.x > 0.0f &&
+            scrollNode->getOverflowX() == NodeOverflow::Scroll
+        ) {
+            xOverflowNode = scrollNode;
+        }
+
+        if (
+            scrollNode->_scrollOverflow.y > 0.0f &&
+            scrollNode->getOverflowY() == NodeOverflow::Scroll
+        ) {
+            yOverflowNode = scrollNode;
+        }
+    }
+
+    auto const deltaX = (wheel.x * -1.0f);
+    auto const deltaY = (wheel.y * -1.0f);
+
+    auto scrolled = false;
+
+    if (xOverflowNode != nullptr) {
+        xOverflowNode->_scrollPosition.x = _SnapToPixelGrid(std::clamp((xOverflowNode->_scrollPosition.x + deltaX), 0.0f, xOverflowNode->_scrollOverflow.x), _scale);
+        scrolled = true;
+    }
+
+    if (yOverflowNode != nullptr) {
+        yOverflowNode->_scrollPosition.y = _SnapToPixelGrid(std::clamp((yOverflowNode->_scrollPosition.y + deltaY), 0.0f, yOverflowNode->_scrollOverflow.y), _scale);
+        scrolled = true;
+    }
+
+    return scrolled;
+}
+
+void Document::_v2_updateAll() {
+    PROFILE
+
+    if (_v2_isUpdating == true) return;
+    else _v2_isUpdating = true;
+
+    for (;;) {
+        if (_v2_needsUpdate == false) break;
+        else {
+            _v2_needsUpdate = false;
+            _v2_needsRender = true;
+        }
+
+        _v2_updateHover();
+        _v2_updateActive();
+        _v2_updateFocus();
+        _v2_updateDrag();
+        _v2_updateScroll();
+        _v2_updateLayout();
+    }
+
+    _v2_isUpdating = false;
+}
+
+void Document::_v2_renderAll() {
+    PROFILE
+
+    ;
+}
+
+bool Document::_v2_triggerMouseWheel(Vec2 const& delta, KeyModifiers const& modifiers) {
+    PROFILE
+
+    ;
+
+    return false;
+}
+
+bool Document::_v2_triggerMouseDown(Mouse mouse, KeyModifiers const& modifiers) {
+    PROFILE
+
+    ;
+
+    return false;
+}
+
+bool Document::_v2_triggerMouseUp(Mouse mouse, KeyModifiers const& modifiers) {
+    PROFILE
+
+    ;
+
+    return false;
+}
+
+bool Document::_v2_triggerKeyDown(Key key, KeyModifiers const& modifiers, std::string const& input) {
+    PROFILE
+
+    ;
+
+    return false;
+}
+
+bool Document::_v2_triggerKeyUp(Key key, KeyModifiers const& modifiers) {
+    PROFILE
+
+    ;
+
+    return false;
+}
+
+void Document::_v2_processInput(Key, KeyModifiers const&, std::string const&) {
     PROFILE
 
     ;

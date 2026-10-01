@@ -1,4 +1,5 @@
 #include <map>
+#include <optional>
 #include <iostream>
 #include <cassert>
 #include <functional>
@@ -214,6 +215,26 @@ static std::string _SanitizeKeyInput(NSString*);
 @implementation __NSWindow {
     BOOL _leftMouseDown;
     BOOL _rightMouseDown;
+    std::optional<Rocket::Vec2> _mousePosition;
+}
+
+- (void)_dispatchMouseMove:(NSPoint)point flags:(NSEventModifierFlags)flags {
+    PROFILE
+
+    auto position = Rocket::Vec2{
+        static_cast<float>(point.x),
+        static_cast<float>(self.contentView.frame.size.height - point.y)
+    };
+
+    if (self->_onMouseMove != nil) {
+        self->_mousePosition = position;
+        self->_onMouseMove(position, {
+            .control = static_cast<bool>((flags & NSEventModifierFlagControl)),
+            .shift = static_cast<bool>((flags & NSEventModifierFlagShift)),
+            .meta = static_cast<bool>((flags & NSEventModifierFlagCommand)),
+            .alt = static_cast<bool>((flags & NSEventModifierFlagOption))
+        });
+    }
 }
 
 - (id)init {
@@ -234,6 +255,15 @@ static std::string _SanitizeKeyInput(NSString*);
 
     if (NSPointInRect(point, self.contentView.frame) == false) {
         return;
+    }
+
+    auto position = Rocket::Vec2{
+        static_cast<float>(point.x),
+        static_cast<float>(self.contentView.frame.size.height - point.y)
+    };
+
+    if (self->_mousePosition != position) {
+        [self _dispatchMouseMove: point flags: event.modifierFlags];
     }
 
     if (self->_onMouseDown != nil) {
@@ -257,6 +287,15 @@ static std::string _SanitizeKeyInput(NSString*);
 
     if (NSPointInRect(point, self.contentView.frame) == false) {
         return;
+    }
+
+    auto position = Rocket::Vec2{
+        static_cast<float>(point.x),
+        static_cast<float>(self.contentView.frame.size.height - point.y)
+    };
+
+    if (self->_mousePosition != position) {
+        [self _dispatchMouseMove: point flags: event.modifierFlags];
     }
 
     if (self->_onMouseDown != nil) {
@@ -340,18 +379,7 @@ static std::string _SanitizeKeyInput(NSString*);
         }
     }
 
-    NSPoint point = [event locationInWindow];
-    if (self->_onMouseMove != nil) {
-        self->_onMouseMove({
-            static_cast<float>(point.x),
-            static_cast<float>(self.contentView.frame.size.height - point.y)
-        }, {
-            .control = static_cast<bool>((event.modifierFlags & NSEventModifierFlagControl)),
-            .shift = static_cast<bool>((event.modifierFlags & NSEventModifierFlagShift)),
-            .meta = static_cast<bool>((event.modifierFlags & NSEventModifierFlagCommand)),
-            .alt = static_cast<bool>((event.modifierFlags & NSEventModifierFlagOption))
-        });
-    }
+    [self _dispatchMouseMove: [event locationInWindow] flags: event.modifierFlags];
 }
 
 - (void)mouseEntered:(NSEvent*)event {
@@ -393,18 +421,7 @@ static std::string _SanitizeKeyInput(NSString*);
 - (void)mouseDragged:(NSEvent*)event {
     PROFILE
 
-    NSPoint point = [event locationInWindow];
-    if (self->_onMouseMove != nil) {
-        self->_onMouseMove({
-            static_cast<float>(point.x),
-            static_cast<float>(self.contentView.frame.size.height - point.y)
-        }, {
-            .control = static_cast<bool>((event.modifierFlags & NSEventModifierFlagControl)),
-            .shift = static_cast<bool>((event.modifierFlags & NSEventModifierFlagShift)),
-            .meta = static_cast<bool>((event.modifierFlags & NSEventModifierFlagCommand)),
-            .alt = static_cast<bool>((event.modifierFlags & NSEventModifierFlagOption))
-        });
-    }
+    [self _dispatchMouseMove: [event locationInWindow] flags: event.modifierFlags];
 }
 
 - (void)scrollWheel:(NSEvent*)event {
@@ -492,6 +509,20 @@ static std::string _SanitizeKeyInput(NSString*);
     if (self->_onHide != nil) {
         self->_onHide();
     }
+}
+
+- (void)windowDidBecomeKey:(NSNotification*)notification {
+    PROFILE
+
+    /* macOS sends no mouseMoved while the window is not key, so report the
+       cursor position on activation to refresh hover without a move */
+    NSPoint point = [self mouseLocationOutsideOfEventStream];
+
+    if (NSPointInRect(point, self.contentView.frame) == false) {
+        return;
+    }
+
+    [self _dispatchMouseMove: point flags: [NSEvent modifierFlags]];
 }
 
 - (void)windowDidResize:(NSNotification*)notification {

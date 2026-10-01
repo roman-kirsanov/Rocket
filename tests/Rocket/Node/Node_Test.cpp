@@ -405,8 +405,8 @@ TEST(Node, ContainsNode) {
     ASSERT_TRUE(!root.containsNode(other));
 }
 
-/* getPath returns the root-first ancestor chain ending at the node. */
-TEST(Node, GetPath) {
+/* getPathFromRoot returns the root-first ancestor chain ending at the node. */
+TEST(Node, GetPathFromRoot) {
     Node root;
     Node mid;
     Node leaf;
@@ -414,14 +414,35 @@ TEST(Node, GetPath) {
     mid.appendChild(leaf);
 
     std::vector<Node*> path;
-    leaf.getPath(path);
+    leaf.getPathFromRoot(path);
     ASSERT_TRUE(path.size() == 3);
     ASSERT_TRUE(path[0] == &root);
     ASSERT_TRUE(path[1] == &mid);
     ASSERT_TRUE(path[2] == &leaf);
 
-    /* getPath clears any previous contents first. */
-    root.getPath(path);
+    /* getPathFromRoot clears any previous contents first. */
+    root.getPathFromRoot(path);
+    ASSERT_TRUE(path.size() == 1);
+    ASSERT_TRUE(path[0] == &root);
+}
+
+/* getPathToRoot returns the node-first ancestor chain ending at the root. */
+TEST(Node, GetPathToRoot) {
+    Node root;
+    Node mid;
+    Node leaf;
+    root.appendChild(mid);
+    mid.appendChild(leaf);
+
+    std::vector<Node*> path;
+    leaf.getPathToRoot(path);
+    ASSERT_TRUE(path.size() == 3);
+    ASSERT_TRUE(path[0] == &leaf);
+    ASSERT_TRUE(path[1] == &mid);
+    ASSERT_TRUE(path[2] == &root);
+
+    /* getPathToRoot clears any previous contents first. */
+    root.getPathToRoot(path);
     ASSERT_TRUE(path.size() == 1);
     ASSERT_TRUE(path[0] == &root);
 }
