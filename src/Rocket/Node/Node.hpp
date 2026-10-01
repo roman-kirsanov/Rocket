@@ -905,6 +905,7 @@ private:
     bool _needsTextUpdate;
     bool _needsLayoutUpdate;
 
+    void _setNodeLayout();
     void _setNodePadding();
     void _setNodeMargin();
     void _setNodeGap();
@@ -915,9 +916,18 @@ private:
     void _resetInputState();
     void _attach(Document&);
     void _detach();
-    void _updateLayout();
     void _createTextNode();
     void _destroyTextNode();
+    void _v2_cascade();
+    void _v2_cascadeFontFamily();
+    void _v2_cascadeFontWeight();
+    void _v2_cascadeFontStyle();
+    void _v2_cascadeFontSize();
+    void _v2_cascadeLineHeight();
+    void _v2_cascadeTextColor();
+    void _v2_cascadeTextMarker();
+    void _v2_invalidateLayout();
+    void _v2_invalidateText();
 
     friend class Document;
 };
