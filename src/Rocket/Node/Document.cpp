@@ -1632,26 +1632,27 @@ void Document::_v2_hoverNode() {
 
     if (_v2_mouseState.down == true) return;
 
+    hoverPath.clear();
+    exitNodes.clear();
+    enterNodes.clear();
+
+    auto const modifiers = _v2_mouseState.modifiers;
+    auto const position = (_v2_mouseState.position * (_window.getScale() / _scale));
+
+    auto hoverNode = _findNodeAtPosition(position);
+    if (hoverNode != nullptr) {
+        hoverNode->getPathToRoot(hoverPath);
+    }
+
+    auto const positionChanged = (_v2_hoverState.mousePosition != _v2_mouseState.position);
+    auto const hoverNodeChanged = (_v2_hoverState.hoverNode != hoverNode);
+
+    _v2_hoverState.mousePosition = _v2_mouseState.position;
+
     if (
-        _v2_hoverState.layoutRevision != _v2_layoutRevision ||
-        _v2_hoverState.mousePosition != _v2_mouseState.position
+        _v2_hoverState.hoverNode != hoverNode ||
+        _v2_hoverState.hoverPath != hoverPath
     ) {
-        _v2_hoverState.layoutRevision = _v2_layoutRevision;
-        _v2_hoverState.mousePosition = _v2_mouseState.position;
-
-        hoverPath.clear();
-        exitNodes.clear();
-        enterNodes.clear();
-
-        auto const modifiers = _v2_mouseState.modifiers;
-        auto const position = (_v2_hoverState.mousePosition * (_window.getScale() / _scale));
-
-        auto hoverNode = _findNodeAtPosition(position);
-
-        if (hoverNode != nullptr) {
-            hoverNode->getPathToRoot(hoverPath);
-        }
-
         for (auto node : _v2_hoverState.hoverPath) {
             if (std::ranges::contains(hoverPath, node) == false) {
                 exitNodes.push_back(node);
@@ -1680,7 +1681,9 @@ void Document::_v2_hoverNode() {
                 MouseEnterNodeEvent(*node, position, modifiers)
             );
         }
+    }
 
+    if (positionChanged || hoverNodeChanged) {
         if (hoverNode != nullptr) {
             hoverNode->dispatchEvent(
                 MouseMoveNodeEvent(*hoverNode, position, modifiers)

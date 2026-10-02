@@ -183,7 +183,6 @@ private:
         Vec2 mousePosition;
         Node* hoverNode;
         std::vector<Node*> hoverPath;
-        std::size_t layoutRevision;
     };
 
     struct _v2_ActiveState {
