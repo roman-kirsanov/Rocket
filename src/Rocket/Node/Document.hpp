@@ -277,11 +277,11 @@ private:
     void _v2_updateAll();
     void _v2_renderAll();
 
-    bool _v2_triggerMouseWheel(Vec2 const&, KeyModifiers const&);
-    bool _v2_triggerMouseDown(Mouse, KeyModifiers const&);
-    bool _v2_triggerMouseUp(Mouse, KeyModifiers const&);
-    bool _v2_triggerKeyDown(Key, KeyModifiers const&, std::string const&);
-    bool _v2_triggerKeyUp(Key, KeyModifiers const&);
+    void _v2_triggerMouseWheel(Vec2 const&, KeyModifiers const&);
+    void _v2_triggerMouseDown(Mouse, KeyModifiers const&);
+    void _v2_triggerMouseUp(Mouse, KeyModifiers const&);
+    void _v2_triggerKeyDown(Key, KeyModifiers const&, std::string const&, bool&);
+    void _v2_triggerKeyUp(Key, KeyModifiers const&);
 
     std::optional<_InputState> _getInputState();
     Node* _getKeyNode();

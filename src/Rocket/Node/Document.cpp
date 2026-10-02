@@ -1571,8 +1571,8 @@ void Document::_v2_handleMouseDownEvent(MouseDownWindowEvent const& event) {
     _v2_mouseState.downPosition = event.getPosition();
     _v2_mouseState.modifiers = event.getModifiers();
 
-    _v2_triggerMouseDown(event.getMouse(), event.getModifiers());
     _v2_activateNode();
+    _v2_triggerMouseDown(event.getMouse(), event.getModifiers());
     _v2_focusNode(_v2_ActiveFocusNode{});
     _v2_updateAll();
 }
@@ -1605,10 +1605,14 @@ void Document::_v2_handleMouseWheelEvent(MouseWheelWindowEvent const& event) {
 void Document::_v2_handleKeyDownEvent(KeyDownWindowEvent const& event) {
     PROFILE
 
-    auto const defaultPrevented = _v2_triggerKeyDown(event.getKey(), event.getModifiers(), event.getInput());
-    if (defaultPrevented == false) {
+    auto inputPrevented = false;
+
+    _v2_triggerKeyDown(event.getKey(), event.getModifiers(), event.getInput(), inputPrevented);
+
+    if (inputPrevented == false) {
         _v2_input(event.getKey(), event.getModifiers(), event.getInput());
     }
+
     _v2_updateAll();
 }
 
@@ -2152,44 +2156,78 @@ void Document::_v2_renderAll() {
     ;
 }
 
-bool Document::_v2_triggerMouseWheel(Vec2 const& delta, KeyModifiers const& modifiers) {
+void Document::_v2_triggerMouseWheel(Vec2 const& delta, KeyModifiers const& modifiers) {
     PROFILE
 
-    ;
+    auto targetNode = (
+        _v2_hoverState.hoverNode != nullptr
+            ? _v2_hoverState.hoverNode
+            : this
+    );
 
-    return false;
+    targetNode->dispatchEvent(
+        MouseWheelNodeEvent(*targetNode, delta, modifiers)
+    );
 }
 
-bool Document::_v2_triggerMouseDown(Mouse mouse, KeyModifiers const& modifiers) {
+void Document::_v2_triggerMouseDown(Mouse mouse, KeyModifiers const& modifiers) {
     PROFILE
 
-    ;
+    auto const position = (_v2_mouseState.position * (_window.getScale() / _scale));
 
-    return false;
+    auto targetNode = (
+        _v2_activeState.activeNode != nullptr
+            ? _v2_activeState.activeNode
+            : this
+    );
+
+    targetNode->dispatchEvent(
+        MouseDownNodeEvent(*targetNode, mouse, position, modifiers)
+    );
 }
 
-bool Document::_v2_triggerMouseUp(Mouse mouse, KeyModifiers const& modifiers) {
+void Document::_v2_triggerMouseUp(Mouse mouse, KeyModifiers const& modifiers) {
     PROFILE
 
-    ;
+    auto const position = (_v2_mouseState.position * (_window.getScale() / _scale));
 
-    return false;
+    auto targetNode = (
+        _v2_activeState.activeNode != nullptr
+            ? _v2_activeState.activeNode
+            : this
+    );
+
+    targetNode->dispatchEvent(
+        MouseUpNodeEvent(*targetNode, mouse, position, modifiers)
+    );
 }
 
-bool Document::_v2_triggerKeyDown(Key key, KeyModifiers const& modifiers, std::string const& input) {
+void Document::_v2_triggerKeyDown(Key key, KeyModifiers const& modifiers, std::string const& input, bool& preventInput) {
     PROFILE
 
-    ;
+    auto targetNode = (
+        (_v2_focusState.focusedNode != nullptr && _v2_focusState.focusedNode->_keyEvents == true)
+            ? _v2_focusState.focusedNode
+            : this
+    );
 
-    return false;
+    auto const event = KeyDownNodeEvent(*targetNode, key, modifiers, input);
+    targetNode->dispatchEvent(event);
+    preventInput = event.isDefaultPrevented();
 }
 
-bool Document::_v2_triggerKeyUp(Key key, KeyModifiers const& modifiers) {
+void Document::_v2_triggerKeyUp(Key key, KeyModifiers const& modifiers) {
     PROFILE
 
-    ;
+    auto targetNode = (
+        (_v2_focusState.focusedNode != nullptr && _v2_focusState.focusedNode->_keyEvents == true)
+            ? _v2_focusState.focusedNode
+            : this
+    );
 
-    return false;
+    targetNode->dispatchEvent(
+        KeyUpNodeEvent(*targetNode, key, modifiers)
+    );
 }
 
 } /* namespace Rocket */
