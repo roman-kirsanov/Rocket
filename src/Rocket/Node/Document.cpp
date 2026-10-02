@@ -63,6 +63,20 @@ Document::Document(Window& window)
     , _caretBlinkStart(std::chrono::steady_clock::now())
     , _hoverPath()
     , _renderList()
+    , _v2_mouseState()
+    , _v2_hoverState()
+    , _v2_activeState()
+    , _v2_focusState()
+    , _v2_dragState()
+    , _v2_scrollState()
+    , _v2_layoutRevision(0)
+    , _v2_mouseDownRevision(0)
+    , _v2_mouseWheelRevision(0)
+    , _v2_keyDownRevision(0)
+    , _v2_isUpdating(false)
+    , _v2_needsUpdate(true)
+    , _v2_needsRender(true)
+    , _v2_renderList()
 {
     PROFILE
 
@@ -71,31 +85,7 @@ Document::Document(Window& window)
     _yogaConfig = ::YGConfigNew();
 
     _windowSub.on(window.onEvent, [&](WindowEvent const& event) {
-        auto const convertPoint = [&](Vec2 const& position) {
-            return (position * (_window.getScale() / _scale));
-        };
-
-        if (auto e = event.as<MouseMoveWindowEvent>()) {
-            _mouseMove(convertPoint(e->getPosition()), e->getModifiers());
-        } else if (auto e = event.as<MouseDownWindowEvent>()) {
-            _mouseDown(e->getMouse(), convertPoint(e->getPosition()), e->getModifiers(), e->getClickCount());
-        } else if (auto e = event.as<MouseUpWindowEvent>()) {
-            _mouseUp(e->getMouse(), convertPoint(e->getPosition()), e->getModifiers());
-        } else if (auto e = event.as<MouseWheelWindowEvent>()) {
-            _mouseWheel(convertPoint(e->getPosition()), e->getModifiers());
-        } else if (auto e = event.as<KeyDownWindowEvent>()) {
-            _keyDown(e->getKey(), e->getModifiers(), e->getInput());
-        } else if (auto e = event.as<KeyUpWindowEvent>()) {
-            _keyUp(e->getKey(), e->getModifiers());
-        } else if (event.is<PaintWindowEvent>()) {
-            update();
-            render();
-        } else if (
-            event.is<ResizeWindowEvent>() ||
-            event.is<DPIChangeWindowEvent>()
-        ) {
-            _needsUpdate = true;
-        }
+        _v2_handleEvent(event);
     });
 }
 
@@ -1598,6 +1588,7 @@ void Document::_v2_handleMouseUpEvent(MouseUpWindowEvent const& event) {
     _v2_mouseState.modifiers = event.getModifiers();
 
     _v2_triggerMouseUp(event.getMouse(), event.getModifiers());
+    _v2_clickNode();
     _v2_unactivateNode();
     _v2_dropNode();
     _v2_updateAll();
@@ -1871,6 +1862,33 @@ void Document::_v2_dropNode() {
     }
 }
 
+void Document::_v2_clickNode() {
+    PROFILE
+
+    static thread_local auto clickPath = std::vector<Node*>();
+
+    if (_v2_mouseState.down == true) return;
+    if (_v2_mouseState.mouse != Mouse::LeftButton) return;
+    if (_v2_activeState.activeNode == nullptr) return;
+    if (_v2_dragState.dragNode != nullptr) return;
+
+    auto const modifiers = _v2_mouseState.modifiers;
+    auto const position = (_v2_mouseState.position * (_window.getScale() / _scale));
+
+    if (auto clickNode = _findNodeAtPosition(position)) {
+        clickNode->getPathToRoot(clickPath);
+
+        for (auto node : clickPath) {
+            if (std::ranges::contains(_v2_activeState.activePath, node)) {
+                node->dispatchEvent(
+                    MouseClickNodeEvent(*node, position, modifiers)
+                );
+                break;
+            }
+        }
+    }
+}
+
 void Document::_v2_input(Key key, KeyModifiers const& modifiers, std::string const& input) {
     PROFILE
 
@@ -1890,6 +1908,217 @@ void Document::_v2_updateLayout() {
     _v2_layoutRevision += 1;
 }
 
+void Document::_v2_updateNode(Node& node) {
+    PROFILE
+
+    auto const margin = Vec4{
+        ::YGNodeLayoutGetMargin((::YGNode*)node._layoutNode, ::YGEdgeLeft),
+        ::YGNodeLayoutGetMargin((::YGNode*)node._layoutNode, ::YGEdgeTop),
+        ::YGNodeLayoutGetMargin((::YGNode*)node._layoutNode, ::YGEdgeRight),
+        ::YGNodeLayoutGetMargin((::YGNode*)node._layoutNode, ::YGEdgeBottom)
+    };
+
+    auto const padding = Vec4{
+        ::YGNodeLayoutGetPadding((::YGNode*)node._layoutNode, ::YGEdgeLeft),
+        ::YGNodeLayoutGetPadding((::YGNode*)node._layoutNode, ::YGEdgeTop),
+        ::YGNodeLayoutGetPadding((::YGNode*)node._layoutNode, ::YGEdgeRight),
+        ::YGNodeLayoutGetPadding((::YGNode*)node._layoutNode, ::YGEdgeBottom)
+    };
+
+    node._computedBorderEdge = {
+        _SnapBorderToPixelGrid(::YGNodeLayoutGetBorder((::YGNode*)node._layoutNode, ::YGEdgeLeft), _scale),
+        _SnapBorderToPixelGrid(::YGNodeLayoutGetBorder((::YGNode*)node._layoutNode, ::YGEdgeTop), _scale),
+        _SnapBorderToPixelGrid(::YGNodeLayoutGetBorder((::YGNode*)node._layoutNode, ::YGEdgeRight), _scale),
+        _SnapBorderToPixelGrid(::YGNodeLayoutGetBorder((::YGNode*)node._layoutNode, ::YGEdgeBottom), _scale)
+    };
+
+    node._computedBorderRect = {
+        ::YGNodeLayoutGetLeft((::YGNode*)node._layoutNode),
+        ::YGNodeLayoutGetTop((::YGNode*)node._layoutNode),
+        ::YGNodeLayoutGetWidth((::YGNode*)node._layoutNode),
+        ::YGNodeLayoutGetHeight((::YGNode*)node._layoutNode)
+    };
+
+    if (std::isfinite(node._computedBorderRect.x) == false)      node._computedBorderRect.x = 0.0f;
+    if (std::isfinite(node._computedBorderRect.y) == false)      node._computedBorderRect.y = 0.0f;
+    if (std::isfinite(node._computedBorderRect.width) == false)  node._computedBorderRect.width = 0.0f;
+    if (std::isfinite(node._computedBorderRect.height) == false) node._computedBorderRect.height = 0.0f;
+
+    if (node._offset) {
+        node._computedBorderRect.origin.x += _SnapToPixelGrid(node._offset->x, _scale);
+        node._computedBorderRect.origin.y += _SnapToPixelGrid(node._offset->y, _scale);
+    }
+
+    if (node._transform) {
+        node._computedBorderRect.origin.x += _SnapToPixelGrid(
+            node._transform->translateX.match(
+                [](PixelValue const& pixel) { return pixel.value; },
+                [&](PercentValue const& percent) { return ((percent.value / 100.0f) * node._computedBorderRect.width); }
+            ),
+            _scale
+        );
+
+        node._computedBorderRect.origin.y += _SnapToPixelGrid(
+            node._transform->translateY.match(
+                [](PixelValue const& pixel) { return pixel.value; },
+                [&](PercentValue const& percent) { return ((percent.value / 100.0f) * node._computedBorderRect.height); }
+            ),
+            _scale
+        );
+    }
+
+    node._computedMarginRect = {
+        (node._computedBorderRect.x - margin.left),
+        (node._computedBorderRect.y - margin.top),
+        (node._computedBorderRect.width + margin.left + margin.right),
+        (node._computedBorderRect.height + margin.top + margin.bottom)
+    };
+
+    if (
+        node._display == NodeDisplay::Text &&
+        node._textNode != nullptr
+    ) {
+        node._computedTextRect = {
+            ::YGNodeLayoutGetLeft((::YGNode*)node._textNode),
+            ::YGNodeLayoutGetTop((::YGNode*)node._textNode),
+            ::YGNodeLayoutGetWidth((::YGNode*)node._textNode),
+            ::YGNodeLayoutGetHeight((::YGNode*)node._textNode)
+        };
+    }
+
+    auto const contentSize = getSize();
+
+    node._computedClipRectInDocument = Vec4{ 0.0f, 0.0f, contentSize.width, contentSize.height };
+    node._computedBorderRectInDocument = node._computedBorderRect;
+    node._computedMarginRectInDocument = node._computedMarginRect;
+    node._computedZIndex = node._zIndex.value_or(0);
+
+    if (node._parent != nullptr) {
+        node._computedBorderRectInDocument.origin += node._parent->_computedBorderRectInDocument.origin;
+        node._computedMarginRectInDocument.origin += node._parent->_computedBorderRectInDocument.origin;
+
+        if (node._position != NodePosition::Fixed) {
+            node._computedBorderRectInDocument.origin -= node._parent->_scrollPosition;
+            node._computedMarginRectInDocument.origin -= node._parent->_scrollPosition;
+        }
+
+        if (node._clipped == true) {
+            node._computedClipRectInDocument = node._parent->_computedClipRectInDocument;
+        }
+
+        if (node._computedZIndex < node._parent->_computedZIndex) {
+            node._computedZIndex = node._parent->_computedZIndex;
+        }
+
+        if (node._computedZIndex > node._parent->_computedZIndex) {
+            _v2_renderList[node._computedZIndex].push_back(&node);
+        }
+    }
+
+    auto const& borderEdge = node._computedBorderEdge;
+    auto const innerBorderRect = Vec4{
+        (node._computedBorderRectInDocument.x + borderEdge.left),
+        (node._computedBorderRectInDocument.y + borderEdge.top),
+        std::max(0.0f, (node._computedBorderRectInDocument.width - borderEdge.left - borderEdge.right)),
+        std::max(0.0f, (node._computedBorderRectInDocument.height - borderEdge.top - borderEdge.bottom))
+    };
+
+    if (
+        (node._overflowX == NodeOverflow::Hidden) ||
+        (node._overflowX == NodeOverflow::Scroll)
+    ) {
+        auto newClipRect = node._computedClipRectInDocument.getIntersection(innerBorderRect);
+        node._computedClipRectInDocument.x = newClipRect.x;
+        node._computedClipRectInDocument.width = newClipRect.width;
+    }
+
+    if (
+        (node._overflowY == NodeOverflow::Hidden) ||
+        (node._overflowY == NodeOverflow::Scroll)
+    ) {
+        auto newClipRect = node._computedClipRectInDocument.getIntersection(innerBorderRect);
+        node._computedClipRectInDocument.y = newClipRect.y;
+        node._computedClipRectInDocument.height = newClipRect.height;
+    }
+
+    auto scrollMaxX = 0.0f;
+    auto scrollMaxY = 0.0f;
+    auto contentMinX = 0.0f;
+    auto contentMinY = 0.0f;
+    auto contentMaxX = node._computedBorderRect.width;
+    auto contentMaxY = node._computedBorderRect.height;
+
+    for (auto child = node._firstChild; child != nullptr; child = child->_nextSibling) {
+        _v2_updateNode(*child);
+
+        if (child->_position == NodePosition::Fixed) {
+            continue; // fixed children don't contribute to the content box or scrollable area
+        }
+
+        auto childLeft   = child->_computedMarginRect.x;
+        auto childTop    = child->_computedMarginRect.y;
+        auto childRight  = child->_computedMarginRect.getMaxX();
+        auto childBottom = child->_computedMarginRect.getMaxY();
+
+        if (
+            (child->_overflowX != NodeOverflow::Hidden) &&
+            (child->_overflowX != NodeOverflow::Scroll)
+        ) {
+            childLeft  = std::min(childLeft,  (child->_computedBorderRect.x + child->_computedContentRect.x));
+            childRight = std::max(childRight, (child->_computedBorderRect.x + child->_computedContentRect.getMaxX()));
+        }
+        if (
+            (child->_overflowY != NodeOverflow::Hidden) &&
+            (child->_overflowY != NodeOverflow::Scroll)
+        ) {
+            childTop    = std::min(childTop,    (child->_computedBorderRect.y + child->_computedContentRect.y));
+            childBottom = std::max(childBottom, (child->_computedBorderRect.y + child->_computedContentRect.getMaxY()));
+        }
+
+        contentMinX = std::min(contentMinX, childLeft);
+        contentMinY = std::min(contentMinY, childTop);
+        contentMaxX = std::max(contentMaxX, childRight);
+        contentMaxY = std::max(contentMaxY, childBottom);
+        scrollMaxX = std::max(scrollMaxX, childRight);
+        scrollMaxY = std::max(scrollMaxY, childBottom);
+    }
+
+    node._computedContentRect = {
+        contentMinX,
+        contentMinY,
+        (contentMaxX - contentMinX),
+        (contentMaxY - contentMinY)
+    };
+
+    node._scrollOverflow = {
+        _SnapToPixelGrid(std::max(0.0f, (scrollMaxX - (node._computedBorderRect.width  - node._computedBorderEdge.right  - padding.right))), _scale),
+        _SnapToPixelGrid(std::max(0.0f, (scrollMaxY - (node._computedBorderRect.height - node._computedBorderEdge.bottom - padding.bottom))), _scale)
+    };
+
+    node._scrollPosition = {
+        std::clamp(node._scrollPosition.x, 0.0f, node._scrollOverflow.x),
+        std::clamp(node._scrollPosition.y, 0.0f, node._scrollOverflow.y)
+    };
+}
+
+void Document::_v2_updateCursor() {
+    PROFILE
+
+    auto cursor = Cursor::Default;
+
+    for (auto node : _v2_hoverState.hoverPath) {
+        if (node->_cursor.has_value()) {
+            cursor = node->_cursor.value();
+            break;
+        }
+    }
+
+    if (_cursor != cursor) {
+        _cursor = cursor;
+        _window.setCursor(cursor);
+    }
+}
+
 void Document::_v2_updateAll() {
     PROFILE
 
@@ -1903,9 +2132,16 @@ void Document::_v2_updateAll() {
             _v2_needsRender = true;
         }
 
+        _v2_renderList.clear();
+
         _v2_updateLayout();
+        _v2_updateNode(*this);
         _v2_hoverNode();
+
+        _v2_renderList[_computedZIndex].push_back(this);
     }
+
+    _v2_updateCursor();
 
     _v2_isUpdating = false;
 }

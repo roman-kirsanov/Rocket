@@ -246,6 +246,11 @@ private:
     bool _v2_needsUpdate;
     bool _v2_needsRender;
 
+    std::map<
+        std::int64_t,
+        std::vector<Node*>
+    > _v2_renderList;
+
     void _v2_handleEvent(WindowEvent const&);
     void _v2_handleMouseMoveEvent(MouseMoveWindowEvent const&);
     void _v2_handleMouseEnterEvent(MouseEnterWindowEvent const&);
@@ -262,10 +267,13 @@ private:
     void _v2_scrollNode(_v2_ScrollNodeVariant const&, Vec2 const&);
     void _v2_dragNode();
     void _v2_dropNode();
+    void _v2_clickNode();
     void _v2_input(Key, KeyModifiers const&, std::string const&);
 
 
     void _v2_updateLayout();
+    void _v2_updateNode(Node&);
+    void _v2_updateCursor();
     void _v2_updateAll();
     void _v2_renderAll();
 
