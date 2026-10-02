@@ -1540,10 +1540,8 @@ void Document::_v2_handleEvent(WindowEvent const& event) {
         _v2_handleKeyDownEvent(*keyDownEvent);
     } else if (auto keyUpEvent = event.as<KeyUpWindowEvent>()) {
         _v2_handleKeyUpEvent(*keyUpEvent);
-    } else if (event.is<PaintWindowEvent>()) {
-        _v2_updateAll();
-        _v2_renderAll();
     } else if (
+        event.is<PaintWindowEvent>() ||
         event.is<ResizeWindowEvent>() ||
         event.is<DPIChangeWindowEvent>()
     ) {
