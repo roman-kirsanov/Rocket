@@ -1578,25 +1578,30 @@ void Document::_updateAll() {
 
             _updateLayout();
             _updateNode(*this);
-            _hoverNode();
 
             _renderList[_computedZIndex].push_back(this);
+
+            _hoverNode();
         }
 
-        if ((_eventQueue.empty() == false) && (_isFlushing == false)) {
-            _flushEvents();
-            continue;
+        if (_eventQueue.empty() == false) {
+            if (_isFlushing == false) {
+                _flushEvents();
+                continue;
+            }
         }
 
-        /* the caret moves without a relayout (arrows, selection): keep it in view */
-        if (auto const focusedNode = _focusState.focusedNode; focusedNode != nullptr && _isNodeEditable(*focusedNode)) {
-            _updateTextScroll(*focusedNode->_firstChild);
+        if (_focusState.focusedNode != nullptr) {
+            if (_isNodeEditable(*_focusState.focusedNode)) {
+                _updateTextScroll(*_focusState.focusedNode->_firstChild);
+            }
         }
 
         _caretState.follow = false;
 
-        /* following the caret scrolled a node: its subtree is placed again */
-        if (_needsUpdate == false) break;
+        if (_needsUpdate == false) {
+            break;
+        }
     }
 
     _updateCursor();
