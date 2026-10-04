@@ -294,10 +294,7 @@ private:
     void _releaseText();
     void _focusNext(bool);
     void _processKey(Scancode, std::string const&, KeyModifiers const&);
-    bool _textCommand(std::string const&, KeyModifiers const&);
     void _insertText(std::string const&);
-    void _applyText(_InputState const&, std::string const&);
-    void _syncInputArea();
     float _getTextVisibleWidth(Node const&) const;
     Vec2 _getTextLocalPosition(_InputState const&, Vec2 const&) const;
     Node* _getTextInputNode() const;
@@ -310,6 +307,7 @@ private:
     void _updateNode(Node&);
     void _updateText(Node&);
     void _updateTextScroll(Node&);
+    void _updateInputArea();
     void _updateCursor();
     void _updateAll();
     void _renderNode(Node&, Vec2 const&, int);

@@ -599,11 +599,11 @@ void Text::clearStyle() {
     _invalidateIndex();
 }
 
-void Text::input(std::string const& string) {
+bool Text::input(std::string const& string) {
     PROFILE
 
     if (_editState == nullptr) {
-        return;
+        return false;
     }
 
     static thread_local auto _stringCodepoints = std::vector<std::uint32_t>();
@@ -643,7 +643,7 @@ void Text::input(std::string const& string) {
     }
 
     if (_stringCodepoints.empty()) {
-        return;
+        return false;
     }
 
     auto const startsWord = (_stringCodepoints.size() == 1) && (CodepointIsWhitespace(_stringCodepoints.front()) == false);
@@ -658,11 +658,12 @@ void Text::input(std::string const& string) {
     }
 
     _insertCodepoints(_editState->caret, _stringCodepoints);
-
     _setCaret(_editState->caret + _stringCodepoints.size());
     _setAnchor(_editState->caret);
     _invalidateData();
     _endEdit();
+
+    return true;
 }
 
 void Text::moveUp(bool selection) {
@@ -1048,11 +1049,11 @@ void Text::moveDocumentEnd(bool selection) {
     }
 }
 
-void Text::deleteForward() {
+bool Text::deleteForward() {
     PROFILE
 
     if (_editState == nullptr) {
-        return;
+        return false;
     }
 
     _editState->caretXGoal = std::nullopt;
@@ -1064,21 +1065,24 @@ void Text::deleteForward() {
         _invalidateData();
     } else {
         if (_editState->caret >= _getMaxIndex()) {
-            return;
+            return false;
         }
 
         _pushUndo(_EDIT_DELETE_FORWARD, true);
         _eraseCodepoints(_editState->caret, GraphemeNext(_codepoints, _editState->caret));
         _invalidateData();
     }
+
     _endEdit();
+
+    return true;
 }
 
-void Text::deleteBackward() {
+bool Text::deleteBackward() {
     PROFILE
 
     if (_editState == nullptr) {
-        return;
+        return false;
     }
 
     _editState->caretXGoal = std::nullopt;
@@ -1090,7 +1094,7 @@ void Text::deleteBackward() {
         _invalidateData();
     } else {
         if (_editState->caret <= 0) {
-            return;
+            return false;
         }
 
         _pushUndo(_EDIT_DELETE_BACKWARD, true);
@@ -1098,20 +1102,21 @@ void Text::deleteBackward() {
         auto const index = GraphemePrev(_codepoints, _editState->caret);
 
         _eraseCodepoints(index, _editState->caret);
-
         _setCaret(index);
         _setAnchor(index);
         _invalidateData();
     }
 
     _endEdit();
+
+    return true;
 }
 
-void Text::deleteWordForward() {
+bool Text::deleteWordForward() {
     PROFILE
 
     if (_editState == nullptr) {
-        return;
+        return false;
     }
 
     _editState->caretXGoal = std::nullopt;
@@ -1123,7 +1128,7 @@ void Text::deleteWordForward() {
         _invalidateData();
     } else {
         if (_editState->caret >= _getMaxIndex()) {
-            return;
+            return false;
         }
 
         _pushUndo(_EDIT_NONE, false);
@@ -1135,13 +1140,15 @@ void Text::deleteWordForward() {
     }
 
     _endEdit();
+
+    return true;
 }
 
-void Text::deleteWordBackward() {
+bool Text::deleteWordBackward() {
     PROFILE
 
     if (_editState == nullptr) {
-        return;
+        return false;
     }
 
     _editState->caretXGoal = std::nullopt;
@@ -1153,7 +1160,7 @@ void Text::deleteWordBackward() {
         _invalidateData();
     } else {
         if (_editState->caret <= 0) {
-            return;
+            return false;
         }
 
         _pushUndo(_EDIT_NONE, false);
@@ -1161,20 +1168,21 @@ void Text::deleteWordBackward() {
         auto const index = _getWordBoundaryLeft(_editState->caret);
 
         _eraseCodepoints(index, _editState->caret);
-
         _setCaret(index);
         _setAnchor(index);
         _invalidateData();
     }
 
     _endEdit();
+
+    return true;
 }
 
-void Text::deleteLineBackward() {
+bool Text::deleteLineBackward() {
     PROFILE
 
     if (_editState == nullptr) {
-        return;
+        return false;
     }
 
     _editState->caretXGoal = std::nullopt;
@@ -1188,13 +1196,13 @@ void Text::deleteLineBackward() {
         auto const& lines = getLines();
 
         if (_editState->caret <= 0 || lines.empty()) {
-            return;
+            return false;
         }
 
         auto const index = lines[_getCaretRow()].startIndex;
 
         if (index >= _editState->caret) {
-            return;
+            return false;
         }
 
         _pushUndo(_EDIT_NONE, false);
@@ -1205,13 +1213,15 @@ void Text::deleteLineBackward() {
     }
 
     _endEdit();
+
+    return true;
 }
 
-void Text::deleteLineForward() {
+bool Text::deleteLineForward() {
     PROFILE
 
     if (_editState == nullptr) {
-        return;
+        return false;
     }
 
     _editState->caretXGoal = std::nullopt;
@@ -1226,7 +1236,7 @@ void Text::deleteLineForward() {
         auto const& lines = getLines();
 
         if (_editState->caret >= _getMaxIndex() || lines.empty()) {
-            return;
+            return false;
         }
 
         auto const& line = lines[_getCaretRow()];
@@ -1246,6 +1256,8 @@ void Text::deleteLineForward() {
     }
 
     _endEdit();
+
+    return true;
 }
 
 void Text::selectWordAt(std::int64_t index) {
@@ -1305,11 +1317,14 @@ void Text::selectParagraphAt(std::int64_t index) {
     _editState->lastEditKind = _EDIT_NONE;
 }
 
-void Text::undo() {
+bool Text::undo() {
     PROFILE
 
-    if ((_editState == nullptr) || _editState->undoStack.empty()) {
-        return;
+    if (
+        _editState == nullptr ||
+        _editState->undoStack.empty()
+    ) {
+        return false;
     }
 
     _editState->redoStack.push_back(getSnapshot());
@@ -1318,13 +1333,18 @@ void Text::undo() {
     _editState->undoStack.pop_back();
     _applySnapshot(snapshot);
     _editState->lastEditKind = _EDIT_NONE;
+
+    return true;
 }
 
-void Text::redo() {
+bool Text::redo() {
     PROFILE
 
-    if ((_editState == nullptr) || _editState->redoStack.empty()) {
-        return;
+    if (
+        _editState == nullptr ||
+        _editState->redoStack.empty()
+    ) {
+        return false;
     }
 
     _editState->undoStack.push_back(getSnapshot());
@@ -1333,6 +1353,8 @@ void Text::redo() {
     _editState->redoStack.pop_back();
     _applySnapshot(snapshot);
     _editState->lastEditKind = _EDIT_NONE;
+
+    return true;
 }
 
 bool Text::canUndo() const {
@@ -1357,7 +1379,6 @@ void Text::selectAll() {
     _editState->lastEditKind = _EDIT_NONE;
     _editState->caretXGoal = std::nullopt;
     _setCaretAffinity(false);
-
     _setAnchor(0);
     _setCaret(_getMaxIndex());
 }
@@ -1465,20 +1486,22 @@ void Text::mouseUp(Vec2 const& position) {
     _editState->mouseIsDown = false;
 }
 
-void Text::paste(std::string const& string) {
+bool Text::paste(std::string const& string) {
     PROFILE
 
     if (_editState == nullptr) {
-        return;
+        return false;
     }
 
     if (string.empty()) {
-        return;
+        return false;
     }
 
     _editState->lastEditKind = _EDIT_NONE; /* a paste is its own undo group */
-    input(string);
+    auto const edited = input(string);
     _editState->lastEditKind = _EDIT_NONE;
+
+    return edited;
 }
 
 void Text::copy(std::string& string) {
@@ -1505,7 +1528,7 @@ void Text::copy(std::string& string) {
     }
 }
 
-void Text::cut(std::string& string) {
+bool Text::cut(std::string& string) {
     PROFILE
 
     copy(string);
@@ -1514,7 +1537,11 @@ void Text::cut(std::string& string) {
         _pushUndo(_EDIT_NONE, false);
         _deleteSelection();
         _endEdit();
+
+        return true;
     }
+
+    return false;
 }
 
 void Text::restoreSnapshot(TextEditSnapshot const& snapshot) {

@@ -2687,6 +2687,128 @@ TEST(Text, EditingLineDeletes) {
     EXPECT_EQ(text.getString(), "one\n");
 }
 
+/* --------------------------- edit return values --------------------------- */
+
+/* Every editing method reports whether it edited the text, so a caller can
+   tell a real edit from a no-op without comparing the content. */
+TEST(Text, EditingMethodsReturnFalseWhileNotEditable) {
+    Text text;
+    text.setString("abc");
+
+    auto string = std::string();
+    EXPECT_FALSE(text.input("x"));
+    EXPECT_FALSE(text.paste("x"));
+    EXPECT_FALSE(text.cut(string));
+    EXPECT_FALSE(text.deleteForward());
+    EXPECT_FALSE(text.deleteBackward());
+    EXPECT_FALSE(text.deleteWordForward());
+    EXPECT_FALSE(text.deleteWordBackward());
+    EXPECT_FALSE(text.deleteLineForward());
+    EXPECT_FALSE(text.deleteLineBackward());
+    EXPECT_FALSE(text.undo());
+    EXPECT_FALSE(text.redo());
+    EXPECT_EQ(text.getString(), "abc");
+}
+
+TEST(Text, EditingInputAndPasteReturnWhetherEdited) {
+    Text text;
+    text.setString("abc");
+    text.setEditable(true);
+
+    EXPECT_FALSE(text.input(""));
+    EXPECT_FALSE(text.paste(""));
+    EXPECT_EQ(text.getString(), "abc");
+
+    EXPECT_TRUE(text.input("x"));
+    EXPECT_EQ(text.getString(), "xabc");
+    EXPECT_TRUE(text.paste("yz"));
+    EXPECT_EQ(text.getString(), "xyzabc");
+
+    text.selectAll();
+    EXPECT_TRUE(text.input("q")); /* replacing a selection */
+    EXPECT_EQ(text.getString(), "q");
+}
+
+TEST(Text, EditingDeletesReturnWhetherEdited) {
+    Text text;
+    text.setString("ab cd");
+    text.setEditable(true);
+
+    EXPECT_FALSE(text.deleteBackward()); /* caret at the start */
+    EXPECT_FALSE(text.deleteWordBackward());
+    EXPECT_TRUE(text.deleteForward());
+    EXPECT_EQ(text.getString(), "b cd");
+    EXPECT_TRUE(text.deleteWordForward());
+    EXPECT_EQ(text.getString(), " cd");
+
+    text.moveDocumentEnd();
+    EXPECT_FALSE(text.deleteForward()); /* caret at the end */
+    EXPECT_FALSE(text.deleteWordForward());
+    EXPECT_TRUE(text.deleteBackward());
+    EXPECT_EQ(text.getString(), " c");
+    EXPECT_TRUE(text.deleteWordBackward());
+    EXPECT_EQ(text.getString(), " ");
+
+    text.selectAll();
+    EXPECT_TRUE(text.deleteBackward()); /* a selection is deleted wherever the caret is */
+    EXPECT_EQ(text.getString(), "");
+
+    EXPECT_FALSE(text.deleteForward()); /* empty text */
+    EXPECT_FALSE(text.deleteBackward());
+    EXPECT_FALSE(text.deleteWordForward());
+    EXPECT_FALSE(text.deleteWordBackward());
+}
+
+TEST(Text, EditingLineDeletesReturnWhetherEdited) {
+    Text text;
+    _Setup(text, "one\ntwo", true);
+
+    EXPECT_FALSE(text.deleteLineBackward()); /* caret at the document start */
+    EXPECT_TRUE(text.deleteLineForward());
+    EXPECT_EQ(text.getString(), "\ntwo");
+
+    text.moveDocumentEnd();
+    EXPECT_FALSE(text.deleteLineForward()); /* caret at the document end */
+    EXPECT_TRUE(text.deleteLineBackward());
+    EXPECT_EQ(text.getString(), "\n");
+    EXPECT_FALSE(text.deleteLineBackward()); /* caret already at the line start */
+    EXPECT_EQ(text.getString(), "\n");
+}
+
+TEST(Text, EditingCutReturnsWhetherEdited) {
+    Text text;
+    text.setString("abc");
+    text.setEditable(true);
+
+    auto string = std::string("stale");
+    EXPECT_FALSE(text.cut(string)); /* nothing selected */
+    EXPECT_EQ(string, "");
+    EXPECT_EQ(text.getString(), "abc");
+
+    text.selectAll();
+    EXPECT_TRUE(text.cut(string));
+    EXPECT_EQ(string, "abc");
+    EXPECT_EQ(text.getString(), "");
+}
+
+TEST(Text, EditingUndoRedoReturnWhetherApplied) {
+    Text text;
+    text.setString("abc");
+    text.setEditable(true);
+
+    EXPECT_FALSE(text.undo()); /* empty history */
+    EXPECT_FALSE(text.redo());
+
+    text.input("x");
+    EXPECT_TRUE(text.undo());
+    EXPECT_EQ(text.getString(), "abc");
+    EXPECT_FALSE(text.undo());
+
+    EXPECT_TRUE(text.redo());
+    EXPECT_EQ(text.getString(), "xabc");
+    EXPECT_FALSE(text.redo());
+}
+
 /* ------------------------------ multi-click ------------------------------- */
 
 /* A double click selects the word under the point (or the whitespace run),

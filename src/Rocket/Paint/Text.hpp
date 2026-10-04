@@ -462,8 +462,9 @@ public:
      * Inserts a UTF-8 string at the caret position, replacing the selection if any.
      *
      * @param string The UTF-8 string to insert at the caret.
+     * @return Whether the text was edited; false when editing is disabled or the string is empty.
      */
-    void input(std::string const& string);
+    bool input(std::string const& string);
 
     /**
      * Moves the caret up one line; in single-line mode (see setMultiLine) moves to the start of the line instead.
@@ -544,23 +545,23 @@ public:
      */
     void moveDocumentEnd(bool selection = false);
 
-    /** Deletes the grapheme cluster after the caret, or the selection if one exists. */
-    void deleteForward();
+    /** Deletes the grapheme cluster after the caret, or the selection if one exists. Returns whether the text was edited. */
+    bool deleteForward();
 
-    /** Deletes the grapheme cluster before the caret, or the selection if one exists. */
-    void deleteBackward();
+    /** Deletes the grapheme cluster before the caret, or the selection if one exists. Returns whether the text was edited. */
+    bool deleteBackward();
 
-    /** Deletes the word after the caret, or the selection if one exists. */
-    void deleteWordForward();
+    /** Deletes the word after the caret, or the selection if one exists. Returns whether the text was edited. */
+    bool deleteWordForward();
 
-    /** Deletes the word before the caret, or the selection if one exists. */
-    void deleteWordBackward();
+    /** Deletes the word before the caret, or the selection if one exists. Returns whether the text was edited. */
+    bool deleteWordBackward();
 
-    /** Deletes from the caret to the start of its visual line, or the selection if one exists. */
-    void deleteLineBackward();
+    /** Deletes from the caret to the start of its visual line, or the selection if one exists. Returns whether the text was edited. */
+    bool deleteLineBackward();
 
-    /** Deletes from the caret to the end of its visual line, or the selection if one exists. */
-    void deleteLineForward();
+    /** Deletes from the caret to the end of its visual line, or the selection if one exists. Returns whether the text was edited. */
+    bool deleteLineForward();
 
     /**
      * Selects the word at the given codepoint index (the run of whitespace
@@ -583,11 +584,13 @@ public:
      * Reverts the most recent edit group. Consecutive typing without moving
      * the caret forms one group, split where a whitespace character starts a
      * new word; consecutive deletes in one direction form one group too.
+     *
+     * @return Whether an edit group was reverted; false when there is nothing to undo.
      */
-    void undo();
+    bool undo();
 
-    /** Re-applies the edit group most recently reverted by undo(). */
-    void redo();
+    /** Re-applies the edit group most recently reverted by undo(). Returns whether an edit group was re-applied. */
+    bool redo();
 
     /** Whether undo() has an edit group to revert. */
     bool canUndo() const;
@@ -627,8 +630,9 @@ public:
      * Pasting an empty string is a no-op: the selection and caret are left untouched.
      *
      * @param string The UTF-8 string to insert at the caret.
+     * @return Whether the text was edited.
      */
-    void paste(std::string const& string);
+    bool paste(std::string const& string);
 
     /**
      * Copies the selected text into the provided string, or clears it when nothing is selected.
@@ -641,8 +645,9 @@ public:
      * Cuts the selected text into the provided string, removing the selection from the text.
      *
      * @param string Output string that receives the cut text; cleared when nothing is selected.
+     * @return Whether the text was edited; false when nothing is selected.
      */
-    void cut(std::string& string);
+    bool cut(std::string& string);
 
     /**
      * Restores a previously captured edit state atomically — text, styles,
