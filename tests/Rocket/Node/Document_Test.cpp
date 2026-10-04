@@ -3802,6 +3802,71 @@ TEST(Document, InputAreaFollowsScrolledCaretWithoutRender) {
     ASSERT_TRUE(area->x >= rect.x && area->getMaxX() <= (rect.getMaxX() + 1.0f));
 }
 
+/* A fixed-height multi-line editable that scrolls vertically keeps its caret
+   in view: moving the caret past an edge scrolls the box, while scrolling
+   the box by hand leaves it alone until the caret is touched again. */
+TEST(Document, EditingMultiLineCaretFollowsVerticalScroll) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    auto box = Node();
+    auto text = Node();
+    _ScriptEditableSetup(document, box, text, "a\nb\nc\nd\ne\nf\ng\nh");
+    box.setContentMultiLine(true);
+    box.setOverflowY(NodeOverflow::Scroll);
+    document.update();
+
+    auto const factor = (document.getScale() / window.getScale());
+    auto const caretInsideBox = [&]() {
+        auto const area = window.getInputArea();
+        auto const rect = (box.getComputedBorderRect() * factor);
+        return area.has_value() && (area->y >= (rect.y - 1.0f)) && (area->getMaxY() <= (rect.getMaxY() + 1.0f));
+    };
+
+    ASSERT_TRUE(text.getComputedBorderRect().height > box.getComputedBorderRect().height); /* the text overflows */
+    ASSERT_TRUE(text.getComputedBorderRect().y == 0.0f);
+    ASSERT_TRUE(caretInsideBox());
+
+    /* Down to the last line: the box scrolls to its end. */
+    for (auto i = 0; i < 7; i++) {
+        _ScriptKey(window, Rocket::Scancode::ArrowDown);
+    }
+    document.update();
+    auto const scrolledY = text.getComputedBorderRect().y;
+    ASSERT_TRUE(scrolledY == (box.getComputedBorderRect().height - text.getComputedBorderRect().height));
+    ASSERT_TRUE(caretInsideBox());
+
+    /* Scrolling by hand is not fought: the caret stays out of view. */
+    document.scrollNode(box, { 0.0f, 1000.0f });
+    document.update();
+    document.update();
+    ASSERT_TRUE(text.getComputedBorderRect().y == 0.0f);
+    ASSERT_FALSE(caretInsideBox());
+
+    /* Touching the caret brings it back. */
+    _ScriptKey(window, Rocket::Scancode::ArrowLeft);
+    document.update();
+    ASSERT_TRUE(text.getComputedBorderRect().y < 0.0f);
+    ASSERT_TRUE(caretInsideBox());
+
+    /* Typing new lines at the end keeps following as the text grows. */
+    _ScriptKey(window, Rocket::Scancode::ArrowRight);
+    _ScriptKey(window, Rocket::Scancode::Enter);
+    _ScriptKey(window, Rocket::Scancode::Enter);
+    document.update();
+    ASSERT_TRUE(text.getComputedBorderRect().y < scrolledY);
+    ASSERT_TRUE(caretInsideBox());
+
+    /* Back up to the first line: the box scrolls to its start. */
+    for (auto i = 0; i < 9; i++) {
+        _ScriptKey(window, Rocket::Scancode::ArrowUp);
+    }
+    document.update();
+    ASSERT_TRUE(text.getComputedBorderRect().y == 0.0f);
+    ASSERT_TRUE(caretInsideBox());
+}
+
 /* The repeat flag of a key-down travels from the window event to the node event. */
 TEST(Document, KeyRepeatReachesNodeEvent) {
     auto window = Window();

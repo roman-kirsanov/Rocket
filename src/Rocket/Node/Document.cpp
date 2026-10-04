@@ -156,7 +156,7 @@ Document::Document(Window& window)
     , _pressState()
     , _focusState()
     , _dragState()
-    , _caretState({ .visible = true, .blinkStart = GetTime() })
+    , _caretState({ .visible = true, .blinkStart = GetTime(), .follow = false })
     , _config(nullptr)
     , _scale(1.0f)
     , _isUpdating(false)
@@ -1169,6 +1169,7 @@ void Document::_restartCaretBlink() {
 
     _caretState.blinkStart = GetTime();
     _caretState.visible = true;
+    _caretState.follow = true;
 }
 
 Vec2 Document::_convertPoint(Vec2 const& point) const {
@@ -1404,27 +1405,24 @@ void Document::_updateNode(Node& node) {
         std::clamp(node._scrollPosition.y, 0.0f, node._scrollOverflow.y)
     };
 
-    _updateText(node);
-}
+    if (
+        (node._display == NodeDisplay::Text) &&
+        (node._textObject != nullptr)
+    ) {
+        node._textObject->setMaxWidth(std::nullopt);
+        node._textObject->setMaxHeight(std::nullopt);
+        node._textObject->setHeight(std::floorf(node._computedTextRect.height * _scale));
+        node._textObject->setWidth(
+            _isNodeSingleLineText(node)
+                ? std::nullopt
+                : std::optional<float>(
+                    std::floorf(node._computedTextRect.width * _scale)
+                )
+        );
 
-void Document::_updateText(Node& node) {
-    PROFILE
-
-    if (node._display != NodeDisplay::Text) return;
-    if (node._textObject == nullptr) return;
-
-    auto const text = node._textObject.get();
-    auto const singleLine = _isNodeSingleLineText(node);
-
-    /* layout measured the text against its constraints; settle it at its final size */
-    text->setMaxWidth(std::nullopt);
-    text->setMaxHeight(std::nullopt);
-    text->setWidth(singleLine ? std::nullopt : std::optional<float>(std::floorf(node._computedTextRect.width * _scale)));
-    text->setHeight(std::floorf(node._computedTextRect.height * _scale));
-
-    /* the field being edited scrolls once per update, in _updateAll; the rest show their start */
-    if (text->getEditable() == false) {
-        _updateTextScroll(node);
+        if (node._textObject->getEditable() == false) {
+            _updateTextScroll(node);
+        }
     }
 }
 
@@ -1459,6 +1457,51 @@ void Document::_updateTextScroll(Node& node) {
     if (node._textScrollX != scrollX) {
         node._textScrollX = scrollX;
         _needsRender = true;
+    }
+
+    /* A multi-line surface wraps and grows instead: once its caret has been
+       touched, the nearest ancestor scrolling vertically brings it back
+       inside its padding. */
+    if ((singleLine == false) && text->getEditable() && _caretState.follow) {
+        auto container = static_cast<Node*>(nullptr);
+
+        for (auto ancestor = node._parent; ancestor != nullptr; ancestor = ancestor->_parent) {
+            if (ancestor->getOverflowY() == NodeOverflow::Scroll) {
+                container = ancestor;
+                break;
+            }
+        }
+
+        if (container != nullptr) {
+            auto const& caretRect = text->getCaretRect();
+            auto const& containerRect = container->_computedBorderRectInDocument;
+            auto const& borderEdge = container->_computedBorderEdge;
+            auto const paddingTop = ::YGNodeLayoutGetPadding((::YGNode*)container->_layoutNode, ::YGEdgeTop);
+            auto const paddingBottom = ::YGNodeLayoutGetPadding((::YGNode*)container->_layoutNode, ::YGEdgeBottom);
+
+            auto const caretMinY = (node._computedBorderRectInDocument.y + node._computedTextRect.y + (caretRect.y / _scale));
+            auto const caretHeight = (caretRect.height / _scale);
+            auto const viewMinY = (containerRect.y + borderEdge.top + paddingTop);
+            auto const viewHeight = std::max(0.0f, (containerRect.height - borderEdge.top - borderEdge.bottom - paddingTop - paddingBottom));
+
+            auto delta = 0.0f;
+
+            if (
+                (caretHeight > viewHeight) ||
+                (caretMinY < viewMinY)
+            ) {
+                delta = (caretMinY - viewMinY);
+            } else if ((caretMinY + caretHeight) > (viewMinY + viewHeight)) {
+                delta = ((caretMinY + caretHeight) - (viewMinY + viewHeight));
+            }
+
+            auto const scrollY = _SnapToPixelGrid(std::clamp((container->_scrollPosition.y + delta), 0.0f, container->_scrollOverflow.y), _scale);
+
+            if (container->_scrollPosition.y != scrollY) {
+                container->_scrollPosition.y = scrollY;
+                _needsUpdate = true;
+            }
+        }
     }
 }
 
@@ -1540,13 +1583,20 @@ void Document::_updateAll() {
             _renderList[_computedZIndex].push_back(this);
         }
 
-        if (_eventQueue.empty() || _isFlushing) break;
-        else _flushEvents();
-    }
+        if ((_eventQueue.empty() == false) && (_isFlushing == false)) {
+            _flushEvents();
+            continue;
+        }
 
-    /* the caret moves without a relayout (arrows, selection): keep it in view */
-    if (auto const focusedNode = _focusState.focusedNode; focusedNode != nullptr && _isNodeEditable(*focusedNode)) {
-        _updateTextScroll(*focusedNode->_firstChild);
+        /* the caret moves without a relayout (arrows, selection): keep it in view */
+        if (auto const focusedNode = _focusState.focusedNode; focusedNode != nullptr && _isNodeEditable(*focusedNode)) {
+            _updateTextScroll(*focusedNode->_firstChild);
+        }
+
+        _caretState.follow = false;
+
+        /* following the caret scrolled a node: its subtree is placed again */
+        if (_needsUpdate == false) break;
     }
 
     _updateCursor();

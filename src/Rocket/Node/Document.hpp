@@ -201,6 +201,7 @@ private:
     struct _CaretState {
         bool visible;
         std::int64_t blinkStart;
+        bool follow;
     };
 
     struct _MouseState {
@@ -305,7 +306,6 @@ private:
     void _flushEvents();
     void _updateLayout();
     void _updateNode(Node&);
-    void _updateText(Node&);
     void _updateTextScroll(Node&);
     void _updateInputArea();
     void _updateCursor();
