@@ -163,12 +163,6 @@ private:
         Text& textObject;
     };
 
-    Window& _window;
-    Sub<WindowEvent const&> _windowSub;
-    Painter _painter;
-    void* _yogaConfig;
-    float _scale;
-
     struct _HoverState {
         Vec2 mousePosition;
         Node* hoverNode;
@@ -190,6 +184,11 @@ private:
         Vec2 mousePosition;
     };
 
+    struct _CaretState {
+        bool visible;
+        std::int64_t blinkStart;
+    };
+
     struct _MouseState {
         bool down;
         bool inside;
@@ -199,6 +198,16 @@ private:
         KeyModifiers modifiers;
         int clickCount;
         bool defaultPrevented;
+    };
+
+    struct _RenderInfo {
+        bool empty;
+        Vec2 offset;
+        QuadShape borderShape;
+        Vec4 clipRect;
+        std::optional<Vec4> scissorRect;
+        std::optional<Vec4> compositeScissor;
+        std::optional<Vec4> layerRect;
     };
 
     struct _NoneFocusNode {};
@@ -217,39 +226,32 @@ private:
         _TargetScrollNode
     >;
 
-    struct _RenderInfo {
-        bool empty;
-        Vec2 offset;
-        QuadShape borderShape;
-        Vec4 clipRect;
-        std::optional<Vec4> scissorRect;
-        std::optional<Vec4> compositeScissor;
-        std::optional<Vec4> layerRect;
-    };
-
+    Window& _window;
+    Sub<WindowEvent const&> _windowSub;
+    Cursor _windowCursor;
+    Painter _painter;
     _MouseState _mouseState;
     _HoverState _hoverState;
     _PressState _pressState;
     _FocusState _focusState;
     _DragState _dragState;
-
-    std::int64_t _caretBlinkStart;
-
-    bool _caretVisible;
+    _CaretState _caretState;
+    void* _config;
+    float _scale;
     bool _isUpdating;
     bool _isFlushing;
     bool _needsUpdate;
     bool _needsRender;
-    bool _needsCursorUpdate;
-
-    Cursor _windowCursor;
+    bool _needsCursor;
 
     std::map<
         std::int64_t,
         std::vector<Node*>
     > _renderList;
 
-    std::vector<std::unique_ptr<NodeEvent>> _eventQueue;
+    std::vector<
+        std::unique_ptr<NodeEvent>
+    > _eventQueue;
 
     void _handleEvent(WindowEvent const&);
     void _handleMouseMoveEvent(MouseMoveWindowEvent const&);
@@ -261,7 +263,6 @@ private:
     void _handleKeyDownEvent(KeyDownWindowEvent const&);
     void _handleKeyUpEvent(KeyUpWindowEvent const&);
     void _handleMousePosition(Vec2 const&, KeyModifiers const&, bool);
-
     void _hoverNode();
     void _pressNode();
     void _releaseNode();
@@ -280,10 +281,8 @@ private:
     std::optional<_InputState> _ensureInputState();
     void _restartCaretBlink();
     Vec2 _convertPoint(Vec2 const&) const;
-
     void _queueEvent(std::unique_ptr<NodeEvent>);
     void _flushEvents();
-
     void _updateLayout();
     void _updateNode(Node&);
     void _updateCursor();
@@ -297,13 +296,11 @@ private:
     void _renderNodeForeground(Node&, _RenderInfo const&);
     void _renderNodeShadow(Node&, _RenderInfo const&, ImageBrush const&);
     void _renderAll();
-
     void _triggerMouseWheel(Vec2 const&, KeyModifiers const&, bool&);
     void _triggerMouseDown(Mouse, KeyModifiers const&, bool&);
     void _triggerMouseUp(Mouse, KeyModifiers const&);
     void _triggerKeyDown(Key, KeyModifiers const&, std::string const&, bool&);
     void _triggerKeyUp(Key, KeyModifiers const&);
-
     Vec2 _getTextLocalPosition(_InputState const&, Vec2 const&) const;
     Node* _findNodeAtPosition(Vec2 const&);
     bool _isNodeFocusable(Node const&) const;

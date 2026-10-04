@@ -37,8 +37,8 @@ static float _SnapBorderToPixelGrid(float value, float scale) {
 Document::~Document() {
     PROFILE
 
-    if (_yogaConfig != nullptr) {
-        ::YGConfigFree((::YGConfig*)_yogaConfig);
+    if (_config != nullptr) {
+        ::YGConfigFree((::YGConfig*)_config);
     }
 }
 
@@ -46,22 +46,21 @@ Document::Document(Window& window)
     : Node()
     , _window(window)
     , _windowSub()
+    , _windowCursor(Cursor::Default)
     , _painter()
-    , _yogaConfig(nullptr)
-    , _scale(1.0f)
     , _mouseState()
     , _hoverState()
     , _pressState()
     , _focusState()
     , _dragState()
-    , _caretBlinkStart(GetTime())
-    , _caretVisible(true)
+    , _caretState({ .visible = true, .blinkStart = GetTime() })
+    , _config(nullptr)
+    , _scale(1.0f)
     , _isUpdating(false)
     , _isFlushing(false)
     , _needsUpdate(true)
     , _needsRender(true)
-    , _needsCursorUpdate(true)
-    , _windowCursor(Cursor::Default)
+    , _needsCursor(true)
     , _renderList()
     , _eventQueue()
 {
@@ -69,7 +68,7 @@ Document::Document(Window& window)
 
     _document = this;
     _scale = window.getScale();
-    _yogaConfig = ::YGConfigNew();
+    _config = ::YGConfigNew();
 
     _windowSub.on(window.onEvent, [&](WindowEvent const& event) {
         _handleEvent(event);
@@ -404,7 +403,7 @@ void Document::_hoverNode() {
 
         _hoverState.hoverNode = hoverNode;
         _hoverState.hoverPath = hoverPath;
-        _needsCursorUpdate = true;
+        _needsCursor = true;
         _needsRender = true;
     }
 
@@ -1036,8 +1035,8 @@ std::optional<Document::_InputState> Document::_ensureInputState() {
 void Document::_restartCaretBlink() {
     PROFILE
 
-    _caretBlinkStart = GetTime();
-    _caretVisible = true;
+    _caretState.blinkStart = GetTime();
+    _caretState.visible = true;
 }
 
 Vec2 Document::_convertPoint(Vec2 const& point) const {
@@ -1075,7 +1074,7 @@ void Document::_updateLayout() {
 
     auto const size = getSize();
 
-    ::YGConfigSetPointScaleFactor((::YGConfig*)_yogaConfig, _scale);
+    ::YGConfigSetPointScaleFactor((::YGConfig*)_config, _scale);
     ::YGNodeStyleSetWidth((::YGNode*)_layoutNode, size.width);
     ::YGNodeStyleSetHeight((::YGNode*)_layoutNode, size.height);
     ::YGNodeCalculateLayout((::YGNode*)_layoutNode, size.width, size.height, YGDirectionLTR);
@@ -1277,8 +1276,8 @@ void Document::_updateNode(Node& node) {
 void Document::_updateCursor() {
     PROFILE
 
-    if (_needsCursorUpdate == false) return;
-    else _needsCursorUpdate = false;
+    if (_needsCursor == false) return;
+    else _needsCursor = false;
 
     auto cursor = Cursor::Default;
 
@@ -1568,7 +1567,7 @@ void Document::_renderNodeText(Node& node, _RenderInfo const& info) {
 
     if (
         editable &&
-        _caretVisible &&
+        _caretState.visible &&
         (text->isSelectedRange() == false)
     ) {
         auto const& caretRect = text->getCaretRect();
@@ -1682,11 +1681,11 @@ void Document::_renderAll() {
         _isNodeEditable(*_focusState.focusedNode)
     ) {
         auto const& text = *_focusState.focusedNode->_firstChild->_textObject;
-        auto const phase = ((GetTime() - _caretBlinkStart) / _caretBlinkPeriod);
+        auto const phase = ((GetTime() - _caretState.blinkStart) / _caretBlinkPeriod);
         auto const visible = text.isSelectedRange() || ((phase % 2) == 0);
 
-        if (_caretVisible != visible) {
-            _caretVisible = visible;
+        if (_caretState.visible != visible) {
+            _caretState.visible = visible;
             _needsRender = true;
         }
     }

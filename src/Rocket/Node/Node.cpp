@@ -1430,7 +1430,7 @@ void Node::setCursor(std::optional<Cursor> const& cursor) {
         _cursor = cursor;
 
         if (_document != nullptr) {
-            _document->_needsCursorUpdate = true;
+            _document->_needsCursor = true;
         }
     }
 }
@@ -1782,10 +1782,10 @@ void Node::_attach(Document& root) {
     _resetTextState();
     _resetLayoutState();
 
-    ::YGNodeSetConfig((::YGNode*)_layoutNode, (::YGConfig*)_document->_yogaConfig);
+    ::YGNodeSetConfig((::YGNode*)_layoutNode, (::YGConfig*)_document->_config);
 
     if (_textNode != nullptr) {
-        ::YGNodeSetConfig((::YGNode*)_textNode, (::YGConfig*)_document->_yogaConfig);
+        ::YGNodeSetConfig((::YGNode*)_textNode, (::YGConfig*)_document->_config);
         ::YGNodeMarkDirty((::YGNode*)_textNode);
     }
 
@@ -1812,7 +1812,7 @@ void Node::_detach() {
         }
 
         if (std::erase(_document->_hoverState.hoverPath, this) > 0) {
-            _document->_needsCursorUpdate = true;
+            _document->_needsCursor = true;
         }
 
         std::erase(_document->_pressState.pressPath, this);
@@ -1960,7 +1960,7 @@ void Node::_createTextNode() {
         ::YGNodeStyleSetFlexShrink((::YGNode*)_textNode, 0.0f);
 
         if (_document != nullptr) {
-            ::YGNodeSetConfig((::YGNode*)_textNode, (::YGConfig*)_document->_yogaConfig);
+            ::YGNodeSetConfig((::YGNode*)_textNode, (::YGConfig*)_document->_config);
         }
 
         ::YGNodeInsertChild((::YGNode*)_layoutNode, (::YGNode*)_textNode, 0);
