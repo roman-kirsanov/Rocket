@@ -88,14 +88,14 @@ void Popup(PopupProps const& props, std::function<void()> const& children) {
         auto const& rect = nodeRef->getComputedBorderRect();
         auto const size = document.getSize();
 
+        state.measured = true;
         state.shift = Vec2{
             _GetShift(rect.x - state.shift.x, rect.width, size.width),
             _GetShift(rect.y - state.shift.y, rect.height, size.height)
         };
-        state.measured = true;
     } else if (adjust == false) {
-        state.shift = Vec2{ 0.0f, 0.0f };
         state.measured = false;
+        state.shift = Vec2{ 0.0f, 0.0f };
     }
 
     auto const shifted = (state.shift.x != 0.0f || state.shift.y != 0.0f);
