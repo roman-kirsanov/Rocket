@@ -416,7 +416,15 @@ public:
      * Clears path first, then appends nodes from the root (index 0) to this
      * node (last index).
      */
-    void getPath(std::vector<Node*>&) const;
+    void getPathFromRoot(std::vector<Node*>&) const;
+
+    /**
+     * Fills path with the ordered ancestor chain from this node up to the root.
+     *
+     * Clears path first, then appends nodes from this node (index 0) to the
+     * root (last index).
+     */
+    void getPathToRoot(std::vector<Node*>&) const;
 
     /**
      * Sets the display mode.
@@ -894,9 +902,7 @@ private:
     void* _layoutNode;
     void* _textNode;
 
-    bool _needsTextUpdate;
-    bool _needsLayoutUpdate;
-
+    void _setNodeLayout();
     void _setNodePadding();
     void _setNodeMargin();
     void _setNodeGap();
@@ -907,9 +913,19 @@ private:
     void _resetInputState();
     void _attach(Document&);
     void _detach();
-    void _updateLayout();
     void _createTextNode();
     void _destroyTextNode();
+    void _cascade();
+    void _cascadeFontFamily();
+    void _cascadeFontWeight();
+    void _cascadeFontStyle();
+    void _cascadeFontSize();
+    void _cascadeLineHeight();
+    void _cascadeTextColor();
+    void _cascadeTextMarker();
+    void _invalidateLayout();
+    void _invalidateRender();
+    void _invalidateText();
 
     friend class Document;
 };

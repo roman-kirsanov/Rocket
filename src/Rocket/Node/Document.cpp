@@ -9,10 +9,12 @@
 #include <cassert>
 #include <memory>
 #include <cmath>
+#include <ranges>
 #include <algorithm>
 #include <optional>
 #include <yoga/Yoga.h>
 #include <Rocket/Base/Profile.hpp>
+#include <Rocket/Base/Time.hpp>
 #include <Rocket/Paint/Color.hpp>
 #include <Rocket/Paint/Text.hpp>
 #include <Rocket/Window/Clipboard.hpp>
@@ -22,7 +24,7 @@
 namespace Rocket {
 
 static auto constexpr _selectionColor = Vec4{ 0.4f, 0.6f, 1.0f, 0.4f };
-static auto constexpr _caretBlinkPeriod = std::chrono::milliseconds(530);
+static auto constexpr _caretBlinkPeriod = 530ll;
 
 static float _SnapToPixelGrid(float value, float scale) {
     return (std::roundf(value * scale) / scale);
@@ -45,23 +47,23 @@ Document::Document(Window& window)
     , _window(window)
     , _windowSub()
     , _painter()
-    , _cursor(Cursor::Default)
-    , _hoverNode(nullptr)
-    , _activeNode(nullptr)
-    , _focusedNode(nullptr)
-    , _mousePosition({ 0.0f, 0.0f })
-    , _mouseButton(Mouse::LeftButton)
-    , _mouseIsDown(false)
-    , _mouseIsDragging(false)
     , _yogaConfig(nullptr)
     , _scale(1.0f)
+    , _mouseState()
+    , _hoverState()
+    , _pressState()
+    , _focusState()
+    , _dragState()
+    , _caretBlinkStart(GetTime())
+    , _caretVisible(true)
     , _isUpdating(false)
+    , _isFlushing(false)
     , _needsUpdate(true)
     , _needsRender(true)
-    , _caretVisible(true)
-    , _caretBlinkStart(std::chrono::steady_clock::now())
-    , _hoverPath()
+    , _needsCursorUpdate(true)
+    , _windowCursor(Cursor::Default)
     , _renderList()
+    , _eventQueue()
 {
     PROFILE
 
@@ -70,31 +72,7 @@ Document::Document(Window& window)
     _yogaConfig = ::YGConfigNew();
 
     _windowSub.on(window.onEvent, [&](WindowEvent const& event) {
-        auto const convertPoint = [&](Vec2 const& position) {
-            return (position * (_window.getScale() / _scale));
-        };
-
-        if (auto e = event.as<MouseMoveWindowEvent>()) {
-            _mouseMove(convertPoint(e->getPosition()), e->getModifiers());
-        } else if (auto e = event.as<MouseDownWindowEvent>()) {
-            _mouseDown(e->getMouse(), convertPoint(e->getPosition()), e->getModifiers(), e->getClickCount());
-        } else if (auto e = event.as<MouseUpWindowEvent>()) {
-            _mouseUp(e->getMouse(), convertPoint(e->getPosition()), e->getModifiers());
-        } else if (auto e = event.as<MouseWheelWindowEvent>()) {
-            _mouseWheel(convertPoint(e->getPosition()), e->getModifiers());
-        } else if (auto e = event.as<KeyDownWindowEvent>()) {
-            _keyDown(e->getKey(), e->getModifiers(), e->getInput());
-        } else if (auto e = event.as<KeyUpWindowEvent>()) {
-            _keyUp(e->getKey(), e->getModifiers());
-        } else if (event.is<PaintWindowEvent>()) {
-            update();
-            render();
-        } else if (
-            event.is<ResizeWindowEvent>() ||
-            event.is<DPIChangeWindowEvent>()
-        ) {
-            _needsUpdate = true;
-        }
+        _handleEvent(event);
     });
 }
 
@@ -128,252 +106,37 @@ void Document::setScale(float scale) {
 void Document::scrollNode(Node& node, Vec2 const& wheel) {
     PROFILE
 
-    static thread_local auto _path = std::vector<Node*>();
-
-    Node* xOverflowNode = nullptr;
-    Node* yOverflowNode = nullptr;
-
-    node.getPath(_path);
-
-    for (auto pathNode : _path) {
-        if (
-            pathNode->_scrollOverflow.x > 0.0f &&
-            pathNode->getOverflowX() == NodeOverflow::Scroll
-        ) {
-            xOverflowNode = pathNode;
-        }
-
-        if (
-            pathNode->_scrollOverflow.y > 0.0f &&
-            pathNode->getOverflowY() == NodeOverflow::Scroll
-        ) {
-            yOverflowNode = pathNode;
-        }
-    }
-
-    auto const deltaX = (wheel.x * -1.0f);
-    auto const deltaY = (wheel.y * -1.0f);
-
-    if (xOverflowNode != nullptr) {
-        xOverflowNode->_scrollPosition.x = _SnapToPixelGrid(std::clamp((xOverflowNode->_scrollPosition.x + deltaX), 0.0f, xOverflowNode->_scrollOverflow.x), _scale);
-        _needsUpdate = true;
-    }
-
-    if (yOverflowNode != nullptr) {
-        yOverflowNode->_scrollPosition.y = _SnapToPixelGrid(std::clamp((yOverflowNode->_scrollPosition.y + deltaY), 0.0f, yOverflowNode->_scrollOverflow.y), _scale);
-        _needsUpdate = true;
-    }
+    _scrollNode(_TargetScrollNode{ node }, wheel);
 }
 
 void Document::scrollNodeIntoView(Node& node) {
     PROFILE
 
-    auto container = static_cast<Node*>(nullptr);
-
-    for (auto ancestor = node._parent; ancestor != nullptr; ancestor = ancestor->_parent) {
-        if (
-            (ancestor->getOverflowX() == NodeOverflow::Scroll) ||
-            (ancestor->getOverflowY() == NodeOverflow::Scroll)
-        ) {
-            container = ancestor;
-            break;
-        }
-    }
-
-    if (container == nullptr) {
-        return;
-    }
-
-    auto const& nodeRect = node._computedBorderRectInDocument;
-    auto const& containerRect = container->_computedBorderRectInDocument;
-    auto const& borderEdge = container->_computedBorderEdge;
-
-    auto const scrollAxis = [&](float nodeMin, float nodeSize, float viewMin, float viewSize, float& position, float overflow) {
-        auto delta = 0.0f;
-
-        if (
-            (nodeSize > viewSize) ||
-            (nodeMin < viewMin)
-        ) {
-            delta = (nodeMin - viewMin);
-        } else if ((nodeMin + nodeSize) > (viewMin + viewSize)) {
-            delta = ((nodeMin + nodeSize) - (viewMin + viewSize));
-        }
-
-        if (delta != 0.0f) {
-            position = _SnapToPixelGrid(std::clamp((position + delta), 0.0f, overflow), _scale);
-            _needsUpdate = true;
-        }
-    };
-
-    if (container->getOverflowX() == NodeOverflow::Scroll) {
-        scrollAxis(
-            nodeRect.x, nodeRect.width,
-            (containerRect.x + borderEdge.left), std::max(0.0f, (containerRect.width - borderEdge.left - borderEdge.right)),
-            container->_scrollPosition.x, container->_scrollOverflow.x
-        );
-    }
-
-    if (container->getOverflowY() == NodeOverflow::Scroll) {
-        scrollAxis(
-            nodeRect.y, nodeRect.height,
-            (containerRect.y + borderEdge.top), std::max(0.0f, (containerRect.height - borderEdge.top - borderEdge.bottom)),
-            container->_scrollPosition.y, container->_scrollOverflow.y
-        );
-    }
+    _scrollNodeIntoView(node);
 }
 
 void Document::focusNode(Node* targetNode) {
     PROFILE
 
-    Node* focusedNode = nullptr;
-    Node* nextTarget = targetNode;
-    while (nextTarget != nullptr) {
-        if (
-            _isNodeFocusable(*nextTarget) ||
-            _isNodeEditable(*nextTarget)
-        ) {
-            focusedNode = nextTarget;
-            break;
-        }
-        nextTarget = nextTarget->_parent;
+    if (targetNode != nullptr) {
+        _focusNode(_TargetFocusNode{ *targetNode });
+    } else {
+        _focusNode(_NoneFocusNode{});
     }
 
-    if (_focusedNode != focusedNode) {
-        if (_focusedNode != nullptr) {
-            _focusedNode->_isFocused = false;
-            if (_isNodeEditable(*_focusedNode) && _focusedNode->_firstChild->_textObject != nullptr) {
-                _focusedNode->_firstChild->_textObject->setEditable(false);
-                _focusedNode->_firstChild->_needsTextUpdate = true;
-            }
-
-            auto nextOldFocused = _focusedNode;
-            while (nextOldFocused != nullptr) {
-                nextOldFocused->_isFocusedWithin = false;
-                nextOldFocused = nextOldFocused->_parent;
-            }
-        }
-
-        if (focusedNode != nullptr) {
-            focusedNode->_isFocused = true;
-            if (_isNodeEditable(*focusedNode)) {
-                if (focusedNode->_firstChild->_textObject == nullptr) {
-                    focusedNode->_firstChild->_textObject = std::make_unique<Text>();
-                }
-                focusedNode->_firstChild->_textObject->setEditable(true);
-                focusedNode->_firstChild->_needsTextUpdate = true;
-            }
-
-            auto nextNewFocused = focusedNode;
-            while (nextNewFocused != nullptr) {
-                nextNewFocused->_isFocusedWithin = true;
-                nextNewFocused = nextNewFocused->_parent;
-            }
-        }
-
-        _focusedNode = focusedNode;
-        _needsUpdate = true;
-        _restartCaretBlink();
-    }
+    _flushEvents();
 }
 
 void Document::update() {
     PROFILE
 
-    if (_isUpdating == true) return;
-    else _isUpdating = true;
-
-    _invalidateNode(*this);
-
-    if (_needsUpdate == false) {
-        _isUpdating = false;
-        return;
-    } else {
-        _needsUpdate = false;
-        _needsRender = true;
-    }
-
-    _renderList.clear();
-
-    _cascadeNode(*this);
-    _updateLayout();
-    _updateNode(*this);
-    _updateCursor();
-    _updateHover();
-
-    _renderList[_computedZIndex].push_back(this);
-
-    _isUpdating = false;
+    _updateAll();
 }
 
 void Document::render() {
     PROFILE
 
-    if (
-        (_focusedNode != nullptr) &&
-        (_focusedNode->_firstChild != nullptr) &&
-        (_focusedNode->_firstChild->_textObject != nullptr) &&
-        _isNodeEditable(*_focusedNode)
-    ) {
-        auto const& text = *_focusedNode->_firstChild->_textObject;
-        auto const phase = ((std::chrono::steady_clock::now() - _caretBlinkStart) / _caretBlinkPeriod);
-        auto const visible = text.isSelectedRange() || ((phase % 2) == 0);
-
-        if (_caretVisible != visible) {
-            _caretVisible = visible;
-            _needsRender = true;
-        }
-    }
-
-    if (_needsRender == false) {
-        return;
-    }
-
-    _needsRender = false;
-
-    _painter.beginPaint(
-        WindowPaintTarget{
-            .window = _window,
-            .clearColor = COLOR_TRANSPARENT
-        }
-    );
-
-    for (auto& [ zIndex, nodes ] : _renderList) {
-        for (auto& node : nodes) {
-            _renderNode(*node, { 0.0f, 0.0f }, zIndex);
-        }
-    }
-
-    _painter.endPaint();
-}
-
-std::optional<Document::_InputState> Document::_getInputState() {
-    PROFILE
-
-    if (
-        _focusedNode != nullptr &&
-        _isNodeEditable(*_focusedNode)
-    ) {
-        auto& textNode = *_focusedNode->_firstChild;
-
-        /* the text child may have been swapped since focus: adopt it as the surface */
-        if (textNode._textObject == nullptr) {
-            textNode._textObject = std::make_unique<Text>();
-            textNode._textObject->setString(textNode._content.value_or(""));
-            textNode._needsTextUpdate = true;
-            _needsUpdate = true;
-        }
-
-        if (textNode._textObject->getEditable() == false) {
-            textNode._textObject->setEditable(true);
-            textNode._needsTextUpdate = true;
-            _needsUpdate = true;
-        }
-
-        return _InputState{ *_focusedNode, textNode, *textNode._textObject };
-    } else {
-        return std::nullopt;
-    }
+    _renderAll();
 }
 
 Vec2 Document::_getTextLocalPosition(_InputState const& inputState, Vec2 const& position) const {
@@ -447,19 +210,579 @@ bool Document::_isNodeEditable(Node const& node) const {
         && (node._firstChild->_display == NodeDisplay::Text);
 }
 
+void Document::_handleEvent(WindowEvent const& event) {
+    PROFILE
+
+    if (auto mouseMoveEvent = event.as<MouseMoveWindowEvent>()) {
+        _handleMouseMoveEvent(*mouseMoveEvent);
+    } else if (auto mouseEnterEvent = event.as<MouseEnterWindowEvent>()) {
+        _handleMouseEnterEvent(*mouseEnterEvent);
+    } else if (auto mouseExitEvent = event.as<MouseExitWindowEvent>()) {
+        _handleMouseExitEvent(*mouseExitEvent);
+    } else if (auto mouseDownEvent = event.as<MouseDownWindowEvent>()) {
+        _handleMouseDownEvent(*mouseDownEvent);
+    } else if (auto mouseUpEvent = event.as<MouseUpWindowEvent>()) {
+        _handleMouseUpEvent(*mouseUpEvent);
+    } else if (auto mouseWheelEvent = event.as<MouseWheelWindowEvent>()) {
+        _handleMouseWheelEvent(*mouseWheelEvent);
+    } else if (auto keyDownEvent = event.as<KeyDownWindowEvent>()) {
+        _handleKeyDownEvent(*keyDownEvent);
+    } else if (auto keyUpEvent = event.as<KeyUpWindowEvent>()) {
+        _handleKeyUpEvent(*keyUpEvent);
+    } else if (
+        event.is<ResizeWindowEvent>() ||
+        event.is<DPIChangeWindowEvent>()
+    ) {
+        _needsUpdate = true;
+        _updateAll();
+        _renderAll();
+    } else if (event.is<PaintWindowEvent>()) {
+        _updateAll();
+        _renderAll();
+    }
+}
+
+void Document::_handleMouseMoveEvent(MouseMoveWindowEvent const& event) {
+    PROFILE
+
+    _handleMousePosition(event.getPosition(), event.getModifiers(), true);
+}
+
+void Document::_handleMouseEnterEvent(MouseEnterWindowEvent const& event) {
+    PROFILE
+
+    _handleMousePosition(event.getPosition(), event.getModifiers(), true);
+}
+
+void Document::_handleMouseExitEvent(MouseExitWindowEvent const& event) {
+    PROFILE
+
+    _handleMousePosition(event.getPosition(), event.getModifiers(), false);
+}
+
+void Document::_handleMouseDownEvent(MouseDownWindowEvent const& event) {
+    PROFILE
+
+    if (_mouseState.down == true) return;
+
+    _mouseState.down = true;
+    _mouseState.mouse = event.getMouse();
+    _mouseState.position = event.getPosition();
+    _mouseState.downPosition = event.getPosition();
+    _mouseState.modifiers = event.getModifiers();
+    _mouseState.clickCount = event.getClickCount();
+    _mouseState.defaultPrevented = false;
+
+    _pressNode();
+    _triggerMouseDown(event.getMouse(), event.getModifiers(), _mouseState.defaultPrevented);
+
+    if (
+        event.getMouse() == Mouse::LeftButton ||
+        event.getMouse() == Mouse::RightButton
+    ) {
+        if (_mouseState.defaultPrevented == false) {
+            _focusNode(_PressFocusNode{});
+        }
+    }
+
+    _pressText();
+    _updateAll();
+}
+
+void Document::_handleMouseUpEvent(MouseUpWindowEvent const& event) {
+    PROFILE
+
+    if (_mouseState.down == false) return;
+    if (_mouseState.mouse != event.getMouse()) return;
+
+    _mouseState.down = false;
+    _mouseState.position = event.getPosition();
+    _mouseState.modifiers = event.getModifiers();
+
+    _releaseText();
+    _triggerMouseUp(event.getMouse(), event.getModifiers());
+    _clickNode();
+    _releaseNode();
+    _dropNode();
+    _hoverNode();
+    _updateAll();
+}
+
+void Document::_handleMouseWheelEvent(MouseWheelWindowEvent const& event) {
+    PROFILE
+
+    auto const wheel = _convertPoint(event.getPosition());
+    auto defaultPrevented = false;
+
+    _triggerMouseWheel(wheel, event.getModifiers(), defaultPrevented);
+
+    if (defaultPrevented == false) {
+        _scrollNode(_HoverScrollNode{}, wheel);
+    }
+
+    _updateAll();
+}
+
+void Document::_handleKeyDownEvent(KeyDownWindowEvent const& event) {
+    PROFILE
+
+    auto defaultPrevented = false;
+
+    _triggerKeyDown(event.getKey(), event.getModifiers(), event.getInput(), defaultPrevented);
+
+    if (defaultPrevented == false) {
+        _processKey(event.getKey(), event.getModifiers(), event.getInput());
+    }
+
+    _updateAll();
+}
+
+void Document::_handleKeyUpEvent(KeyUpWindowEvent const& event) {
+    PROFILE
+
+    _triggerKeyUp(event.getKey(), event.getModifiers());
+    _updateAll();
+}
+
+void Document::_handleMousePosition(Vec2 const& position, KeyModifiers const& modifiers, bool inside) {
+    PROFILE
+
+    _mouseState.inside = inside;
+    _mouseState.position = position;
+    _mouseState.modifiers = modifiers;
+    _hoverNode();
+    _dragNode();
+    _dragText();
+    _updateAll();
+}
+
+void Document::_hoverNode() {
+    PROFILE
+
+    static thread_local auto hoverPath = std::vector<Node*>();
+
+    if (_mouseState.down == true) return;
+
+    hoverPath.clear();
+
+    auto const modifiers = _mouseState.modifiers;
+    auto const position = _convertPoint(_mouseState.position);
+
+    auto hoverNode = (_mouseState.inside == true) ? _findNodeAtPosition(position) : nullptr;
+    if (hoverNode != nullptr) {
+        hoverNode->getPathToRoot(hoverPath);
+    }
+
+    auto const positionChanged = (_hoverState.mousePosition != _mouseState.position);
+    auto const hoverNodeChanged = (_hoverState.hoverNode != hoverNode);
+
+    _hoverState.mousePosition = _mouseState.position;
+
+    if (
+        hoverNodeChanged ||
+        _hoverState.hoverPath != hoverPath
+    ) {
+        for (auto node : _hoverState.hoverPath) {
+            if (std::ranges::contains(hoverPath, node) == false) {
+                node->_isHover = false;
+                _queueEvent(
+                    std::make_unique<MouseExitNodeEvent>(*node, position, modifiers)
+                );
+            }
+        }
+
+        for (auto node : std::views::reverse(hoverPath)) {
+            if (std::ranges::contains(_hoverState.hoverPath, node) == false) {
+                node->_isHover = true;
+                _queueEvent(
+                    std::make_unique<MouseEnterNodeEvent>(*node, position, modifiers)
+                );
+            }
+        }
+
+        _hoverState.hoverNode = hoverNode;
+        _hoverState.hoverPath = hoverPath;
+        _needsCursorUpdate = true;
+        _needsRender = true;
+    }
+
+    if (positionChanged || hoverNodeChanged) {
+        if (hoverNode != nullptr) {
+            _queueEvent(
+                std::make_unique<MouseMoveNodeEvent>(*hoverNode, position, modifiers)
+            );
+        }
+    }
+}
+
+void Document::_pressNode() {
+    PROFILE
+
+    if (_hoverState.hoverNode != nullptr) {
+        _pressState.pressNode = _hoverState.hoverNode;
+        _pressState.pressNode->getPathToRoot(_pressState.pressPath);
+
+        if (_mouseState.mouse == Mouse::LeftButton) {
+            for (auto node : _pressState.pressPath) {
+                node->_isActive = true;
+            }
+
+            _needsRender = true;
+        }
+    }
+}
+
+void Document::_releaseNode() {
+    PROFILE
+
+    if (_pressState.pressPath.empty() == false) {
+        if (_mouseState.mouse == Mouse::LeftButton) {
+            for (auto node : _pressState.pressPath) {
+                node->_isActive = false;
+            }
+
+            _needsRender = true;
+        }
+
+        _pressState.pressNode = nullptr;
+        _pressState.pressPath.clear();
+    }
+}
+
+void Document::_focusNode(_FocusNodeVariant const& variant) {
+    PROFILE
+
+    static thread_local auto focusPath = std::vector<Node*>();
+
+    auto focusNode = variant.match(
+        [&](_NoneFocusNode const&) { return (Node*)nullptr; },
+        [&](_PressFocusNode const&) { return _pressState.pressNode; },
+        [&](_TargetFocusNode const& v) { return &v.node; }
+    );
+
+    for (; focusNode != nullptr; focusNode = focusNode->_parent) {
+        if (_isNodeFocusable(*focusNode) || _isNodeEditable(*focusNode)) break;
+    }
+
+    if (focusNode != _focusState.focusedNode) {
+        auto blurNode = _focusState.focusedNode;
+
+        if (focusNode != nullptr) {
+            focusNode->_isFocused = true;
+            focusNode->getPathToRoot(focusPath);
+        } else {
+            focusPath.clear();
+        }
+
+        if (blurNode != nullptr) {
+            blurNode->_isFocused = false;
+
+            if (
+                _isNodeEditable(*blurNode) &&
+                (blurNode->_firstChild->_textObject != nullptr)
+            ) {
+                blurNode->_firstChild->_textObject->setEditable(false);
+                blurNode->_firstChild->_invalidateText();
+                blurNode->_invalidateLayout();
+            }
+        }
+
+        if (
+            (focusNode != nullptr) &&
+            _isNodeEditable(*focusNode)
+        ) {
+            if (focusNode->_firstChild->_textObject == nullptr) {
+                focusNode->_firstChild->_textObject = std::make_unique<Text>();
+            }
+            focusNode->_firstChild->_textObject->setEditable(true);
+            focusNode->_firstChild->_invalidateText();
+            focusNode->_invalidateLayout();
+        }
+
+        for (auto node : _focusState.focusedPath) {
+            if (std::ranges::contains(focusPath, node) == false) {
+                node->_isFocusedWithin = false;
+            }
+        }
+
+        for (auto node : focusPath) {
+            if (std::ranges::contains(_focusState.focusedPath, node) == false) {
+                node->_isFocusedWithin = true;
+            }
+        }
+
+        _focusState.focusedNode = focusNode;
+        _focusState.focusedPath = focusPath;
+        _needsRender = true;
+
+        _restartCaretBlink();
+
+        if (blurNode != nullptr) {
+            _queueEvent(
+                std::make_unique<BlurNodeEvent>(*blurNode)
+            );
+        }
+
+        if (focusNode != nullptr) {
+            _queueEvent(
+                std::make_unique<FocusNodeEvent>(*focusNode)
+            );
+        }
+    }
+}
+
+void Document::_scrollNode(_ScrollNodeVariant const& variant, Vec2 const& wheel) {
+    PROFILE
+
+    static thread_local auto scrollPath = std::vector<Node*>();
+
+    auto scrollNode = variant.match(
+        [&](_HoverScrollNode const&) { return _hoverState.hoverNode; },
+        [&](_TargetScrollNode const& v) { return &v.node; }
+    );
+
+    if (scrollNode == nullptr) return;
+
+    Node* xOverflowNode = nullptr;
+    Node* yOverflowNode = nullptr;
+
+    scrollNode->getPathFromRoot(scrollPath);
+
+    for (auto n : scrollPath) {
+        if (
+            n->_scrollOverflow.x > 0.0f &&
+            n->getOverflowX() == NodeOverflow::Scroll
+        ) {
+            xOverflowNode = n;
+        }
+
+        if (
+            n->_scrollOverflow.y > 0.0f &&
+            n->getOverflowY() == NodeOverflow::Scroll
+        ) {
+            yOverflowNode = n;
+        }
+    }
+
+    auto const deltaX = (wheel.x * -1.0f);
+    auto const deltaY = (wheel.y * -1.0f);
+
+    if (xOverflowNode != nullptr) {
+        xOverflowNode->_scrollPosition.x = _SnapToPixelGrid(std::clamp((xOverflowNode->_scrollPosition.x + deltaX), 0.0f, xOverflowNode->_scrollOverflow.x), _scale);
+        _needsUpdate = true;
+    }
+
+    if (yOverflowNode != nullptr) {
+        yOverflowNode->_scrollPosition.y = _SnapToPixelGrid(std::clamp((yOverflowNode->_scrollPosition.y + deltaY), 0.0f, yOverflowNode->_scrollOverflow.y), _scale);
+        _needsUpdate = true;
+    }
+}
+
+void Document::_scrollNodeIntoView(Node& node) {
+    PROFILE
+
+    auto container = static_cast<Node*>(nullptr);
+
+    for (auto ancestor = node._parent; ancestor != nullptr; ancestor = ancestor->_parent) {
+        if (
+            (ancestor->getOverflowX() == NodeOverflow::Scroll) ||
+            (ancestor->getOverflowY() == NodeOverflow::Scroll)
+        ) {
+            container = ancestor;
+            break;
+        }
+    }
+
+    if (container == nullptr) {
+        return;
+    }
+
+    auto const& nodeRect = node._computedBorderRectInDocument;
+    auto const& containerRect = container->_computedBorderRectInDocument;
+    auto const& borderEdge = container->_computedBorderEdge;
+
+    auto const scrollAxis = [&](float nodeMin, float nodeSize, float viewMin, float viewSize, float& position, float overflow) {
+        auto delta = 0.0f;
+
+        if (
+            (nodeSize > viewSize) ||
+            (nodeMin < viewMin)
+        ) {
+            delta = (nodeMin - viewMin);
+        } else if ((nodeMin + nodeSize) > (viewMin + viewSize)) {
+            delta = ((nodeMin + nodeSize) - (viewMin + viewSize));
+        }
+
+        if (delta != 0.0f) {
+            position = _SnapToPixelGrid(std::clamp((position + delta), 0.0f, overflow), _scale);
+            _needsUpdate = true;
+        }
+    };
+
+    if (container->getOverflowX() == NodeOverflow::Scroll) {
+        scrollAxis(
+            nodeRect.x, nodeRect.width,
+            (containerRect.x + borderEdge.left), std::max(0.0f, (containerRect.width - borderEdge.left - borderEdge.right)),
+            container->_scrollPosition.x, container->_scrollOverflow.x
+        );
+    }
+
+    if (container->getOverflowY() == NodeOverflow::Scroll) {
+        scrollAxis(
+            nodeRect.y, nodeRect.height,
+            (containerRect.y + borderEdge.top), std::max(0.0f, (containerRect.height - borderEdge.top - borderEdge.bottom)),
+            container->_scrollPosition.y, container->_scrollOverflow.y
+        );
+    }
+}
+
+void Document::_dragNode() {
+    PROFILE
+
+    if (_mouseState.down == false) return;
+    if (_mouseState.mouse != Mouse::LeftButton) return;
+
+    auto const modifiers = _mouseState.modifiers;
+    auto const position = _convertPoint(_mouseState.position);
+    auto const translate = (position - _convertPoint(_mouseState.downPosition));
+
+    if (_dragState.dragNode == nullptr) {
+        if (
+            std::fabsf(translate.x) > 2.0f ||
+            std::fabsf(translate.y) > 2.0f
+        ) {
+            if (_pressState.pressNode != nullptr) {
+                _dragState.dragNode = _pressState.pressNode;
+                _dragState.mousePosition = _mouseState.position;
+
+                _queueEvent(
+                    std::make_unique<MouseBeginDragNodeEvent>(*_dragState.dragNode, position, translate, modifiers)
+                );
+
+                _queueEvent(
+                    std::make_unique<MouseDragNodeEvent>(*_dragState.dragNode, position, translate, modifiers)
+                );
+            }
+        }
+    } else if (_dragState.mousePosition != _mouseState.position) {
+        _dragState.mousePosition = _mouseState.position;
+        _queueEvent(
+            std::make_unique<MouseDragNodeEvent>(*_dragState.dragNode, position, translate, modifiers)
+        );
+    }
+}
+
+void Document::_dropNode() {
+    PROFILE
+
+    if (_dragState.dragNode != nullptr) {
+        auto const modifiers = _mouseState.modifiers;
+        auto const position = _convertPoint(_mouseState.position);
+        auto const translate = (position - _convertPoint(_mouseState.downPosition));
+
+        _queueEvent(
+            std::make_unique<MouseEndDragNodeEvent>(*_dragState.dragNode, position, translate, modifiers)
+        );
+
+        _dragState.dragNode = nullptr;
+    }
+}
+
+void Document::_clickNode() {
+    PROFILE
+
+    static thread_local auto clickPath = std::vector<Node*>();
+
+    if (_mouseState.mouse != Mouse::LeftButton) return;
+    if (_pressState.pressNode == nullptr) return;
+    if (_dragState.dragNode != nullptr) return;
+
+    auto const modifiers = _mouseState.modifiers;
+    auto const position = _convertPoint(_mouseState.position);
+
+    if (auto clickNode = _findNodeAtPosition(position)) {
+        clickNode->getPathToRoot(clickPath);
+
+        for (auto node : clickPath) {
+            if (std::ranges::contains(_pressState.pressPath, node)) {
+                _queueEvent(
+                    std::make_unique<MouseClickNodeEvent>(*node, position, modifiers)
+                );
+                break;
+            }
+        }
+    }
+}
+
+void Document::_pressText() {
+    PROFILE
+
+    if (_mouseState.mouse != Mouse::LeftButton) return;
+    if (_mouseState.defaultPrevented == true) return;
+
+    if (auto inputState = _ensureInputState()) {
+        auto const position = _convertPoint(_mouseState.position);
+
+        inputState->textObject.mouseDown(
+            _getTextLocalPosition(*inputState, position),
+            _mouseState.modifiers.shift,
+            _mouseState.clickCount
+        );
+
+        _restartCaretBlink();
+        _needsRender = true;
+    }
+}
+
+void Document::_dragText() {
+    PROFILE
+
+    if (_mouseState.down == false) return;
+    if (_mouseState.mouse != Mouse::LeftButton) return;
+    if (_mouseState.defaultPrevented == true) return;
+
+    if (auto inputState = _ensureInputState()) {
+        auto const position = _convertPoint(_mouseState.position);
+
+        inputState->textObject.mouseMove(
+            _getTextLocalPosition(*inputState, position)
+        );
+
+        _restartCaretBlink();
+        _needsRender = true;
+    }
+}
+
+void Document::_releaseText() {
+    PROFILE
+
+    if (_mouseState.mouse != Mouse::LeftButton) return;
+    if (_mouseState.defaultPrevented == true) return;
+
+    if (auto inputState = _ensureInputState()) {
+        auto const position = _convertPoint(_mouseState.position);
+
+        inputState->textObject.mouseUp(
+            _getTextLocalPosition(*inputState, position)
+        );
+
+        _needsRender = true;
+    }
+}
+
 void Document::_focusNext(bool reverse) {
     PROFILE
 
-    static thread_local auto _candidates = std::vector<Node*>();
+    static thread_local auto candidates = std::vector<Node*>();
 
-    _candidates.clear();
+    candidates.clear();
 
     auto const collect = [&](Node& node, auto&& collect) -> void {
         if (node._visible == false) {
             return;
         }
         if ((&node != this) && (_isNodeFocusable(node) || _isNodeEditable(node))) {
-            _candidates.push_back(&node);
+            candidates.push_back(&node);
         }
         for (auto child = node._firstChild; child != nullptr; child = child->_nextSibling) {
             collect(*child, collect);
@@ -468,15 +791,15 @@ void Document::_focusNext(bool reverse) {
 
     collect(*this, collect);
 
-    if (_candidates.empty()) {
+    if (candidates.empty()) {
         return;
     }
 
-    auto const count = (std::int64_t)_candidates.size();
+    auto const count = (std::int64_t)candidates.size();
     auto current = (std::int64_t)-1;
 
     for (auto i = 0ll; i < count; i++) {
-        if (_candidates[(std::size_t)i] == _focusedNode) {
+        if (candidates[(std::size_t)i] == _focusState.focusedNode) {
             current = i;
             break;
         }
@@ -490,247 +813,26 @@ void Document::_focusNext(bool reverse) {
         return;
     }
 
-    focusNode(_candidates[(std::size_t)next]);
+    _focusNode(_TargetFocusNode{ *candidates[(std::size_t)next] });
 
-    if (auto inputState = _getInputState()) {
+    if (auto inputState = _ensureInputState()) {
         inputState->textObject.selectAll();
     }
 
-    _needsUpdate = true;
+    _needsRender = true;
 }
 
-void Document::_restartCaretBlink() {
+void Document::_processKey(Key key, KeyModifiers const& modifiers, std::string const& input) {
     PROFILE
 
-    _caretBlinkStart = std::chrono::steady_clock::now();
-    _caretVisible = true;
-}
-
-void Document::_mouseWheel(Vec2 const& wheel, KeyModifiers const& modifiers) {
-    PROFILE
-
-    if (_hoverNode != nullptr) {
-        scrollNode(*_hoverNode, wheel);
-        _hoverNode->dispatchEvent(
-            MouseWheelNodeEvent(*_hoverNode, wheel, modifiers)
-        );
-    }
-}
-
-void Document::_mouseMove(Vec2 const& position, KeyModifiers const& modifiers) {
-    PROFILE
-
-    static thread_local auto _newHoverPath = std::vector<Node*>();
-
-    if (_mouseIsDown == true) {
-        if (auto inputState = _getInputState()) {
-            inputState->textObject.mouseMove(_getTextLocalPosition(*inputState, position));
-            _restartCaretBlink();
-            _needsRender = true;
-        }
-
-        if (_activeNode != nullptr) {
-            auto const translate = (position - _mousePosition);
-
-            if (_mouseIsDragging == false) {
-                if (
-                    std::fabsf(translate.x) > 2.0f ||
-                    std::fabsf(translate.y) > 2.0f
-                ) {
-                    _mouseIsDragging = true;
-                    _activeNode->dispatchEvent(
-                        MouseBeginDragNodeEvent(*_activeNode, position, translate, modifiers)
-                    );
-                }
-            }
-
-            if (_mouseIsDragging == true) {
-                _activeNode->dispatchEvent(
-                    MouseDragNodeEvent(*_activeNode, position, translate, modifiers)
-                );
-            }
-        }
-    } else {
-        auto const newHoverNode = _findNodeAtPosition(position);
-
-        if (_hoverNode != newHoverNode) {
-            _newHoverPath.clear();
-
-            if (newHoverNode != nullptr) {
-                newHoverNode->getPath(_newHoverPath);
-            }
-
-            for (auto node : _hoverPath) {
-                if (std::ranges::contains(_newHoverPath, node) == false) {
-                    node->_isHover = false;
-                    node->dispatchEvent(
-                        MouseExitNodeEvent(*node, position, modifiers)
-                    );
-                }
-            }
-
-            for (auto node : _newHoverPath) {
-                if (std::ranges::contains(_hoverPath, node) == false) {
-                    node->_isHover = true;
-                    node->dispatchEvent(
-                        MouseEnterNodeEvent(*node, position, modifiers)
-                    );
-                }
-            }
-
-            _hoverNode = newHoverNode;
-            _hoverPath = _newHoverPath;
-            _needsUpdate = true;
-        }
-
-        if (_hoverNode != nullptr) {
-            _hoverNode->dispatchEvent(
-                MouseMoveNodeEvent(*_hoverNode, position, modifiers)
-            );
-        }
-    }
-}
-
-void Document::_mouseDown(Mouse const& mouse, Vec2 const& position, KeyModifiers const& modifiers, int clickCount) {
-    PROFILE
-
-    if (_mouseIsDown == true) {
-        return;
-    }
-
-    if (mouse == Mouse::LeftButton) {
-        _mousePosition = position;
-        _mouseButton = mouse;
-        _mouseIsDown = true;
-        _mouseIsDragging = false;
-
-        _activateNode(_hoverNode);
-        focusNode(_hoverNode);
-
-        if (auto inputState = _getInputState()) {
-            inputState->textObject.mouseDown(_getTextLocalPosition(*inputState, position), modifiers.shift, clickCount);
-            _restartCaretBlink();
-            _needsRender = true;
-        }
-
-        if (_activeNode != nullptr) {
-            _activeNode->dispatchEvent(
-                MouseDownNodeEvent(*_activeNode, mouse, position, modifiers, clickCount)
-            );
-        } else {
-            dispatchEvent(
-                MouseDownNodeEvent(*this, mouse, position, modifiers, clickCount)
-            );
-        }
-    } else if (mouse == Mouse::RightButton) {
-        _mousePosition = position;
-        _mouseButton = mouse;
-        _mouseIsDown = true;
-        _mouseIsDragging = false;
-
-        if (_hoverNode != nullptr) {
-            _hoverNode->dispatchEvent(
-                MouseDownNodeEvent(*_hoverNode, mouse, position, modifiers, clickCount)
-            );
-        } else {
-            dispatchEvent(
-                MouseDownNodeEvent(*this, mouse, position, modifiers, clickCount)
-            );
-        }
-    }
-}
-
-void Document::_mouseUp(Mouse const& mouse, Vec2 const& position, KeyModifiers const& modifiers) {
-    PROFILE
-
-    static thread_local auto _hoverPath  = std::vector<Node*>();
-    static thread_local auto _activePath = std::vector<Node*>();
-
-    if (_mouseIsDown == false) {
-        return;
-    }
-
-    if (_mouseButton != mouse) {
-        return;
-    }
-
-    if (mouse == Mouse::LeftButton) {
-        if (auto inputState = _getInputState()) {
-            inputState->textObject.mouseUp(_getTextLocalPosition(*inputState, position));
-            _needsRender = true;
-        }
-
-        if (_activeNode != nullptr) {
-            _activeNode->dispatchEvent(
-                MouseUpNodeEvent(*_activeNode, mouse, position, modifiers)
-            );
-
-            if (_mouseIsDragging == true) {
-                _activeNode->dispatchEvent(
-                    MouseEndDragNodeEvent(*_activeNode, position, position - _mousePosition, modifiers)
-                );
-
-                _needsUpdate = true;
-                _mouseIsDown = false;
-                _mouseIsDragging = false;
-                _activateNode(nullptr);
-                _mouseMove(position, modifiers);
-            } else {
-                if (auto hoverNode = _findNodeAtPosition(position)) {
-                    _activeNode->getPath(_activePath);
-                    hoverNode->getPath(_hoverPath);
-
-                    for (auto it = _hoverPath.rbegin(); it != _hoverPath.rend(); ++it) {
-                        if (std::ranges::contains(_activePath, *it)) {
-                            (*it)->dispatchEvent(
-                                MouseClickNodeEvent(**it, position, modifiers)
-                            );
-                            break;
-                        }
-                    }
-                }
-
-                _needsUpdate = true;
-                _mouseIsDown = false;
-                _mouseIsDragging = false;
-                _activateNode(nullptr);
-            }
-        } else {
-            _mouseIsDown = false;
-            _mouseIsDragging = false;
-        }
-    } else if (mouse == Mouse::RightButton) {
-        if (_hoverNode != nullptr) {
-            _hoverNode->dispatchEvent(
-                MouseUpNodeEvent(*_hoverNode, mouse, position, modifiers)
-            );
-        }
-
-        _mouseIsDown = false;
-        _mouseIsDragging = false;
-    } else {
-        _mouseIsDown = false;
-        _mouseIsDragging = false;
-    }
-}
-
-void Document::_keyDown(Key const& key, KeyModifiers const& modifiers, std::string const& input) {
-    PROFILE
-
-    auto const keyNode = _getKeyNode();
-    auto& target = (keyNode != nullptr) ? *keyNode : *this;
-    auto const event = KeyDownNodeEvent(target, key, modifiers, input);
-
-    target.dispatchEvent(event);
-
-    if (event._defaultPrevented) {
-        return;
-    }
-
+    auto const focusedNode = _focusState.focusedNode;
     auto consumed = false;
 
-    if (keyNode != nullptr && _getInputState()) {
-        consumed = _input(key, modifiers, input);
+    if (
+        (focusedNode != nullptr) &&
+        (focusedNode->_keyEvents == true)
+    ) {
+        consumed = _inputText(key, modifiers, input);
     }
 
     if (
@@ -744,30 +846,10 @@ void Document::_keyDown(Key const& key, KeyModifiers const& modifiers, std::stri
     }
 }
 
-void Document::_keyUp(Key const& key, KeyModifiers const& modifiers) {
+bool Document::_inputText(Key key, KeyModifiers const& modifiers, std::string const& input) {
     PROFILE
 
-    if (auto keyNode = _getKeyNode()) {
-        keyNode->dispatchEvent(
-            KeyUpNodeEvent(*keyNode, key, modifiers)
-        );
-    } else {
-        dispatchEvent(
-            KeyUpNodeEvent(*this, key, modifiers)
-        );
-    }
-}
-
-Node* Document::_getKeyNode() {
-    PROFILE
-
-    return ((_focusedNode != nullptr) && (_focusedNode->_keyEvents == true)) ? _focusedNode : nullptr;
-}
-
-bool Document::_input(Key const& key, KeyModifiers const& modifiers, std::string const& input) {
-    PROFILE
-
-    if (auto inputState = _getInputState()) {
+    if (auto inputState = _ensureInputState()) {
         auto const singleLine = (inputState->boxNode._contentMultiLine == false);
         auto const controlOnly = modifiers.control && (modifiers.meta == false) && (modifiers.alt == false);
         auto const contentBefore = inputState->textObject.getString();
@@ -886,14 +968,14 @@ bool Document::_input(Key const& key, KeyModifiers const& modifiers, std::string
             return false;
         }
 
-        _needsUpdate = true;
+        _needsRender = true;
         _restartCaretBlink();
 
         auto const& contentAfter = inputState->textObject.getString();
         if (contentAfter != contentBefore) {
             inputState->textNode.setContent(contentAfter);
-            inputState->boxNode.dispatchEvent(
-                InputNodeEvent(*_focusedNode, contentAfter)
+            _queueEvent(
+                std::make_unique<InputNodeEvent>(inputState->boxNode, contentAfter)
             );
         }
 
@@ -903,61 +985,81 @@ bool Document::_input(Key const& key, KeyModifiers const& modifiers, std::string
     return false;
 }
 
-void Document::_invalidateNode(Node& node) {
+std::optional<Document::_InputState> Document::_ensureInputState() {
     PROFILE
 
-    static auto const _invalidateTextObject = [](Node& node, auto&& _invalidateTextObject) -> void {
-        if (node._textNode != nullptr) {
-            ::YGNodeMarkDirty((::YGNode*)node._textNode);
-        } else if (node._parent != nullptr) {
-            _invalidateTextObject(*node._parent, _invalidateTextObject);
+    if (
+        _focusState.focusedNode != nullptr &&
+        _isNodeEditable(*_focusState.focusedNode)
+    ) {
+        auto& textNode = *_focusState.focusedNode->_firstChild;
+
+        /* the text child may have been swapped since focus: adopt it as the surface */
+        if (textNode._textObject == nullptr) {
+            textNode._textObject = std::make_unique<Text>();
+            textNode._textObject->setString(textNode._content.value_or(""));
+            textNode._invalidateText();
+            textNode._invalidateLayout();
         }
-    };
 
-    if (node._needsLayoutUpdate == true) {
-        node._needsLayoutUpdate = false;
-        _needsUpdate = true;
-    }
-
-    if (node._needsTextUpdate == true) {
-        node._needsTextUpdate  = false;
-        _invalidateTextObject(node, _invalidateTextObject);
-        _needsUpdate = true;
-
-        for (auto child = node._firstChild; child != nullptr; child = child->_nextSibling) {
-            child->_needsTextUpdate = true;
+        if (textNode._textObject->getEditable() == false) {
+            textNode._textObject->setEditable(true);
+            textNode._invalidateText();
+            textNode._invalidateLayout();
         }
-    }
 
-    for (auto child = node._firstChild; child != nullptr; child = child->_nextSibling) {
-        _invalidateNode(*child);
+        return _InputState{ *_focusState.focusedNode, textNode, *textNode._textObject };
+    } else {
+        return std::nullopt;
     }
 }
 
-void Document::_cascadeNode(Node& node) {
+void Document::_restartCaretBlink() {
     PROFILE
 
-    if (node._parent != nullptr) {
-        node._computedFontFamily  = node._fontFamily.value_or(node._parent->_computedFontFamily);
-        node._computedFontWeight  = node._fontWeight.value_or(node._parent->_computedFontWeight);
-        node._computedFontStyle   = node._fontStyle.value_or(node._parent->_computedFontStyle);
-        node._computedFontSize    = node._fontSize.value_or(node._parent->_computedFontSize);
-        node._computedTextColor   = node._textColor.value_or(node._parent->_computedTextColor);
-        node._computedMarkerColor = node._textMarker.value_or(Vec4{ 0.0f, 0.0f, 0.0f, 0.0f });
-        node._computedLineHeight  = node._lineHeight.value_or(node._parent->_computedLineHeight);
-    } else {
-        node._computedFontFamily  = node._fontFamily.value_or(TEXT_DEFAULT_FONT_FAMILY);
-        node._computedFontWeight  = node._fontWeight.value_or(TEXT_DEFAULT_FONT_WEIGHT);
-        node._computedFontStyle   = node._fontStyle.value_or(TEXT_DEFAULT_FONT_STYLE);
-        node._computedFontSize    = node._fontSize.value_or(TEXT_DEFAULT_FONT_SIZE);
-        node._computedTextColor   = node._textColor.value_or(TEXT_DEFAULT_COLOR);
-        node._computedMarkerColor = node._textMarker.value_or(Vec4{ 0.0f, 0.0f, 0.0f, 0.0f });
-        node._computedLineHeight  = node._lineHeight.value_or(TEXT_DEFAULT_LINE_HEIGHT);
+    _caretBlinkStart = GetTime();
+    _caretVisible = true;
+}
+
+Vec2 Document::_convertPoint(Vec2 const& point) const {
+    PROFILE
+
+    return (point * (_window.getScale() / _scale));
+}
+
+void Document::_queueEvent(std::unique_ptr<NodeEvent> event) {
+    PROFILE
+
+    _eventQueue.push_back(std::move(event));
+}
+
+void Document::_flushEvents() {
+    PROFILE
+
+    if (_isFlushing == true) return;
+    else _isFlushing = true;
+
+    for (auto i = 0uz; i < _eventQueue.size(); i++) {
+        auto const event = std::move(_eventQueue[i]);
+
+        if (event != nullptr) {
+            event->getNode().dispatchEvent(*event);
+        }
     }
 
-    for (auto child = node._firstChild; child != nullptr; child = child->_nextSibling) {
-        _cascadeNode(*child);
-    }
+    _eventQueue.clear();
+    _isFlushing = false;
+}
+
+void Document::_updateLayout() {
+    PROFILE
+
+    auto const size = getSize();
+
+    ::YGConfigSetPointScaleFactor((::YGConfig*)_yogaConfig, _scale);
+    ::YGNodeStyleSetWidth((::YGNode*)_layoutNode, size.width);
+    ::YGNodeStyleSetHeight((::YGNode*)_layoutNode, size.height);
+    ::YGNodeCalculateLayout((::YGNode*)_layoutNode, size.width, size.height, YGDirectionLTR);
 }
 
 void Document::_updateNode(Node& node) {
@@ -1002,14 +1104,21 @@ void Document::_updateNode(Node& node) {
     }
 
     if (node._transform) {
-        node._computedBorderRect.origin.x += _SnapToPixelGrid(node._transform->translateX.match(
-            [](PixelValue const& pixel) { return pixel.value; },
-            [&](PercentValue const& percent) { return ((percent.value / 100.0f) * node._computedBorderRect.width); }
-        ), _scale);
-        node._computedBorderRect.origin.y += _SnapToPixelGrid(node._transform->translateY.match(
-            [](PixelValue const& pixel) { return pixel.value; },
-            [&](PercentValue const& percent) { return ((percent.value / 100.0f) * node._computedBorderRect.height); }
-        ), _scale);
+        node._computedBorderRect.origin.x += _SnapToPixelGrid(
+            node._transform->translateX.match(
+                [](PixelValue const& pixel) { return pixel.value; },
+                [&](PercentValue const& percent) { return ((percent.value / 100.0f) * node._computedBorderRect.width); }
+            ),
+            _scale
+        );
+
+        node._computedBorderRect.origin.y += _SnapToPixelGrid(
+            node._transform->translateY.match(
+                [](PixelValue const& pixel) { return pixel.value; },
+                [&](PercentValue const& percent) { return ((percent.value / 100.0f) * node._computedBorderRect.height); }
+            ),
+            _scale
+        );
     }
 
     node._computedMarginRect = {
@@ -1019,7 +1128,10 @@ void Document::_updateNode(Node& node) {
         (node._computedBorderRect.height + margin.top + margin.bottom)
     };
 
-    if ((node._display == NodeDisplay::Text) && (node._textNode != nullptr)) {
+    if (
+        node._display == NodeDisplay::Text &&
+        node._textNode != nullptr
+    ) {
         node._computedTextRect = {
             ::YGNodeLayoutGetLeft((::YGNode*)node._textNode),
             ::YGNodeLayoutGetTop((::YGNode*)node._textNode),
@@ -1143,65 +1255,136 @@ void Document::_updateNode(Node& node) {
     };
 }
 
+void Document::_updateCursor() {
+    PROFILE
+
+    if (_needsCursorUpdate == false) return;
+    else _needsCursorUpdate = false;
+
+    auto cursor = Cursor::Default;
+
+    for (auto node : _hoverState.hoverPath) {
+        if (node->_cursor.has_value()) {
+            cursor = node->_cursor.value();
+            break;
+        }
+    }
+
+    if (_windowCursor != cursor) {
+        _windowCursor = cursor;
+        _window.setCursor(cursor);
+    }
+}
+
+void Document::_updateAll() {
+    PROFILE
+
+    if (_isUpdating == true) return;
+    else _isUpdating = true;
+
+    for (;;) {
+        if (_needsUpdate == true) {
+            _needsUpdate = false;
+            _needsRender = true;
+
+            _renderList.clear();
+
+            _updateLayout();
+            _updateNode(*this);
+            _hoverNode();
+
+            _renderList[_computedZIndex].push_back(this);
+        }
+
+        if (_eventQueue.empty() || _isFlushing) break;
+        else _flushEvents();
+    }
+
+    _updateCursor();
+
+    _isUpdating = false;
+}
+
 void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
     PROFILE
 
-    if (node._visible == false) {
-        return;
+    if (node._visible == false) return;
+    if (node._computedZIndex != zIndex) return;
+
+    auto const info = _beginNodeRender(node, offset);
+    if (info.empty == true) return;
+
+    _renderNodeBackground(node, info);
+    _renderNodeBorder(node, info);
+    _renderNodeText(node, info);
+
+    for (auto child = node._firstChild; child != nullptr; child = child->_nextSibling) {
+        _renderNode(*child, info.offset, zIndex);
     }
 
-    if (node._computedZIndex != zIndex) {
-        return;
-    }
+    _renderNodeForeground(node, info);
+    _endNodeRender(node, info);
+}
 
-    auto nodeOffset = offset;
-    auto nodeClipRect = (node._computedClipRectInDocument * _scale);
-    auto nodeBorderRect = (node._computedBorderRectInDocument * _scale);
-    auto scissorRect = std::optional<Vec4>{};
-    auto layerOffset = Vec2{};
-    auto layerRect = Vec4{};
-    auto layerNeeded = (
-        node._opacity.value_or(1.0f) < 1.0f ||
-        node._shadow.has_value()
-    );
+Document::_RenderInfo Document::_beginNodeRender(Node& node, Vec2 const& offset) {
+    PROFILE
 
-    nodeClipRect.origin += nodeOffset;
-    nodeBorderRect.origin += nodeOffset;
+    auto const scaledRadius = [this](std::optional<float> const& radius) -> std::optional<float> {
+        return radius.has_value() ? std::optional<float>{ (*radius * _scale) } : std::nullopt;
+    };
+
+    auto info = _RenderInfo{
+        .empty = false,
+        .offset = offset,
+        .borderShape = QuadShape{
+            .rect = (node._computedBorderRectInDocument * _scale),
+            .borderRadius = scaledRadius(node._borderRadius),
+            .borderTopLeftRadius = scaledRadius(node._borderTopLeftRadius),
+            .borderTopRightRadius = scaledRadius(node._borderTopRightRadius),
+            .borderBottomLeftRadius = scaledRadius(node._borderBottomLeftRadius),
+            .borderBottomRightRadius = scaledRadius(node._borderBottomRightRadius)
+        },
+        .clipRect = (node._computedClipRectInDocument * _scale)
+    };
+
+    info.borderShape.rect.origin += offset;
+    info.clipRect.origin += offset;
 
     if (
         (node._clipped == true) &&
         (node._parent != nullptr)
     ) {
         auto parentClipRect = (node._parent->_computedClipRectInDocument * _scale);
-        parentClipRect.origin += nodeOffset;
-        scissorRect = parentClipRect;
+        parentClipRect.origin += offset;
+        info.scissorRect = parentClipRect;
+        info.compositeScissor = parentClipRect;
     }
 
-    /* The node's own box is clipped by its ancestors only; its own overflow
-       clip applies to its children. Inside a layer the ancestor clip is
-       applied when the layer is composited. */
-    auto boxScissorRect = scissorRect;
+    auto const needsLayer = (
+        node._opacity.value_or(1.0f) < 1.0f ||
+        node._shadow.has_value()
+    );
 
-    if (layerNeeded) {
-        auto nodeContentRect = (node._computedContentRect * _scale);
-        auto nodeContentOffset = Vec2{
-            std::min(0.0f, nodeContentRect.x),
-            std::min(0.0f, nodeContentRect.y)
+    if (needsLayer) {
+        auto const contentRect = (node._computedContentRect * _scale);
+        auto const contentOffset = Vec2{
+            std::min(0.0f, contentRect.x),
+            std::min(0.0f, contentRect.y)
         };
 
-        layerOffset = (nodeBorderRect.origin + nodeContentOffset);
-        layerRect = {
-            (nodeBorderRect.x + nodeContentOffset.width),
-            (nodeBorderRect.y + nodeContentOffset.height),
-            std::max(nodeBorderRect.width, nodeContentRect.width),
-            std::max(nodeBorderRect.height, nodeContentRect.height)
+        auto const layerOffset = (info.borderShape.rect.origin + contentOffset);
+        auto const layerRect = Vec4{
+            (info.borderShape.rect.x + contentOffset.width),
+            (info.borderShape.rect.y + contentOffset.height),
+            std::max(info.borderShape.rect.width, contentRect.width),
+            std::max(info.borderShape.rect.height, contentRect.height)
         };
 
         if (
             (layerRect.width < 1.0f) ||
             (layerRect.height < 1.0f)
         ) {
-            return;
+            return { .empty = true };
         }
 
         if (
@@ -1211,10 +1394,11 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
             node._layerImage = std::make_unique<Image>(layerRect.size);
         }
 
-        nodeBorderRect.origin -= layerOffset;
-        nodeClipRect.origin -= layerOffset;
-        nodeOffset -= layerOffset;
-        boxScissorRect = std::nullopt;
+        info.borderShape.rect.origin -= layerOffset;
+        info.clipRect.origin -= layerOffset;
+        info.offset -= layerOffset;
+        info.scissorRect = std::nullopt;
+        info.layerRect = layerRect;
 
         _painter.beginPaint(
             ImagePaintTarget{
@@ -1224,147 +1408,16 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
         );
     }
 
-    auto const scaledRadius = [this](std::optional<float> const& radius) -> std::optional<float> {
-        return radius.has_value() ? std::optional<float>{ (*radius * _scale) } : std::nullopt;
-    };
+    return info;
+}
 
-    if (node._background) {
-        auto const backgroundBrush = *node._background;
-        auto const backgroundShape = QuadShape{
-            .rect = nodeBorderRect,
-            .borderRadius = scaledRadius(node._borderRadius),
-            .borderTopLeftRadius = scaledRadius(node._borderTopLeftRadius),
-            .borderTopRightRadius = scaledRadius(node._borderTopRightRadius),
-            .borderBottomLeftRadius = scaledRadius(node._borderBottomLeftRadius),
-            .borderBottomRightRadius = scaledRadius(node._borderBottomRightRadius)
-        };
-        _painter.paint(backgroundShape, backgroundBrush, { .scissor = boxScissorRect });
-    }
+void Document::_endNodeRender(Node& node, _RenderInfo const& info) {
+    PROFILE
 
-    if (node._border) {
-        auto const borderBrush = *node._border;
-        auto const borderShape = QuadOutlineShape{
-            .rect = nodeBorderRect,
-            .borderRadius = scaledRadius(node._borderRadius),
-            .borderTopLeftRadius = scaledRadius(node._borderTopLeftRadius),
-            .borderTopRightRadius = scaledRadius(node._borderTopRightRadius),
-            .borderBottomLeftRadius = scaledRadius(node._borderBottomLeftRadius),
-            .borderBottomRightRadius = scaledRadius(node._borderBottomRightRadius),
-            .leftBorder = (node._computedBorderEdge.left * _scale),
-            .topBorder = (node._computedBorderEdge.top * _scale),
-            .rightBorder = (node._computedBorderEdge.right * _scale),
-            .bottomBorder = (node._computedBorderEdge.bottom * _scale)
-        };
-        _painter.paint(borderShape, borderBrush, { .scissor = boxScissorRect });
-    }
-
-    auto const text = node._textObject.get();
-
-    if (
-        (node._display == NodeDisplay::Text) &&
-        (text != nullptr)
-    ) {
-        auto const editable = text->getEditable();
-        auto const singleLine = (text->getMultiLine() == false) && (node._parent != nullptr);
-
-        text->setMaxWidth(std::nullopt);
-        text->setMaxHeight(std::nullopt);
-        text->setWidth(singleLine ? std::nullopt : std::optional<float>(std::floorf(node._computedTextRect.width * _scale)));
-        text->setHeight(std::floorf(node._computedTextRect.height * _scale));
-
-        auto const textOrigin = (nodeBorderRect.origin + (node._computedTextRect.origin * _scale));
-        auto textClipRect = nodeClipRect;
-        auto textRect = Vec4{
-            Vec2{ std::roundf(textOrigin.x), std::roundf(textOrigin.y) },
-            text->getSize()
-        };
-
-        if (singleLine) {
-            /* A single-line surface never wraps and is clipped to the slot
-               the box gives its text (the box's border rect minus its border
-               and, mirrored, the text's left inset). While it is being
-               edited it scrolls horizontally so the caret stays inside that
-               slot; unfocused, it shows its start. */
-            auto const inset = (node._computedBorderRectInDocument.x - node._parent->_computedBorderRectInDocument.x - node._parent->_computedBorderEdge.left);
-            auto const visibleMaxX = ((node._parent->_computedBorderRectInDocument.getMaxX() - node._parent->_computedBorderEdge.right - inset) * _scale) + nodeOffset.x;
-            auto const visibleWidth = std::max(1.0f, (visibleMaxX - nodeBorderRect.x));
-            auto& scrollX = node._textScrollX;
-
-            if (editable) {
-                auto const& caretRect = text->getCaretRect();
-
-                if ((caretRect.getMaxX() - scrollX) > visibleWidth) {
-                    scrollX = (caretRect.getMaxX() - visibleWidth);
-                }
-                if ((caretRect.x - scrollX) < 0.0f) {
-                    scrollX = caretRect.x;
-                }
-
-                scrollX = std::ceilf(std::clamp(scrollX, 0.0f, std::max(0.0f, (std::max(textRect.width, caretRect.getMaxX()) - visibleWidth))));
-            } else {
-                scrollX = 0.0f;
-            }
-
-            textRect.x -= scrollX;
-
-            auto const clipMinX = std::max(nodeClipRect.x, nodeBorderRect.x);
-            auto const clipMaxX = std::min(nodeClipRect.getMaxX(), (nodeBorderRect.x + visibleWidth));
-            textClipRect = { clipMinX, nodeClipRect.y, std::max(0.0f, (clipMaxX - clipMinX)), nodeClipRect.height };
-        } else {
-            node._textScrollX = 0.0f;
-        }
-
-        if (editable) {
-            for (auto const& rect : text->getSelectionRects()) {
-                auto const selectionShape = QuadShape{ Vec4{ (textRect.origin + rect.origin), rect.size } };
-                auto const selectionBrush = ColorBrush{ .color = _selectionColor };
-                _painter.paint(selectionShape, selectionBrush, { .scissor = textClipRect });
-            }
-        }
-
-        auto const textShape = QuadShape{ textRect };
-        auto const textBrush = ImageBrush{
-            .image = text->getImage(),
-            .positionX = ImagePosition::Start,
-            .positionY = ImagePosition::Start,
-            .filterMag = ImageFilter::Linear,
-            .filterMin = ImageFilter::Linear
-        };
-        _painter.paint(textShape, textBrush, { .scissor = textClipRect });
-
-        if (
-            editable &&
-            _caretVisible &&
-            (text->isSelectedRange() == false)
-        ) {
-            auto const& caretRect = text->getCaretRect();
-            auto const caretShape = QuadShape{ Vec4{ (textRect.origin + caretRect.origin), caretRect.size } };
-            auto const caretBrush = ColorBrush{ .color = node._computedTextColor };
-            _painter.paint(caretShape, caretBrush, { .scissor = textClipRect });
-        }
-    }
-
-    for (auto child = node._firstChild; child != nullptr; child = child->_nextSibling) {
-        _renderNode(*child, nodeOffset, zIndex);
-    }
-
-    if (node._foreground) {
-        auto const foregroundBrush = *node._foreground;
-        auto const foregroundShape = QuadShape{
-            .rect = nodeBorderRect,
-            .borderRadius = scaledRadius(node._borderRadius),
-            .borderTopLeftRadius = scaledRadius(node._borderTopLeftRadius),
-            .borderTopRightRadius = scaledRadius(node._borderTopRightRadius),
-            .borderBottomLeftRadius = scaledRadius(node._borderBottomLeftRadius),
-            .borderBottomRightRadius = scaledRadius(node._borderBottomRightRadius)
-        };
-        _painter.paint(foregroundShape, foregroundBrush, { .scissor = boxScissorRect });
-    }
-
-    if (layerNeeded) {
+    if (info.layerRect.has_value()) {
         _painter.endPaint();
 
-        auto const shape = QuadShape{ layerRect };
+        auto const shape = QuadShape{ *info.layerRect };
         auto const brush = ImageBrush{
             .image = &*node._layerImage,
             .positionX = ImagePosition::Start,
@@ -1373,153 +1426,353 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
             .filterMin = ImageFilter::Nearest
         };
 
-        if (node._shadow.has_value()) {
-            auto const& shadow = *node._shadow;
-            auto const shadowColor = shadow.color.value_or(Vec4{ 0.0f, 0.0f, 0.0f, 1.0f });
-
-            if (shadowColor.alpha > 0.0f) {
-                auto const radius  = (shadow.blur.value_or(0.0f) * _scale);
-                auto const spread  = (shadow.spread.value_or(Vec2{}) * _scale);
-                auto const offset = (shadow.offset.value_or(Vec2{}) * _scale);
-                auto const padding = Vec2{
-                    std::ceil(radius + std::max(spread.x, 0.0f)),
-                    std::ceil(radius + std::max(spread.y, 0.0f))
-                };
-                auto const shadowSize = Vec2{
-                    (layerRect.width  + (padding.x * 2.0f)),
-                    (layerRect.height + (padding.y * 2.0f))
-                };
-                auto const shadowShape = QuadShape{
-                    Vec4{ padding, layerRect.size }
-                };
-
-                auto rebake = false;
-                auto shadowKey = shadow;
-                shadowKey.offset = std::nullopt;
-
-                auto const clipKey = nodeClipRect.getIntersection(
-                    Vec4{ 0.0f, 0.0f, layerRect.width, layerRect.height }
-                );
-
-                auto const radiusKey = Vec4{
-                    node._borderTopLeftRadius.value_or(node._borderRadius.value_or(0.0f)),
-                    node._borderTopRightRadius.value_or(node._borderRadius.value_or(0.0f)),
-                    node._borderBottomRightRadius.value_or(node._borderRadius.value_or(0.0f)),
-                    node._borderBottomLeftRadius.value_or(node._borderRadius.value_or(0.0f))
-                };
-
-                if (
-                    (node._shadowImage == nullptr) ||
-                    (node._shadowImage->getSize() != shadowSize)
-                ) {
-                    node._shadowImage = std::make_unique<Image>(shadowSize);
-                    rebake = true;
-                }
-
-                if (
-                    rebake ||
-                    (node._shadowImageShadow != shadowKey) ||
-                    (node._shadowImageRadius != radiusKey) ||
-                    (node._shadowImageScale != _scale) ||
-                    (node._shadowImageClipRect != clipKey)
-                ) {
-                    node._shadowImageShadow = shadowKey;
-                    node._shadowImageRadius = radiusKey;
-                    node._shadowImageScale = _scale;
-                    node._shadowImageClipRect = clipKey;
-
-                    _painter.beginPaint(
-                        ImagePaintTarget{
-                            .image = *node._shadowImage,
-                            .clearColor = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f }
-                        }
-                    );
-                    _painter.paint(shadowShape, brush, {
-                        .filter = Filter{
-                            ShadowFilter{
-                                .radius = radius,
-                                .color = shadowColor,
-                                .spread = (shadow.spread.has_value() ? std::optional<Vec2>{ spread } : std::optional<Vec2>{})
-                            }
-                        }
-                    });
-                    _painter.endPaint();
-                }
-
-                auto const shadowImageShape = QuadShape{ Vec4{ (layerRect.origin - padding + offset), shadowSize } };
-                auto const shadowImageBrush = ImageBrush{
-                    .image = &*node._shadowImage,
-                    .positionX = ImagePosition::Start,
-                    .positionY = ImagePosition::Start,
-                    .filterMag = ImageFilter::Nearest,
-                    .filterMin = ImageFilter::Nearest
-                };
-                _painter.paint(shadowImageShape, shadowImageBrush, {
-                    .scissor = scissorRect,
-                    .opacity = node._opacity
-                });
-            }
-        }
+        _renderNodeShadow(node, info, brush);
 
         _painter.paint(shape, brush, {
-            .scissor = scissorRect,
+            .scissor = info.compositeScissor,
             .opacity = node._opacity
         });
     }
 }
 
-void Document::_activateNode(Node* targetNode) {
+void Document::_renderNodeBackground(Node& node, _RenderInfo const& info) {
     PROFILE
 
-    Node* nextOldActive = _activeNode;
-    while (nextOldActive != nullptr) {
-        nextOldActive->_isActive = false;
-        nextOldActive = nextOldActive->_parent;
+    if (node._background) {
+        _painter.paint(info.borderShape, *node._background, { .scissor = info.scissorRect });
     }
-
-    Node* nextNewActive = targetNode;
-    while (nextNewActive != nullptr) {
-        nextNewActive->_isActive = true;
-        nextNewActive = nextNewActive->_parent;
-    }
-
-    _activeNode = targetNode;
-    _needsUpdate = true;
 }
 
-void Document::_updateLayout() {
+void Document::_renderNodeBorder(Node& node, _RenderInfo const& info) {
     PROFILE
 
-    auto const size = getSize();
-
-    ::YGConfigSetPointScaleFactor((::YGConfig*)_yogaConfig, _scale);
-    ::YGNodeStyleSetWidth((::YGNode*)_layoutNode, size.width);
-    ::YGNodeStyleSetHeight((::YGNode*)_layoutNode, size.height);
-    ::YGNodeCalculateLayout((::YGNode*)_layoutNode, size.width, size.height, YGDirectionLTR);
+    if (node._border) {
+        auto const borderShape = QuadOutlineShape{
+            .rect = info.borderShape.rect,
+            .borderRadius = info.borderShape.borderRadius,
+            .borderTopLeftRadius = info.borderShape.borderTopLeftRadius,
+            .borderTopRightRadius = info.borderShape.borderTopRightRadius,
+            .borderBottomLeftRadius = info.borderShape.borderBottomLeftRadius,
+            .borderBottomRightRadius = info.borderShape.borderBottomRightRadius,
+            .leftBorder = (node._computedBorderEdge.left * _scale),
+            .topBorder = (node._computedBorderEdge.top * _scale),
+            .rightBorder = (node._computedBorderEdge.right * _scale),
+            .bottomBorder = (node._computedBorderEdge.bottom * _scale)
+        };
+        _painter.paint(borderShape, *node._border, { .scissor = info.scissorRect });
+    }
 }
 
-void Document::_updateCursor() {
+void Document::_renderNodeForeground(Node& node, _RenderInfo const& info) {
     PROFILE
 
-    auto cursor = Cursor::Default;
+    if (node._foreground) {
+        _painter.paint(info.borderShape, *node._foreground, { .scissor = info.scissorRect });
+    }
+}
 
-    for (auto node = _hoverNode; node != nullptr; node = node->_parent) {
-        if (node->_cursor.has_value()) {
-            cursor = node->_cursor.value();
-            break;
+void Document::_renderNodeText(Node& node, _RenderInfo const& info) {
+    PROFILE
+
+    if (node._display != NodeDisplay::Text) return;
+    if (node._textObject == nullptr) return;
+
+    auto const text = node._textObject.get();
+
+    auto const editable = text->getEditable();
+    auto const singleLine = (text->getMultiLine() == false) && (node._parent != nullptr);
+
+    text->setMaxWidth(std::nullopt);
+    text->setMaxHeight(std::nullopt);
+    text->setWidth(singleLine ? std::nullopt : std::optional<float>(std::floorf(node._computedTextRect.width * _scale)));
+    text->setHeight(std::floorf(node._computedTextRect.height * _scale));
+
+    auto const textOrigin = (info.borderShape.rect.origin + (node._computedTextRect.origin * _scale));
+    auto textClipRect = info.clipRect;
+    auto textRect = Vec4{
+        Vec2{ std::roundf(textOrigin.x), std::roundf(textOrigin.y) },
+        text->getSize()
+    };
+
+    if (singleLine) {
+        /* A single-line surface never wraps and is clipped to the slot
+           the box gives its text (the box's border rect minus its border
+           and, mirrored, the text's left inset). While it is being
+           edited it scrolls horizontally so the caret stays inside that
+           slot; unfocused, it shows its start. */
+        auto const inset = (node._computedBorderRectInDocument.x - node._parent->_computedBorderRectInDocument.x - node._parent->_computedBorderEdge.left);
+        auto const visibleMaxX = ((node._parent->_computedBorderRectInDocument.getMaxX() - node._parent->_computedBorderEdge.right - inset) * _scale) + info.offset.x;
+        auto const visibleWidth = std::max(1.0f, (visibleMaxX - info.borderShape.rect.x));
+        auto& scrollX = node._textScrollX;
+
+        if (editable) {
+            auto const& caretRect = text->getCaretRect();
+
+            if ((caretRect.getMaxX() - scrollX) > visibleWidth) {
+                scrollX = (caretRect.getMaxX() - visibleWidth);
+            }
+            if ((caretRect.x - scrollX) < 0.0f) {
+                scrollX = caretRect.x;
+            }
+
+            scrollX = std::ceilf(std::clamp(scrollX, 0.0f, std::max(0.0f, (std::max(textRect.width, caretRect.getMaxX()) - visibleWidth))));
+        } else {
+            scrollX = 0.0f;
+        }
+
+        textRect.x -= scrollX;
+
+        auto const clipMinX = std::max(info.clipRect.x, info.borderShape.rect.x);
+        auto const clipMaxX = std::min(info.clipRect.getMaxX(), (info.borderShape.rect.x + visibleWidth));
+        textClipRect = { clipMinX, info.clipRect.y, std::max(0.0f, (clipMaxX - clipMinX)), info.clipRect.height };
+    } else {
+        node._textScrollX = 0.0f;
+    }
+
+    if (editable) {
+        for (auto const& rect : text->getSelectionRects()) {
+            auto const selectionShape = QuadShape{ Vec4{ (textRect.origin + rect.origin), rect.size } };
+            auto const selectionBrush = ColorBrush{ .color = _selectionColor };
+            _painter.paint(selectionShape, selectionBrush, { .scissor = textClipRect });
         }
     }
 
-    if (_cursor != cursor) {
-        _cursor = cursor;
-        _window.setCursor(cursor);
+    auto const textShape = QuadShape{ textRect };
+    auto const textBrush = ImageBrush{
+        .image = text->getImage(),
+        .positionX = ImagePosition::Start,
+        .positionY = ImagePosition::Start,
+        .filterMag = ImageFilter::Linear,
+        .filterMin = ImageFilter::Linear
+    };
+    _painter.paint(textShape, textBrush, { .scissor = textClipRect });
+
+    if (
+        editable &&
+        _caretVisible &&
+        (text->isSelectedRange() == false)
+    ) {
+        auto const& caretRect = text->getCaretRect();
+        auto const caretShape = QuadShape{ Vec4{ (textRect.origin + caretRect.origin), caretRect.size } };
+        auto const caretBrush = ColorBrush{ .color = node._computedTextColor };
+        _painter.paint(caretShape, caretBrush, { .scissor = textClipRect });
     }
 }
 
-void Document::_updateHover() {
+void Document::_renderNodeShadow(Node& node, _RenderInfo const& info, ImageBrush const& brush) {
     PROFILE
 
-    ;
+    auto const& layerRect = *info.layerRect;
+
+    if (node._shadow.has_value() == false) return;
+
+    auto const& shadow = *node._shadow;
+    auto const shadowColor = shadow.color.value_or(Vec4{ 0.0f, 0.0f, 0.0f, 1.0f });
+
+    if (shadowColor.alpha <= 0.0f) return;
+
+    auto const radius  = (shadow.blur.value_or(0.0f) * _scale);
+    auto const spread  = (shadow.spread.value_or(Vec2{}) * _scale);
+    auto const offset = (shadow.offset.value_or(Vec2{}) * _scale);
+    auto const padding = Vec2{
+        std::ceil(radius + std::max(spread.x, 0.0f)),
+        std::ceil(radius + std::max(spread.y, 0.0f))
+    };
+    auto const shadowSize = Vec2{
+        (layerRect.width  + (padding.x * 2.0f)),
+        (layerRect.height + (padding.y * 2.0f))
+    };
+    auto const shadowShape = QuadShape{
+        Vec4{ padding, layerRect.size }
+    };
+
+    auto rebake = false;
+    auto shadowKey = shadow;
+    shadowKey.offset = std::nullopt;
+
+    auto const clipKey = info.clipRect.getIntersection(
+        Vec4{ 0.0f, 0.0f, layerRect.width, layerRect.height }
+    );
+
+    auto const radiusKey = Vec4{
+        node._borderTopLeftRadius.value_or(node._borderRadius.value_or(0.0f)),
+        node._borderTopRightRadius.value_or(node._borderRadius.value_or(0.0f)),
+        node._borderBottomRightRadius.value_or(node._borderRadius.value_or(0.0f)),
+        node._borderBottomLeftRadius.value_or(node._borderRadius.value_or(0.0f))
+    };
+
+    if (
+        (node._shadowImage == nullptr) ||
+        (node._shadowImage->getSize() != shadowSize)
+    ) {
+        node._shadowImage = std::make_unique<Image>(shadowSize);
+        rebake = true;
+    }
+
+    if (
+        rebake ||
+        (node._shadowImageShadow != shadowKey) ||
+        (node._shadowImageRadius != radiusKey) ||
+        (node._shadowImageScale != _scale) ||
+        (node._shadowImageClipRect != clipKey)
+    ) {
+        node._shadowImageShadow = shadowKey;
+        node._shadowImageRadius = radiusKey;
+        node._shadowImageScale = _scale;
+        node._shadowImageClipRect = clipKey;
+
+        _painter.beginPaint(
+            ImagePaintTarget{
+                .image = *node._shadowImage,
+                .clearColor = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f }
+            }
+        );
+        _painter.paint(shadowShape, brush, {
+            .filter = Filter{
+                ShadowFilter{
+                    .radius = radius,
+                    .color = shadowColor,
+                    .spread = (shadow.spread.has_value() ? std::optional<Vec2>{ spread } : std::optional<Vec2>{})
+                }
+            }
+        });
+        _painter.endPaint();
+    }
+
+    auto const shadowImageShape = QuadShape{ Vec4{ (layerRect.origin - padding + offset), shadowSize } };
+    auto const shadowImageBrush = ImageBrush{
+        .image = &*node._shadowImage,
+        .positionX = ImagePosition::Start,
+        .positionY = ImagePosition::Start,
+        .filterMag = ImageFilter::Nearest,
+        .filterMin = ImageFilter::Nearest
+    };
+    _painter.paint(shadowImageShape, shadowImageBrush, {
+        .scissor = info.compositeScissor,
+        .opacity = node._opacity
+    });
+}
+
+void Document::_renderAll() {
+    PROFILE
+
+    if (
+        (_focusState.focusedNode != nullptr) &&
+        (_focusState.focusedNode->_firstChild != nullptr) &&
+        (_focusState.focusedNode->_firstChild->_textObject != nullptr) &&
+        _isNodeEditable(*_focusState.focusedNode)
+    ) {
+        auto const& text = *_focusState.focusedNode->_firstChild->_textObject;
+        auto const phase = ((GetTime() - _caretBlinkStart) / _caretBlinkPeriod);
+        auto const visible = text.isSelectedRange() || ((phase % 2) == 0);
+
+        if (_caretVisible != visible) {
+            _caretVisible = visible;
+            _needsRender = true;
+        }
+    }
+
+    if (_needsRender == false) return;
+    else _needsRender = false;
+
+    _painter.beginPaint(
+        WindowPaintTarget{
+            .window = _window,
+            .clearColor = COLOR_TRANSPARENT
+        }
+    );
+
+    for (auto& [ zIndex, nodes ] : _renderList) {
+        for (auto& node : nodes) {
+            _renderNode(*node, { 0.0f, 0.0f }, zIndex);
+        }
+    }
+
+    _painter.endPaint();
+}
+
+void Document::_triggerMouseWheel(Vec2 const& delta, KeyModifiers const& modifiers, bool& defaultPrevented) {
+    PROFILE
+
+    _flushEvents();
+
+    auto targetNode = (
+        _hoverState.hoverNode != nullptr
+            ? _hoverState.hoverNode
+            : this
+    );
+
+    auto const event = MouseWheelNodeEvent(*targetNode, delta, modifiers);
+    targetNode->dispatchEvent(event);
+    defaultPrevented = event.isDefaultPrevented();
+}
+
+void Document::_triggerMouseDown(Mouse mouse, KeyModifiers const& modifiers, bool& defaultPrevented) {
+    PROFILE
+
+    _flushEvents();
+
+    auto const position = _convertPoint(_mouseState.position);
+
+    auto targetNode = (
+        _pressState.pressNode != nullptr
+            ? _pressState.pressNode
+            : this
+    );
+
+    auto const event = MouseDownNodeEvent(*targetNode, mouse, position, modifiers, _mouseState.clickCount);
+    targetNode->dispatchEvent(event);
+    defaultPrevented = event.isDefaultPrevented();
+}
+
+void Document::_triggerMouseUp(Mouse mouse, KeyModifiers const& modifiers) {
+    PROFILE
+
+    _flushEvents();
+
+    auto const position = _convertPoint(_mouseState.position);
+
+    auto targetNode = (
+        _pressState.pressNode != nullptr
+            ? _pressState.pressNode
+            : this
+    );
+
+    targetNode->dispatchEvent(
+        MouseUpNodeEvent(*targetNode, mouse, position, modifiers)
+    );
+}
+
+void Document::_triggerKeyDown(Key key, KeyModifiers const& modifiers, std::string const& input, bool& defaultPrevented) {
+    PROFILE
+
+    _flushEvents();
+
+    auto targetNode = (
+        (_focusState.focusedNode != nullptr && _focusState.focusedNode->_keyEvents == true)
+            ? _focusState.focusedNode
+            : this
+    );
+
+    auto const event = KeyDownNodeEvent(*targetNode, key, modifiers, input);
+    targetNode->dispatchEvent(event);
+    defaultPrevented = event.isDefaultPrevented();
+}
+
+void Document::_triggerKeyUp(Key key, KeyModifiers const& modifiers) {
+    PROFILE
+
+    _flushEvents();
+
+    auto targetNode = (
+        (_focusState.focusedNode != nullptr && _focusState.focusedNode->_keyEvents == true)
+            ? _focusState.focusedNode
+            : this
+    );
+
+    targetNode->dispatchEvent(
+        KeyUpNodeEvent(*targetNode, key, modifiers)
+    );
 }
 
 } /* namespace Rocket */

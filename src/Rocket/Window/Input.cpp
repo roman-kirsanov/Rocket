@@ -4,6 +4,21 @@
 
 namespace Rocket {
 
+bool KeyModifiers::operator==(KeyModifiers const& modifiers) const {
+    PROFILE
+
+    return (control == modifiers.control)
+        && (shift == modifiers.shift)
+        && (meta == modifiers.meta)
+        && (alt == modifiers.alt);
+}
+
+bool KeyModifiers::operator!=(KeyModifiers const& modifiers) const {
+    PROFILE
+
+    return !operator==(modifiers);
+}
+
 std::string const& GetKeyName(Key key) {
     PROFILE
 

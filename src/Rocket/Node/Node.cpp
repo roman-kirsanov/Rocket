@@ -187,8 +187,6 @@ Node::Node()
     , _scrollPosition()
     , _layoutNode(nullptr)
     , _textNode(nullptr)
-    , _needsTextUpdate()
-    , _needsLayoutUpdate()
 {
     PROFILE
 
@@ -746,7 +744,7 @@ bool Node::isFocusedWithin() const {
     return _isFocusedWithin;
 }
 
-void Node::getPath(std::vector<Node*>& path) const {
+void Node::getPathFromRoot(std::vector<Node*>& path) const {
     PROFILE
 
     path.clear();
@@ -760,14 +758,37 @@ void Node::getPath(std::vector<Node*>& path) const {
     std::reverse(path.begin(), path.end());
 }
 
+void Node::getPathToRoot(std::vector<Node*>& path) const {
+    PROFILE
+
+    path.clear();
+
+    auto next = const_cast<Node*>(this);
+    while (next != nullptr) {
+        path.push_back(next);
+        next = next->_parent;
+    }
+}
+
 void Node::setDisplay(std::optional<NodeDisplay> const& display) {
     PROFILE
 
     if (_display != display) {
         _display = display;
-        _needsTextUpdate = true;
-        _needsLayoutUpdate = true;
-        _updateLayout();
+        _invalidateLayout();
+        _setNodeLayout();
+        _cascadeFontFamily();
+        _cascadeFontWeight();
+        _cascadeFontStyle();
+        _cascadeFontSize();
+        _cascadeLineHeight();
+        _cascadeTextColor();
+        _cascadeTextMarker();
+        _invalidateText();
+
+        if (_parent != nullptr) {
+            _parent->_invalidateText();
+        }
     }
 }
 
@@ -776,7 +797,7 @@ void Node::setDirection(std::optional<NodeDirection> const& direction) {
 
     if (_direction != direction) {
         _direction = direction;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
 
         ::YGNodeStyleSetFlexDirection((::YGNode*)_layoutNode, direction.has_value() ? _directionMap[direction.value()] : ::YGFlexDirectionRow);
     }
@@ -787,7 +808,7 @@ void Node::setAlignment(std::optional<NodeAlignment> const& alignment) {
 
     if (_alignment != alignment) {
         _alignment = alignment;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
 
         ::YGNodeStyleSetAlignItems((::YGNode*)_layoutNode, alignment.has_value() ? _alignmentMap[alignment.value()] : ::YGAlignFlexStart);
     }
@@ -798,7 +819,7 @@ void Node::setJustify(std::optional<NodeJustify> const& justify) {
 
     if (_justify != justify) {
         _justify = justify;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
 
         ::YGNodeStyleSetJustifyContent((::YGNode*)_layoutNode, justify.has_value() ? _justifyMap[justify.value()] : ::YGJustifyFlexStart);
     }
@@ -809,7 +830,7 @@ void Node::setOverflowX(std::optional<NodeOverflow> const& overflowX) {
 
     if (_overflowX != overflowX) {
         _overflowX = overflowX;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
     }
 }
 
@@ -818,7 +839,7 @@ void Node::setOverflowY(std::optional<NodeOverflow> const& overflowY) {
 
     if (_overflowY != overflowY) {
         _overflowY = overflowY;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
     }
 }
 
@@ -827,7 +848,7 @@ void Node::setPosition(std::optional<NodePosition> const& position) {
 
     if (_position != position) {
         _position = position;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
 
         ::YGNodeStyleSetPositionType((::YGNode*)_layoutNode, position.has_value() ? _positionMap[position.value()] : ::YGPositionTypeRelative);
     }
@@ -838,7 +859,7 @@ void Node::setSelfAlignment(std::optional<NodeAlignment> const& selfAlignment) {
 
     if (_selfAlignment != selfAlignment) {
         _selfAlignment = selfAlignment;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
 
         ::YGNodeStyleSetAlignSelf((::YGNode*)_layoutNode, selfAlignment.has_value() ? _alignmentMap[selfAlignment.value()] : ::YGAlignAuto);
     }
@@ -849,7 +870,7 @@ void Node::setWidth(std::optional<NodeValue> const& width) {
 
     if (_width != width) {
         _width = width;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
 
         if (width.has_value()) {
             width->match(
@@ -867,7 +888,7 @@ void Node::setHeight(std::optional<NodeValue> const& height) {
 
     if (_height != height) {
         _height = height;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
 
         if (height.has_value()) {
             height->match(
@@ -885,7 +906,7 @@ void Node::setMinWidth(std::optional<NodeValue> const& minWidth) {
 
     if (_minWidth != minWidth) {
         _minWidth = minWidth;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
 
         if (minWidth.has_value()) {
             minWidth->match(
@@ -903,7 +924,7 @@ void Node::setMaxWidth(std::optional<NodeValue> const& maxWidth) {
 
     if (_maxWidth != maxWidth) {
         _maxWidth = maxWidth;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
 
         if (maxWidth.has_value()) {
             maxWidth->match(
@@ -921,7 +942,7 @@ void Node::setMinHeight(std::optional<NodeValue> const& minHeight) {
 
     if (_minHeight != minHeight) {
         _minHeight = minHeight;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
 
         if (minHeight.has_value()) {
             minHeight->match(
@@ -939,7 +960,7 @@ void Node::setMaxHeight(std::optional<NodeValue> const& maxHeight) {
 
     if (_maxHeight != maxHeight) {
         _maxHeight = maxHeight;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
 
         if (maxHeight.has_value()) {
             maxHeight->match(
@@ -957,7 +978,7 @@ void Node::setTop(std::optional<NodeValue> const& top) {
 
     if (_top != top) {
         _top = top;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
 
         if (top.has_value()) {
             top->match(
@@ -975,7 +996,7 @@ void Node::setLeft(std::optional<NodeValue> const& left) {
 
     if (_left != left) {
         _left = left;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
 
         if (left.has_value()) {
             left->match(
@@ -993,7 +1014,7 @@ void Node::setRight(std::optional<NodeValue> const& right) {
 
     if (_right != right) {
         _right = right;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
 
         if (right.has_value()) {
             right->match(
@@ -1011,7 +1032,7 @@ void Node::setBottom(std::optional<NodeValue> const& bottom) {
 
     if (_bottom != bottom) {
         _bottom = bottom;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
 
         if (bottom.has_value()) {
             bottom->match(
@@ -1029,7 +1050,7 @@ void Node::setPadding(std::optional<NodeValue> const& padding) {
 
     if (_padding != padding) {
         _padding = padding;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
         _setNodePadding();
     }
 }
@@ -1039,7 +1060,7 @@ void Node::setPaddingTop(std::optional<NodeValue> const& paddingTop) {
 
     if (_paddingTop != paddingTop) {
         _paddingTop = paddingTop;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
         _setNodePadding();
     }
 }
@@ -1049,7 +1070,7 @@ void Node::setPaddingLeft(std::optional<NodeValue> const& paddingLeft) {
 
     if (_paddingLeft != paddingLeft) {
         _paddingLeft = paddingLeft;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
         _setNodePadding();
     }
 }
@@ -1059,7 +1080,7 @@ void Node::setPaddingRight(std::optional<NodeValue> const& paddingRight) {
 
     if (_paddingRight != paddingRight) {
         _paddingRight = paddingRight;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
         _setNodePadding();
     }
 }
@@ -1069,7 +1090,7 @@ void Node::setPaddingBottom(std::optional<NodeValue> const& paddingBottom) {
 
     if (_paddingBottom != paddingBottom) {
         _paddingBottom = paddingBottom;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
         _setNodePadding();
     }
 }
@@ -1079,7 +1100,7 @@ void Node::setMargin(std::optional<NodeValue> const& margin) {
 
     if (_margin != margin) {
         _margin = margin;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
         _setNodeMargin();
     }
 }
@@ -1089,7 +1110,7 @@ void Node::setMarginTop(std::optional<NodeValue> const& marginTop) {
 
     if (_marginTop != marginTop) {
         _marginTop = marginTop;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
         _setNodeMargin();
     }
 }
@@ -1099,7 +1120,7 @@ void Node::setMarginLeft(std::optional<NodeValue> const& marginLeft) {
 
     if (_marginLeft != marginLeft) {
         _marginLeft = marginLeft;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
         _setNodeMargin();
     }
 }
@@ -1109,7 +1130,7 @@ void Node::setMarginRight(std::optional<NodeValue> const& marginRight) {
 
     if (_marginRight != marginRight) {
         _marginRight = marginRight;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
         _setNodeMargin();
     }
 }
@@ -1119,7 +1140,7 @@ void Node::setMarginBottom(std::optional<NodeValue> const& marginBottom) {
 
     if (_marginBottom != marginBottom) {
         _marginBottom = marginBottom;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
         _setNodeMargin();
     }
 }
@@ -1129,7 +1150,7 @@ void Node::setGap(std::optional<NodeValue> const& gap) {
 
     if (_gap != gap) {
         _gap = gap;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
         _setNodeGap();
     }
 }
@@ -1139,7 +1160,7 @@ void Node::setGapX(std::optional<NodeValue> const& gapX) {
 
     if (_gapX != gapX) {
         _gapX = gapX;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
         _setNodeGap();
     }
 }
@@ -1149,7 +1170,7 @@ void Node::setGapY(std::optional<NodeValue> const& gapY) {
 
     if (_gapY != gapY) {
         _gapY = gapY;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
         _setNodeGap();
     }
 }
@@ -1159,7 +1180,7 @@ void Node::setBorderWidth(std::optional<float> const& borderWidth) {
 
     if (_borderWidth != borderWidth) {
         _borderWidth = borderWidth;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
         _setNodeBorder();
     }
 }
@@ -1169,7 +1190,7 @@ void Node::setBorderTopWidth(std::optional<float> const& borderTopWidth) {
 
     if (_borderTopWidth != borderTopWidth) {
         _borderTopWidth = borderTopWidth;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
         _setNodeBorder();
     }
 }
@@ -1179,7 +1200,7 @@ void Node::setBorderLeftWidth(std::optional<float> const& borderLeftWidth) {
 
     if (_borderLeftWidth != borderLeftWidth) {
         _borderLeftWidth = borderLeftWidth;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
         _setNodeBorder();
     }
 }
@@ -1189,7 +1210,7 @@ void Node::setBorderRightWidth(std::optional<float> const& borderRightWidth) {
 
     if (_borderRightWidth != borderRightWidth) {
         _borderRightWidth = borderRightWidth;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
         _setNodeBorder();
     }
 }
@@ -1199,7 +1220,7 @@ void Node::setBorderBottomWidth(std::optional<float> const& borderBottomWidth) {
 
     if (_borderBottomWidth != borderBottomWidth) {
         _borderBottomWidth = borderBottomWidth;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
         _setNodeBorder();
     }
 }
@@ -1209,7 +1230,7 @@ void Node::setBorderRadius(std::optional<float> const& borderRadius) {
 
     if (_borderRadius != borderRadius) {
         _borderRadius = borderRadius;
-        _needsLayoutUpdate = true;
+        _invalidateRender();
     }
 }
 
@@ -1218,7 +1239,7 @@ void Node::setBorderTopLeftRadius(std::optional<float> const& borderTopLeftRadiu
 
     if (_borderTopLeftRadius != borderTopLeftRadius) {
         _borderTopLeftRadius = borderTopLeftRadius;
-        _needsLayoutUpdate = true;
+        _invalidateRender();
     }
 }
 
@@ -1227,7 +1248,7 @@ void Node::setBorderTopRightRadius(std::optional<float> const& borderTopRightRad
 
     if (_borderTopRightRadius != borderTopRightRadius) {
         _borderTopRightRadius = borderTopRightRadius;
-        _needsLayoutUpdate = true;
+        _invalidateRender();
     }
 }
 
@@ -1236,7 +1257,7 @@ void Node::setBorderBottomLeftRadius(std::optional<float> const& borderBottomLef
 
     if (_borderBottomLeftRadius != borderBottomLeftRadius) {
         _borderBottomLeftRadius = borderBottomLeftRadius;
-        _needsLayoutUpdate = true;
+        _invalidateRender();
     }
 }
 
@@ -1245,7 +1266,7 @@ void Node::setBorderBottomRightRadius(std::optional<float> const& borderBottomRi
 
     if (_borderBottomRightRadius != borderBottomRightRadius) {
         _borderBottomRightRadius = borderBottomRightRadius;
-        _needsLayoutUpdate = true;
+        _invalidateRender();
     }
 }
 
@@ -1254,7 +1275,7 @@ void Node::setVisible(std::optional<bool> const& visible) {
 
     if (_visible != visible) {
         _visible = visible;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
     }
 }
 
@@ -1263,7 +1284,7 @@ void Node::setZIndex(std::optional<int> const& zIndex) {
 
     if (_zIndex != zIndex) {
         _zIndex = zIndex;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
     }
 }
 
@@ -1272,7 +1293,7 @@ void Node::setOffset(std::optional<Vec2> const& offset) {
 
     if (_offset != offset) {
         _offset = offset;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
     }
 }
 
@@ -1281,7 +1302,7 @@ void Node::setOpacity(std::optional<float> const& opacity) {
 
     if (_opacity != opacity) {
         _opacity = opacity;
-        _needsLayoutUpdate = true;
+        _invalidateRender();
     }
 }
 
@@ -1290,7 +1311,7 @@ void Node::setTransform(std::optional<NodeTransform> const& transform) {
 
     if (_transform != transform) {
         _transform = transform;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
     }
 }
 
@@ -1299,8 +1320,8 @@ void Node::setFontFamily(std::optional<std::string> const& fontFamily) {
 
     if (_fontFamily != fontFamily) {
         _fontFamily = fontFamily;
-        _needsTextUpdate = true;
-        _needsLayoutUpdate = true;
+        _cascadeFontFamily();
+        _invalidateLayout();
     }
 }
 
@@ -1309,8 +1330,8 @@ void Node::setFontWeight(std::optional<FontWeight> const& fontWeight) {
 
     if (_fontWeight != fontWeight) {
         _fontWeight = fontWeight;
-        _needsTextUpdate = true;
-        _needsLayoutUpdate = true;
+        _cascadeFontWeight();
+        _invalidateLayout();
     }
 }
 
@@ -1319,8 +1340,8 @@ void Node::setFontStyle(std::optional<FontStyle> const& fontStyle) {
 
     if (_fontStyle != fontStyle) {
         _fontStyle = fontStyle;
-        _needsTextUpdate = true;
-        _needsLayoutUpdate = true;
+        _cascadeFontStyle();
+        _invalidateLayout();
     }
 }
 
@@ -1329,8 +1350,8 @@ void Node::setFontSize(std::optional<float> const& fontSize) {
 
     if (_fontSize != fontSize) {
         _fontSize = fontSize;
-        _needsTextUpdate = true;
-        _needsLayoutUpdate = true;
+        _cascadeFontSize();
+        _invalidateLayout();
     }
 }
 
@@ -1339,8 +1360,8 @@ void Node::setLineHeight(std::optional<float> const& lineHeight) {
 
     if (_lineHeight != lineHeight) {
         _lineHeight = lineHeight;
-        _needsTextUpdate = true;
-        _needsLayoutUpdate = true;
+        _cascadeLineHeight();
+        _invalidateLayout();
     }
 }
 
@@ -1349,8 +1370,8 @@ void Node::setTextMarker(std::optional<Vec4> const& textMarker) {
 
     if (_textMarker != textMarker) {
         _textMarker = textMarker;
-        _needsTextUpdate = true;
-        _needsLayoutUpdate = true;
+        _cascadeTextMarker();
+        _invalidateLayout();
     }
 }
 
@@ -1359,8 +1380,8 @@ void Node::setTextColor(std::optional<Vec4> const& textColor) {
 
     if (_textColor != textColor) {
         _textColor = textColor;
-        _needsTextUpdate = true;
-        _needsLayoutUpdate = true;
+        _cascadeTextColor();
+        _invalidateLayout();
     }
 }
 
@@ -1369,7 +1390,7 @@ void Node::setBackground(std::optional<Brush> const& background) {
 
     if (_background != background) {
         _background = background;
-        _needsLayoutUpdate = true;
+        _invalidateRender();
     }
 }
 
@@ -1378,7 +1399,7 @@ void Node::setForeground(std::optional<Brush> const& foreground) {
 
     if (_foreground != foreground) {
         _foreground = foreground;
-        _needsLayoutUpdate = true;
+        _invalidateRender();
     }
 }
 
@@ -1387,7 +1408,7 @@ void Node::setBorder(std::optional<Brush> const& border) {
 
     if (_border != border) {
         _border = border;
-        _needsLayoutUpdate = true;
+        _invalidateRender();
     }
 }
 
@@ -1396,9 +1417,9 @@ void Node::setShadow(std::optional<Shadow> const& shadow) {
 
     if (_shadow != shadow) {
         _shadow = shadow;
-        _needsLayoutUpdate = true;
         _shadowImageShadow = std::nullopt;
         _shadowImage = nullptr;
+        _invalidateRender();
     }
 }
 
@@ -1407,7 +1428,10 @@ void Node::setCursor(std::optional<Cursor> const& cursor) {
 
     if (_cursor != cursor) {
         _cursor = cursor;
-        _needsLayoutUpdate = true;
+
+        if (_document != nullptr) {
+            _document->_needsCursorUpdate = true;
+        }
     }
 }
 
@@ -1416,8 +1440,8 @@ void Node::setContent(std::optional<std::string> const& content) {
 
     if (_content != content) {
         _content = content;
-        _needsTextUpdate = true;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
+        _invalidateText();
     }
 }
 
@@ -1426,16 +1450,20 @@ void Node::setContentEditable(bool editable) {
 
     if (_contentEditable != editable) {
         _contentEditable = editable;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
+        _invalidateText();
+
+        if (_firstChild != nullptr) {
+            _firstChild->_invalidateText();
+        }
 
         if (
             (_document != nullptr) &&
-            (_document->_focusedNode == this) &&
+            (_document->_focusState.focusedNode == this) &&
             (_firstChild != nullptr) &&
             (_firstChild->_textObject != nullptr)
         ) {
             _firstChild->_textObject->setEditable(editable);
-            _firstChild->_needsTextUpdate = true;
         }
     }
 }
@@ -1445,15 +1473,27 @@ void Node::setContentSecure(bool secure) {
 
     if (_contentSecure != secure) {
         _contentSecure = secure;
-        _needsTextUpdate = true;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
+        _invalidateText();
+
+        if (_firstChild != nullptr) {
+            _firstChild->_invalidateText();
+        }
     }
 }
 
 void Node::setContentMultiLine(bool multiLine) {
     PROFILE
 
-    _contentMultiLine = multiLine;
+    if (_contentMultiLine != multiLine) {
+        _contentMultiLine = multiLine;
+        _invalidateLayout();
+        _invalidateText();
+
+        if (_firstChild != nullptr) {
+            _firstChild->_invalidateText();
+        }
+    }
 }
 
 void Node::setTabIndex(int tabIndex) {
@@ -1461,7 +1501,6 @@ void Node::setTabIndex(int tabIndex) {
 
     if (_tabIndex != tabIndex) {
         _tabIndex = tabIndex;
-        _needsLayoutUpdate = true;
     }
 }
 
@@ -1470,9 +1509,20 @@ void Node::setSkip(bool skip) {
 
     if (_skip != skip) {
         _skip = skip;
-        _needsTextUpdate = true;
-        _needsLayoutUpdate = true;
-        _updateLayout();
+        _invalidateLayout();
+        _setNodeLayout();
+        _cascadeFontFamily();
+        _cascadeFontWeight();
+        _cascadeFontStyle();
+        _cascadeFontSize();
+        _cascadeLineHeight();
+        _cascadeTextColor();
+        _cascadeTextMarker();
+        _invalidateText();
+
+        if (_parent != nullptr) {
+            _parent->_invalidateText();
+        }
     }
 }
 
@@ -1481,7 +1531,7 @@ void Node::setFlex(bool flex) {
 
     if (_flex != flex) {
         _flex = flex;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
 
         if (flex) {
             /* A zero basis (React Native's `flex: 1`) makes sibling flex
@@ -1504,7 +1554,6 @@ void Node::setKeyEvents(bool keyEvents) {
 
     if (_keyEvents != keyEvents) {
         _keyEvents = keyEvents;
-        _needsLayoutUpdate = true;
     }
 }
 
@@ -1513,7 +1562,7 @@ void Node::setMouseEvents(bool mouseEvents) {
 
     if (_mouseEvents != mouseEvents) {
         _mouseEvents = mouseEvents;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
     }
 }
 
@@ -1522,7 +1571,7 @@ void Node::setClipped(bool clipped) {
 
     if (_clipped != clipped) {
         _clipped = clipped;
-        _needsLayoutUpdate = true;
+        _invalidateLayout();
     }
 }
 
@@ -1611,9 +1660,18 @@ void Node::insertChild(Node& child, std::int64_t index) {
         child._attach(*_document);
     }
 
-    child._updateLayout();
-    child._needsTextUpdate = true;
-    child._needsLayoutUpdate = true;
+    child._setNodeLayout();
+    child._cascade();
+
+    _invalidateLayout();
+    _invalidateText();
+
+    if (
+        _firstChild == &child &&
+        child._nextSibling != nullptr
+    ) {
+        child._nextSibling->_invalidateText();
+    }
 }
 
 void Node::removeChild(Node& child) {
@@ -1642,10 +1700,15 @@ void Node::removeChild(Node& child) {
     ::YGNodeRemoveChild((::YGNode*)_layoutNode, (::YGNode*)child._layoutNode);
 
     child._detach();
-    child._updateLayout();
+    child._setNodeLayout();
+    child._cascade();
 
-    _needsTextUpdate = true;
-    _needsLayoutUpdate = true;
+    _invalidateLayout();
+    _invalidateText();
+
+    if (_firstChild != nullptr) {
+        _firstChild->_invalidateText();
+    }
 }
 
 void Node::removeFromParent() {
@@ -1744,56 +1807,29 @@ void Node::_detach() {
     _resetInputState();
 
     if (_document != nullptr) {
-        std::erase(_document->_hoverPath, this);
-        if (_document->_hoverNode == this) _document->_hoverNode = nullptr;
-        if (_document->_activeNode == this) _document->_activeNode = nullptr;
-        if (_document->_focusedNode == this) _document->_focusedNode = nullptr;
+        for (auto& event : _document->_eventQueue) {
+            if ((event != nullptr) && (&event->getNode() == this)) event = nullptr;
+        }
+
+        if (std::erase(_document->_hoverState.hoverPath, this) > 0) {
+            _document->_needsCursorUpdate = true;
+        }
+
+        std::erase(_document->_pressState.pressPath, this);
+        std::erase(_document->_focusState.focusedPath, this);
+
+        if (_document->_hoverState.hoverNode == this) _document->_hoverState.hoverNode = nullptr;
+        if (_document->_pressState.pressNode == this) _document->_pressState.pressNode = nullptr;
+        if (_document->_dragState.dragNode == this) _document->_dragState.dragNode = nullptr;
+        if (_document->_focusState.focusedNode == this) {
+            for (auto node : _document->_focusState.focusedPath) {
+                node->_isFocusedWithin = false;
+            }
+            _document->_focusState.focusedNode = nullptr;
+            _document->_focusState.focusedPath.clear();
+        }
+
         _document = nullptr;
-    }
-}
-
-void Node::_updateLayout() {
-    PROFILE
-
-    auto const display = _display.value_or(NodeDisplay::Box);
-
-    auto isBoxLayout = false;
-    auto isTextLayout = false;
-
-    if (display == NodeDisplay::Box) {
-        if (auto parent = _parent) {
-            isBoxLayout = (parent->_display.value_or(NodeDisplay::Box) == NodeDisplay::Box);
-            isTextLayout = false;
-        } else {
-            isBoxLayout = true;
-            isTextLayout = false;
-        }
-    } else if (display == NodeDisplay::Text) {
-        if (auto parent = _parent) {
-            isTextLayout = (parent->_display.value_or(NodeDisplay::Box) == NodeDisplay::Box);
-            isBoxLayout = false;
-        } else {
-            isTextLayout = true;
-            isBoxLayout = false;
-        }
-    }
-
-    if (_skip) {
-        isBoxLayout = false;
-        isTextLayout = false;
-    }
-
-    if (isTextLayout) {
-        _createTextNode();
-        ::YGNodeStyleSetDisplay((::YGNode*)_layoutNode, ::YGDisplayFlex);
-    } else if (isBoxLayout) {
-        _destroyTextNode();
-        _resetTextState();
-        ::YGNodeStyleSetDisplay((::YGNode*)_layoutNode, ::YGDisplayFlex);
-    } else {
-        _destroyTextNode();
-        _resetTextState();
-        ::YGNodeStyleSetDisplay((::YGNode*)_layoutNode, ::YGDisplayNone);
     }
 }
 
@@ -1868,7 +1904,7 @@ void Node::_createTextNode() {
             textNode->_textObject = std::make_unique<Text>();
 
             /* a text child swapped in under a focused editable box is the editing surface from now on */
-            if (editableParent && (textNode->_document != nullptr) && (textNode->_document->_focusedNode == parent)) {
+            if (editableParent && (textNode->_document != nullptr) && (textNode->_document->_focusState.focusedNode == parent)) {
                 textNode->_textObject->setEditable(true);
             }
         }
@@ -1941,6 +1977,51 @@ void Node::_destroyTextNode() {
 
         ::YGNodeFree((::YGNode*)_textNode);
         _textNode = nullptr;
+    }
+}
+
+void Node::_setNodeLayout() {
+    PROFILE
+
+    auto const display = _display.value_or(NodeDisplay::Box);
+
+    auto isBoxLayout = false;
+    auto isTextLayout = false;
+
+    if (display == NodeDisplay::Box) {
+        if (auto parent = _parent) {
+            isBoxLayout = (parent->_display.value_or(NodeDisplay::Box) == NodeDisplay::Box);
+            isTextLayout = false;
+        } else {
+            isBoxLayout = true;
+            isTextLayout = false;
+        }
+    } else if (display == NodeDisplay::Text) {
+        if (auto parent = _parent) {
+            isTextLayout = (parent->_display.value_or(NodeDisplay::Box) == NodeDisplay::Box);
+            isBoxLayout = false;
+        } else {
+            isTextLayout = true;
+            isBoxLayout = false;
+        }
+    }
+
+    if (_skip) {
+        isBoxLayout = false;
+        isTextLayout = false;
+    }
+
+    if (isTextLayout) {
+        _createTextNode();
+        ::YGNodeStyleSetDisplay((::YGNode*)_layoutNode, ::YGDisplayFlex);
+    } else if (isBoxLayout) {
+        _destroyTextNode();
+        _resetTextState();
+        ::YGNodeStyleSetDisplay((::YGNode*)_layoutNode, ::YGDisplayFlex);
+    } else {
+        _destroyTextNode();
+        _resetTextState();
+        ::YGNodeStyleSetDisplay((::YGNode*)_layoutNode, ::YGDisplayNone);
     }
 }
 
@@ -2034,7 +2115,6 @@ void Node::_resetTextState() {
     _computedMarkerColor = {};
     _computedLineHeight  = TEXT_DEFAULT_LINE_HEIGHT;
     _textObject          = nullptr;
-    _needsTextUpdate     = true;
     _textScrollX         = 0.0f;
 }
 
@@ -2052,7 +2132,6 @@ void Node::_resetLayoutState() {
     _computedMarginRectInDocument = {};
     _computedClipRectInDocument   = {};
     _computedZIndex               = 0;
-    _needsLayoutUpdate            = true;
 }
 
 void Node::_resetPaintState() {
@@ -2073,6 +2152,184 @@ void Node::_resetInputState() {
     _isActive        = false;
     _isFocused       = false;
     _isFocusedWithin = false;
+}
+
+void Node::_cascade() {
+    PROFILE
+
+    if (_parent != nullptr) {
+        _computedFontFamily  = _fontFamily.value_or(_parent->_computedFontFamily);
+        _computedFontWeight  = _fontWeight.value_or(_parent->_computedFontWeight);
+        _computedFontStyle   = _fontStyle.value_or(_parent->_computedFontStyle);
+        _computedFontSize    = _fontSize.value_or(_parent->_computedFontSize);
+        _computedLineHeight  = _lineHeight.value_or(_parent->_computedLineHeight);
+        _computedTextColor   = _textColor.value_or(_parent->_computedTextColor);
+        _computedMarkerColor = _textMarker.value_or(_parent->_computedMarkerColor);
+    } else {
+        _computedFontFamily  = _fontFamily.value_or(TEXT_DEFAULT_FONT_FAMILY);
+        _computedFontWeight  = _fontWeight.value_or(TEXT_DEFAULT_FONT_WEIGHT);
+        _computedFontStyle   = _fontStyle.value_or(TEXT_DEFAULT_FONT_STYLE);
+        _computedFontSize    = _fontSize.value_or(TEXT_DEFAULT_FONT_SIZE);
+        _computedLineHeight  = _lineHeight.value_or(TEXT_DEFAULT_LINE_HEIGHT);
+        _computedTextColor   = _textColor.value_or(TEXT_DEFAULT_COLOR);
+        _computedMarkerColor = _textMarker.value_or(Vec4{ 0.0f, 0.0f, 0.0f, 0.0f });
+    }
+
+    _invalidateText();
+
+    for (auto child = _firstChild; child != nullptr; child = child->_nextSibling) {
+        child->_cascade();
+    }
+}
+
+void Node::_cascadeFontFamily() {
+    PROFILE
+
+    auto const computedFontFamily = (_parent != nullptr)
+        ? _fontFamily.value_or(_parent->_computedFontFamily)
+        : _fontFamily.value_or(TEXT_DEFAULT_FONT_FAMILY);
+
+    if (_computedFontFamily != computedFontFamily) {
+        _computedFontFamily = computedFontFamily;
+        _invalidateText();
+
+        for (auto child = _firstChild; child != nullptr; child = child->_nextSibling) {
+            child->_cascadeFontFamily();
+        }
+    }
+}
+
+void Node::_cascadeFontWeight() {
+    PROFILE
+
+    auto const computedFontWeight = (_parent != nullptr)
+        ? _fontWeight.value_or(_parent->_computedFontWeight)
+        : _fontWeight.value_or(TEXT_DEFAULT_FONT_WEIGHT);
+
+    if (_computedFontWeight != computedFontWeight) {
+        _computedFontWeight = computedFontWeight;
+        _invalidateText();
+
+        for (auto child = _firstChild; child != nullptr; child = child->_nextSibling) {
+            child->_cascadeFontWeight();
+        }
+    }
+}
+
+void Node::_cascadeFontStyle() {
+    PROFILE
+
+    auto const computedFontStyle = (_parent != nullptr)
+        ? _fontStyle.value_or(_parent->_computedFontStyle)
+        : _fontStyle.value_or(TEXT_DEFAULT_FONT_STYLE);
+
+    if (_computedFontStyle != computedFontStyle) {
+        _computedFontStyle = computedFontStyle;
+        _invalidateText();
+
+        for (auto child = _firstChild; child != nullptr; child = child->_nextSibling) {
+            child->_cascadeFontStyle();
+        }
+    }
+}
+
+void Node::_cascadeFontSize() {
+    PROFILE
+
+    auto const computedFontSize = (_parent != nullptr)
+        ? _fontSize.value_or(_parent->_computedFontSize)
+        : _fontSize.value_or(TEXT_DEFAULT_FONT_SIZE);
+
+    if (_computedFontSize != computedFontSize) {
+        _computedFontSize = computedFontSize;
+        _invalidateText();
+
+        for (auto child = _firstChild; child != nullptr; child = child->_nextSibling) {
+            child->_cascadeFontSize();
+        }
+    }
+}
+
+void Node::_cascadeLineHeight() {
+    PROFILE
+
+    auto const computedLineHeight = (_parent != nullptr)
+        ? _lineHeight.value_or(_parent->_computedLineHeight)
+        : _lineHeight.value_or(TEXT_DEFAULT_LINE_HEIGHT);
+
+    if (_computedLineHeight != computedLineHeight) {
+        _computedLineHeight = computedLineHeight;
+        _invalidateText();
+
+        for (auto child = _firstChild; child != nullptr; child = child->_nextSibling) {
+            child->_cascadeLineHeight();
+        }
+    }
+}
+
+void Node::_cascadeTextColor() {
+    PROFILE
+
+    auto const computedTextColor = (_parent != nullptr)
+        ? _textColor.value_or(_parent->_computedTextColor)
+        : _textColor.value_or(TEXT_DEFAULT_COLOR);
+
+    if (_computedTextColor != computedTextColor) {
+        _computedTextColor = computedTextColor;
+        _invalidateText();
+
+        for (auto child = _firstChild; child != nullptr; child = child->_nextSibling) {
+            child->_cascadeTextColor();
+        }
+    }
+}
+
+void Node::_cascadeTextMarker() {
+    PROFILE
+
+    auto const computedMarkerColor = (_parent != nullptr)
+        ? _textMarker.value_or(_parent->_computedMarkerColor)
+        : _textMarker.value_or(Vec4{ 0.0f, 0.0f, 0.0f, 0.0f });
+
+    if (_computedMarkerColor != computedMarkerColor) {
+        _computedMarkerColor = computedMarkerColor;
+        _invalidateText();
+
+        for (auto child = _firstChild; child != nullptr; child = child->_nextSibling) {
+            child->_cascadeTextMarker();
+        }
+    }
+}
+
+void Node::_invalidateLayout() {
+    PROFILE
+
+    if (_document != nullptr) {
+        _document->_needsUpdate = true;
+    }
+}
+
+void Node::_invalidateRender() {
+    PROFILE
+
+    if (_document != nullptr) {
+        _document->_needsRender = true;
+    }
+}
+
+void Node::_invalidateText() {
+    PROFILE
+
+    for (auto node = this; node != nullptr; node = node->_parent) {
+        if (node->_textNode != nullptr) {
+            ::YGNodeMarkDirty((::YGNode*)node->_textNode);
+            break;
+        }
+
+        if (node->_display != NodeDisplay::Text) {
+            break;
+        }
+    }
 }
 
 } /* namespace Rocket */

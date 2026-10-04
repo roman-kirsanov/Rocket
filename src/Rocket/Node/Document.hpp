@@ -8,7 +8,7 @@
 #pragma once
 
 #include <map>
-#include <chrono>
+#include <memory>
 #include <optional>
 #include <vector>
 #include <string>
@@ -31,12 +31,19 @@ namespace Rocket {
  * Constructing a Document registers it as the tree root, sets up layout, and
  * subscribes to the window's event source, translating window input events
  * (mouse, wheel, keyboard) into node events dispatched through the tree,
- * repainting on the window's paint event and requesting an update on resize
- * and DPI change. Call update() to recompute layout (it also pushes the
- * resolved cursor to the window) and render() to paint the tree into the
- * window. Input events are hit-tested against the layout of the last
- * update(), so run update() before dispatching events whenever the tree
- * has changed. The Document does not own the window.
+ * updating and repainting on the window's paint event and relayouting on
+ * resize and DPI change. Every window input event updates the document before
+ * it returns, so hover, press and focus always reflect the current layout.
+ * Call update() after changing the tree outside an event and render() to
+ * paint it into the window. The Document does not own the window.
+ *
+ * Node events that report a state change (enter, exit, move, focus, blur,
+ * drag, click and input) are delivered from a queue once the change is
+ * complete, in the order they happened; a listener may change the tree,
+ * focus or update from inside them. Press, release, wheel and key events are
+ * delivered synchronously so a listener can preventDefault() their default
+ * action. Like pointer capture on the web, a release always goes to the node
+ * that received the press and hover is frozen while a button is held.
  *
  * Non-copyable and non-movable (inherited from Node).
  */
@@ -124,13 +131,15 @@ public:
     void focusNode(Node* targetNode);
 
     /**
-     * Recomputes layout for the node tree, resolves the cursor from the hovered
-     * node chain, and applies it to the window when it changes.
+     * Brings the document up to date: recomputes layout and hover while the
+     * tree is invalidated, delivers queued node events, and repeats until
+     * neither is pending, then applies the resolved cursor to the window when
+     * it changed.
      *
-     * No-op unless the document has been invalidated since the last update.
-     * Calling update() re-entrantly (e.g. from an event handler that runs
-     * during an update) is a no-op: changes made during an update invalidate
-     * the nodes they touch as usual, and the next update() picks them up.
+     * Layout is only recomputed when something invalidated it. Calling
+     * update() re-entrantly (e.g. from an event listener that runs during an
+     * update) is a no-op: the changes it would pick up are handled by the
+     * update already running before it returns.
      */
     void update();
 
@@ -138,11 +147,11 @@ public:
      * Renders the node tree into the window.
      *
      * Call update() beforehand to ensure layout is current. No-op unless a
-     * repaint is pending: an update has run, a mouse press, drag or release
-     * happened while an editable node was focused, or the caret blink phase
-     * flipped (the caret of a focused editable blinks at 530ms, restarting
-     * visible after every handled key, press or focus change) since the last
-     * render.
+     * repaint is pending: a layout ran, a paint-only property changed, hover,
+     * press or focus changed, the caret or selection of the focused editable
+     * moved, or the caret blink phase flipped (the caret blinks at 530ms,
+     * restarting visible after every handled key, press or focus change)
+     * since the last render.
      */
     void render();
 
@@ -157,51 +166,148 @@ private:
     Window& _window;
     Sub<WindowEvent const&> _windowSub;
     Painter _painter;
-    Cursor _cursor;
-    Node* _hoverNode;
-    Node* _activeNode;
-    Node* _focusedNode;
-    Vec2 _mousePosition;
-    Mouse _mouseButton;
-    bool _mouseIsDown;
-    bool _mouseIsDragging;
     void* _yogaConfig;
     float _scale;
+
+    struct _HoverState {
+        Vec2 mousePosition;
+        Node* hoverNode;
+        std::vector<Node*> hoverPath;
+    };
+
+    struct _PressState {
+        Node* pressNode;
+        std::vector<Node*> pressPath;
+    };
+
+    struct _FocusState {
+        Node* focusedNode;
+        std::vector<Node*> focusedPath;
+    };
+
+    struct _DragState {
+        Node* dragNode;
+        Vec2 mousePosition;
+    };
+
+    struct _MouseState {
+        bool down;
+        bool inside;
+        Mouse mouse;
+        Vec2 position;
+        Vec2 downPosition;
+        KeyModifiers modifiers;
+        int clickCount;
+        bool defaultPrevented;
+    };
+
+    struct _NoneFocusNode {};
+    struct _PressFocusNode {};
+    struct _TargetFocusNode { Node& node; };
+    using _FocusNodeVariant = Enum<
+        _NoneFocusNode,
+        _PressFocusNode,
+        _TargetFocusNode
+    >;
+
+    struct _HoverScrollNode {};
+    struct _TargetScrollNode { Node& node; };
+    using _ScrollNodeVariant = Enum<
+        _HoverScrollNode,
+        _TargetScrollNode
+    >;
+
+    struct _RenderInfo {
+        bool empty;
+        Vec2 offset;
+        QuadShape borderShape;
+        Vec4 clipRect;
+        std::optional<Vec4> scissorRect;
+        std::optional<Vec4> compositeScissor;
+        std::optional<Vec4> layerRect;
+    };
+
+    _MouseState _mouseState;
+    _HoverState _hoverState;
+    _PressState _pressState;
+    _FocusState _focusState;
+    _DragState _dragState;
+
+    std::int64_t _caretBlinkStart;
+
+    bool _caretVisible;
     bool _isUpdating;
+    bool _isFlushing;
     bool _needsUpdate;
     bool _needsRender;
-    bool _caretVisible;
-    std::chrono::steady_clock::time_point _caretBlinkStart;
-    std::vector<Node*> _hoverPath;
+    bool _needsCursorUpdate;
+
+    Cursor _windowCursor;
+
     std::map<
         std::int64_t,
         std::vector<Node*>
     > _renderList;
 
-    std::optional<_InputState> _getInputState();
-    Node* _getKeyNode();
+    std::vector<std::unique_ptr<NodeEvent>> _eventQueue;
+
+    void _handleEvent(WindowEvent const&);
+    void _handleMouseMoveEvent(MouseMoveWindowEvent const&);
+    void _handleMouseEnterEvent(MouseEnterWindowEvent const&);
+    void _handleMouseExitEvent(MouseExitWindowEvent const&);
+    void _handleMouseDownEvent(MouseDownWindowEvent const&);
+    void _handleMouseUpEvent(MouseUpWindowEvent const&);
+    void _handleMouseWheelEvent(MouseWheelWindowEvent const&);
+    void _handleKeyDownEvent(KeyDownWindowEvent const&);
+    void _handleKeyUpEvent(KeyUpWindowEvent const&);
+    void _handleMousePosition(Vec2 const&, KeyModifiers const&, bool);
+
+    void _hoverNode();
+    void _pressNode();
+    void _releaseNode();
+    void _focusNode(_FocusNodeVariant const&);
+    void _scrollNode(_ScrollNodeVariant const&, Vec2 const&);
+    void _scrollNodeIntoView(Node&);
+    void _dragNode();
+    void _dropNode();
+    void _clickNode();
+    void _pressText();
+    void _dragText();
+    void _releaseText();
+    void _focusNext(bool);
+    void _processKey(Key, KeyModifiers const&, std::string const&);
+    bool _inputText(Key, KeyModifiers const&, std::string const&);
+    std::optional<_InputState> _ensureInputState();
+    void _restartCaretBlink();
+    Vec2 _convertPoint(Vec2 const&) const;
+
+    void _queueEvent(std::unique_ptr<NodeEvent>);
+    void _flushEvents();
+
+    void _updateLayout();
+    void _updateNode(Node&);
+    void _updateCursor();
+    void _updateAll();
+    void _renderNode(Node&, Vec2 const&, int);
+    _RenderInfo _beginNodeRender(Node&, Vec2 const&);
+    void _endNodeRender(Node&, _RenderInfo const&);
+    void _renderNodeBackground(Node&, _RenderInfo const&);
+    void _renderNodeBorder(Node&, _RenderInfo const&);
+    void _renderNodeText(Node&, _RenderInfo const&);
+    void _renderNodeForeground(Node&, _RenderInfo const&);
+    void _renderNodeShadow(Node&, _RenderInfo const&, ImageBrush const&);
+    void _renderAll();
+
+    void _triggerMouseWheel(Vec2 const&, KeyModifiers const&, bool&);
+    void _triggerMouseDown(Mouse, KeyModifiers const&, bool&);
+    void _triggerMouseUp(Mouse, KeyModifiers const&);
+    void _triggerKeyDown(Key, KeyModifiers const&, std::string const&, bool&);
+    void _triggerKeyUp(Key, KeyModifiers const&);
+
     Vec2 _getTextLocalPosition(_InputState const&, Vec2 const&) const;
     Node* _findNodeAtPosition(Vec2 const&);
     bool _isNodeFocusable(Node const&) const;
     bool _isNodeEditable(Node const&) const;
-    void _focusNext(bool);
-    void _restartCaretBlink();
-    void _mouseWheel(Vec2 const&, KeyModifiers const&);
-    void _mouseMove(Vec2 const&, KeyModifiers const&);
-    void _mouseDown(Mouse const&, Vec2 const&, KeyModifiers const&, int);
-    void _mouseUp(Mouse const&, Vec2 const&, KeyModifiers const&);
-    void _keyDown(Key const&, KeyModifiers const&, std::string const&);
-    void _keyUp(Key const&, KeyModifiers const&);
-    bool _input(Key const&, KeyModifiers const&, std::string const&);
-
-    void _invalidateNode(Node&);
-    void _cascadeNode(Node&);
-    void _updateNode(Node&);
-    void _renderNode(Node&, Vec2 const&, int);
-    void _activateNode(Node*);
-    void _updateLayout();
-    void _updateCursor();
-    void _updateHover();
 
     friend class Node;
 };

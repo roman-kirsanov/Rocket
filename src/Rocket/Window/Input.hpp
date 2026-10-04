@@ -145,6 +145,9 @@ struct KeyModifiers {
     bool shift;
     bool meta;
     bool alt;
+
+    bool operator==(KeyModifiers const&) const;
+    bool operator!=(KeyModifiers const&) const;
 };
 
 /**

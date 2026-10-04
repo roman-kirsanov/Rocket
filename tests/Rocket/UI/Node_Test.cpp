@@ -266,11 +266,11 @@ TEST(UINode, FullDeclarativeStack) {
 struct _OrderHarness {
     Window window;
     class Document document;
+    class Node* parent = nullptr;
+    std::map<std::string, class Node*> refs; /* outlives the reconciler, whose nodes clear their refs on teardown */
     Reconciler reconciler;
     std::vector<std::string> names;
     std::vector<std::string> hidden;
-    class Node* parent = nullptr;
-    std::map<std::string, class Node*> refs;
 
     _OrderHarness()
         : window()
@@ -413,10 +413,10 @@ TEST(UINode, StableOrderDoesNotReparent) {
 struct _DocumentOrderHarness {
     Window window;
     class Document* document = nullptr;
+    std::map<std::string, class Node*> refs; /* outlives the reconciler, whose nodes clear their refs on teardown */
     Reconciler reconciler;
     std::vector<std::string> names;
     std::vector<std::string> hidden;
-    std::map<std::string, class Node*> refs;
 
     _DocumentOrderHarness() {
         window.setSize({ 640.0f, 480.0f });
@@ -481,12 +481,13 @@ TEST(UINode, RefSurvivesOrdinalRematch) {
     window.setSize({ 640.0f, 480.0f });
 
     class Document document(window);
-    auto reconciler = Reconciler();
 
-    class Node* parent = nullptr;
+    class Node* parent = nullptr; /* declared before the reconciler: its nodes clear these refs on teardown */
     class Node* first = nullptr;
     class Node* second = nullptr;
     auto renderFirst = true;
+
+    auto reconciler = Reconciler();
 
     reconciler.setUpdateFn([&] {
         Context(document, [&] {

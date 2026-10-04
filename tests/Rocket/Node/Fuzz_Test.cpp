@@ -37,6 +37,10 @@ struct Fuzzer {
     std::vector<std::unique_ptr<Node>> pool;
     std::uint32_t seed;
     int step = 0;
+    bool mouseDown = false;
+    Mouse mouseButton = Mouse::LeftButton;
+    int listenerDepth = 0;
+    Sub<NodeEvent const&> listenerSub;
 
     Fuzzer(std::uint32_t seed) : rng(seed), seed(seed) {
         window.setSize({ 640.0f, 480.0f });
@@ -112,15 +116,53 @@ struct Fuzzer {
         return { floatIn(-200.0f, 900.0f), floatIn(-200.0f, 700.0f) };
     }
 
+    /** A structural mutation — deliberately legal mid-drag, mid-edit and from inside event listeners. */
+    void randomMutation() {
+        auto const kind = intIn(0, 5);
+        if (kind == 0) { /* grow */
+            auto& node = makeNode();
+            if (node.getParent() == nullptr) randomAttachedParent()->appendChild(node);
+        } else if (kind == 1) { /* detach (stays in the pool) */
+            if (auto node = randomPoolNode()) node->removeFromParent();
+        } else if (kind == 2) { /* destroy outright */
+            if (pool.empty() == false) {
+                pool.erase(pool.begin() + intIn(0, (int)pool.size() - 1));
+            }
+        } else if (kind == 3) { /* re-attach a detached node (the cycle guard makes any target safe) */
+            if (auto node = randomPoolNode()) {
+                if (node->getParent() == nullptr && node->getDocument() != &document) {
+                    randomAttachedParent()->appendChild(*node);
+                }
+            }
+        } else if (kind == 4) { /* insert a new node at an arbitrary index (negative and past-the-end included) */
+            auto& node = makeNode();
+            if (node.getParent() == nullptr) randomAttachedParent()->insertChild(node, intIn(-1, 8));
+        } else { /* move any node to an arbitrary index of any attached parent: reparents,
+                    moves within its own parent, or no-ops when already there */
+            if (auto node = randomPoolNode()) {
+                randomAttachedParent()->insertChild(*node, intIn(-1, 8));
+            }
+        }
+    }
+
     void randomEvent() {
         auto const roll = intIn(1, 100);
 
         if (roll <= 30) {
             window.onEvent.publish(MouseMoveWindowEvent(window, randomPosition(), KeyModifiers{}));
         } else if (roll <= 40) {
-            window.onEvent.publish(MouseDownWindowEvent(window, chance(85) ? Mouse::LeftButton : Mouse::RightButton, randomPosition(), KeyModifiers{}));
+            auto const button = chance(85) ? Mouse::LeftButton : Mouse::RightButton;
+            if (mouseDown == false) {
+                mouseDown = true;
+                mouseButton = button;
+            }
+            window.onEvent.publish(MouseDownWindowEvent(window, button, randomPosition(), KeyModifiers{}));
         } else if (roll <= 50) {
-            window.onEvent.publish(MouseUpWindowEvent(window, chance(85) ? Mouse::LeftButton : Mouse::RightButton, randomPosition(), KeyModifiers{}));
+            auto const button = chance(85) ? Mouse::LeftButton : Mouse::RightButton;
+            if (mouseDown && (mouseButton == button)) {
+                mouseDown = false;
+            }
+            window.onEvent.publish(MouseUpWindowEvent(window, button, randomPosition(), KeyModifiers{}));
         } else if (roll <= 58) {
             window.onEvent.publish(MouseWheelWindowEvent(window, { floatIn(-300.0f, 300.0f), floatIn(-300.0f, 300.0f) }, KeyModifiers{}));
         } else if (roll <= 72) {
@@ -150,32 +192,7 @@ struct Fuzzer {
             window.onEvent.publish(KeyDownWindowEvent(window, key, mods, input));
             window.onEvent.publish(KeyUpWindowEvent(window, key, mods));
         } else if (roll <= 88) {
-            /* structural mutation — deliberately legal mid-drag and mid-edit */
-            auto const kind = intIn(0, 5);
-            if (kind == 0) { /* grow */
-                auto& node = makeNode();
-                if (node.getParent() == nullptr) randomAttachedParent()->appendChild(node);
-            } else if (kind == 1) { /* detach (stays in the pool) */
-                if (auto node = randomPoolNode()) node->removeFromParent();
-            } else if (kind == 2) { /* destroy outright */
-                if (pool.empty() == false) {
-                    pool.erase(pool.begin() + intIn(0, (int)pool.size() - 1));
-                }
-            } else if (kind == 3) { /* re-attach a detached node (the cycle guard makes any target safe) */
-                if (auto node = randomPoolNode()) {
-                    if (node->getParent() == nullptr && node->getDocument() != &document) {
-                        randomAttachedParent()->appendChild(*node);
-                    }
-                }
-            } else if (kind == 4) { /* insert a new node at an arbitrary index (negative and past-the-end included) */
-                auto& node = makeNode();
-                if (node.getParent() == nullptr) randomAttachedParent()->insertChild(node, intIn(-1, 8));
-            } else { /* move any node to an arbitrary index of any attached parent: reparents,
-                        moves within its own parent, or no-ops when already there */
-                if (auto node = randomPoolNode()) {
-                    randomAttachedParent()->insertChild(*node, intIn(-1, 8));
-                }
-            }
+            randomMutation();
         } else if (roll <= 92) {
             document.setScale(float(intIn(2, 6)) * 0.5f); /* 1.0 .. 3.0 */
         } else if (roll <= 96) {
@@ -232,6 +249,37 @@ struct Fuzzer {
         };
         walk(&document, walk);
 
+        /* input flags stay consistent with the tree: hover and active form
+           chains up to the root, focus-within marks exactly the focused node
+           and its ancestors, and nothing is active while no button is held */
+        auto focusedCount = 0;
+        auto checkFlags = [&](Node* node, bool& focusedInSubtree, auto&& checkFlags) -> void {
+            focusedInSubtree = node->isFocused();
+            if (node->isFocused()) focusedCount += 1;
+
+            if (node->getParent() != nullptr) {
+                ASSERT_TRUE((node->isHover() == false) || node->getParent()->isHover()) << trace("hover chain broken");
+                ASSERT_TRUE((node->isActive() == false) || node->getParent()->isActive()) << trace("active chain broken");
+            }
+
+            if (mouseDown == false) {
+                ASSERT_TRUE(node->isActive() == false) << trace("node active while no button is held");
+            }
+
+            for (auto child = node->getFirstChild(); child != nullptr; child = child->getNextSibling()) {
+                auto focusedBelow = false;
+                checkFlags(child, focusedBelow, checkFlags);
+                if (::testing::Test::HasFatalFailure()) return;
+                if (focusedBelow) focusedInSubtree = true;
+            }
+
+            ASSERT_TRUE(node->isFocusedWithin() == focusedInSubtree) << trace("focus-within does not match the focused node");
+        };
+        auto documentFocusedWithin = false;
+        checkFlags(&document, documentFocusedWithin, checkFlags);
+        if (::testing::Test::HasFatalFailure()) return;
+        ASSERT_TRUE(focusedCount <= 1) << trace("more than one node focused");
+
         /* hover/focus flags only ever mark attached nodes */
         for (auto& node : pool) {
             if (node->getDocument() != &document) {
@@ -239,6 +287,27 @@ struct Fuzzer {
                 ASSERT_TRUE(node->isFocused() == false) << trace("detached node still focused");
             }
         }
+    }
+
+    /** Lets event listeners mutate the tree, update and move focus while events are being dispatched. */
+    void enableListenerMutations() {
+        listenerSub.on(document.onEvent, [this](NodeEvent const&) {
+            if (listenerDepth >= 3) return;
+            listenerDepth += 1;
+
+            if (chance(10)) {
+                randomMutation();
+            }
+            if (chance(5)) {
+                document.update();
+            }
+            if (chance(3)) {
+                auto node = randomPoolNode();
+                document.focusNode(((node != nullptr) && (node->getDocument() == &document)) ? node : nullptr);
+            }
+
+            listenerDepth -= 1;
+        });
     }
 
     void run(int steps) {
@@ -263,17 +332,29 @@ struct Fuzzer {
 
 } /* namespace */
 
-TEST(Fuzz, RandomTreeAndEventSoak) {
-    auto seeds = std::vector<std::uint32_t>();
-
+static std::vector<std::uint32_t> _FuzzSeeds() {
     if (auto const env = std::getenv("ROCKET_FUZZ_SEED")) {
-        seeds.push_back((std::uint32_t)std::strtoul(env, nullptr, 10));
-    } else {
-        seeds = { 20260802u, 424242u, 7u }; /* fixed: deterministic in CI */
+        return { (std::uint32_t)std::strtoul(env, nullptr, 10) };
     }
+    return { 20260802u, 424242u, 7u }; /* fixed: deterministic in CI */
+}
 
-    for (auto const seed : seeds) {
+TEST(Fuzz, RandomTreeAndEventSoak) {
+    for (auto const seed : _FuzzSeeds()) {
         auto fuzzer = Fuzzer(seed);
+        fuzzer.run(800);
+        if (::testing::Test::HasFatalFailure()) return;
+    }
+}
+
+/* The same soak with event listeners that mutate the tree (including
+   destroying nodes), force updates and move focus while events are being
+   dispatched — the re-entrancy the UI layer produces when a handler's state
+   change reconciles synchronously. */
+TEST(Fuzz, ListenerMutationSoak) {
+    for (auto const seed : _FuzzSeeds()) {
+        auto fuzzer = Fuzzer(seed);
+        fuzzer.enableListenerMutations();
         fuzzer.run(800);
         if (::testing::Test::HasFatalFailure()) return;
     }

@@ -183,9 +183,9 @@ TEST(Popup, NodePropsOverride) {
 }
 
 TEST(Popup, HeaderAndFooter) {
-    auto h = _PopupHarness();
-    class Node* header = nullptr;
+    class Node* header = nullptr; /* declared before the harness: its nodes clear these refs on teardown */
     class Node* footer = nullptr;
+    auto h = _PopupHarness();
     h.props.header = [&]{ Node({ .ref = &header, .height = NodeValue(20.0f) }); };
     h.props.footer = [&]{ Node({ .ref = &footer, .height = NodeValue(20.0f) }); };
     h.render();

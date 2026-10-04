@@ -197,6 +197,11 @@ private:
 /**
  * A mouse button was pressed; position is in window content coordinates.
  *
+ * Every press is preceded by a MouseMoveWindowEvent to the same position,
+ * so hover state is current before the press is handled. Platform backends
+ * must uphold this, synthesizing the move when the platform does not
+ * deliver one.
+ *
  * Note: the middle button is not currently published by the macOS backend
  * (the middle button is unhandled).
  */

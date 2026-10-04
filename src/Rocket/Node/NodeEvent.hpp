@@ -50,7 +50,9 @@ public:
      * Marks the event as default-prevented. For a KeyDownNodeEvent this
      * keeps the document from applying the key to the focused editable
      * text and from moving focus on Tab, so a listener can filter or
-     * limit what is typed.
+     * limit what is typed. For a MouseDownNodeEvent it keeps the press
+     * from moving focus and from placing the caret or selecting text. For
+     * a MouseWheelNodeEvent it keeps the wheel from scrolling.
      *
      * Does not affect propagation; use stopPropagation() for that.
      */
@@ -90,8 +92,9 @@ private:
     KeyModifiers _modifiers;
 };
 
-/** Fired when the mouse cursor moves over the target node. Not fired while a
-    mouse button is held; during a left press that hit a node only the drag
+/** Fired when the mouse cursor moves over the target node, and once on a node
+    that comes under a still cursor because the layout changed. Not fired while
+    a mouse button is held; during a left press that hit a node only the drag
     events fire, and during any other hold nothing fires. */
 class MouseMoveNodeEvent : public NodeEvent {
 public:
@@ -115,7 +118,8 @@ private:
 };
 
 /** Fired for every node that joins the hover path — the newly hit node and any
-    of its ancestors not already hovered. Not fired while a mouse button is held. */
+    of its ancestors not already hovered — whether the cursor moved or the
+    layout moved nodes under it. Not fired while a mouse button is held. */
 class MouseEnterNodeEvent : public NodeEvent {
 public:
     /**
@@ -138,7 +142,8 @@ private:
 };
 
 /** Fired for every node that leaves the hover path — previously hovered nodes
-    no longer on the hit node's ancestor chain. Not fired while a mouse button is held. */
+    no longer on the hit node's ancestor chain, including when the cursor
+    leaves the window. Not fired while a mouse button is held. */
 class MouseExitNodeEvent : public NodeEvent {
 public:
     /**
@@ -160,7 +165,9 @@ private:
     KeyModifiers _modifiers;
 };
 
-/** Fired when the mouse wheel is scrolled over the target node. */
+/** Fired when the mouse wheel is scrolled over the target node: the hovered
+    node, or the Document when there is none. preventDefault() cancels the
+    scroll. */
 class MouseWheelNodeEvent : public NodeEvent {
 public:
     /**
@@ -182,8 +189,11 @@ private:
     KeyModifiers _modifiers;
 };
 
-/** Fired when the left or right mouse button is pressed (other buttons are
-    ignored). Targets the hovered node, or the Document when there is none. */
+/** Fired when a mouse button is pressed. Targets the hovered node, or the
+    Document when there is none. As on the web, only the left button marks the
+    pressed node chain active, and the left and right buttons move focus to it;
+    preventDefault() keeps focus where it is and stops the press from placing
+    the caret or selecting text. */
 class MouseDownNodeEvent : public NodeEvent {
 public:
     /**
@@ -215,11 +225,9 @@ private:
     int _clickCount;
 };
 
-/** Fired when the left or right mouse button is released. The left-button
-    release targets the node that received the press, even if the cursor has
-    since left it, and is not fired when nothing received the press. The
-    right-button release targets the hovered node and is not fired when
-    there is none. */
+/** Fired when the pressed mouse button is released. Always targets the node
+    that received the press — the Document when the press hit nothing — even
+    if the cursor has since left it, like pointer capture on the web. */
 class MouseUpNodeEvent : public NodeEvent {
 public:
     /**
@@ -391,6 +399,28 @@ public:
     std::string const& getContent() const;
 private:
     std::string _content;
+};
+
+/** Fired on the node that gains keyboard focus. */
+class FocusNodeEvent : public NodeEvent {
+public:
+    /**
+     * A focus event.
+     *
+     * @param node The node that is the target of the event.
+     */
+    FocusNodeEvent(Node& node);
+};
+
+/** Fired on the node that loses keyboard focus. */
+class BlurNodeEvent : public NodeEvent {
+public:
+    /**
+     * A blur event.
+     *
+     * @param node The node that is the target of the event.
+     */
+    BlurNodeEvent(Node& node);
 };
 
 } /* namespace Rocket */

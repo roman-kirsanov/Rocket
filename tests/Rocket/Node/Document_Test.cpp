@@ -2485,3 +2485,945 @@ TEST(Document, ScrollNodeIntoView) {
     document.update();
     ASSERT_TRUE(c.getComputedBorderRect().y == 0.0f);
 }
+
+/* ------------------------- interaction state machine -------------------------
+   Pins the input state machine's guarantees: listeners may update or change
+   the tree while events are dispatched, the pointer can leave the window,
+   nodes can be removed mid-gesture, and layout can move nodes under a still
+   pointer. */
+
+namespace {
+
+std::string _EventNameWithFocus(NodeEvent const& event) {
+    if (event.is<FocusNodeEvent>()) return "focus";
+    if (event.is<BlurNodeEvent>())  return "blur";
+    return eventName(event);
+}
+
+} /* namespace */
+
+/* An enter or exit listener that forces an update sees consistent state, and
+   every hover event still fires exactly once. */
+TEST(Document, UpdateFromHoverListenerIsSafe) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    document.setDirection(NodeDirection::Horizontal);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    document.appendChild(a);
+
+    auto b = Node();
+    b.setWidth(100.0f);
+    b.setHeight(50.0f);
+    document.appendChild(b);
+
+    document.update();
+
+    auto aEvents = std::vector<std::string>();
+    auto bEvents = std::vector<std::string>();
+    auto toggle = false;
+
+    auto const listen = [&](Node& node, std::vector<std::string>& events) {
+        return Sub<NodeEvent const&>(node.onEvent, [&](NodeEvent const& event) {
+            if (&event.getNode() != &node) return;
+            events.push_back(eventName(event));
+            if (event.is<MouseEnterNodeEvent>() || event.is<MouseExitNodeEvent>()) {
+                toggle = !toggle;
+                node.setHeight(toggle ? 51.0f : 50.0f);
+                document.update();
+            }
+        });
+    };
+
+    auto aSub = listen(a, aEvents);
+    auto bSub = listen(b, bEvents);
+
+    _ScriptMove(window, { 50.0f, 25.0f });
+    _ScriptMove(window, { 150.0f, 25.0f });
+    _ScriptMove(window, { 500.0f, 400.0f });
+
+    ASSERT_TRUE(aEvents == std::vector<std::string>({ "enter", "move", "exit" }));
+    ASSERT_TRUE(bEvents == std::vector<std::string>({ "enter", "move", "exit" }));
+    ASSERT_TRUE(a.isHover() == false);
+    ASSERT_TRUE(b.isHover() == false);
+    ASSERT_TRUE(document.isHover() == false);
+}
+
+/* An enter listener that hides its node and updates moves the pointer off it:
+   events already queued for the node (its move) still arrive in order, then
+   its exit, and nothing after it. */
+TEST(Document, EnterListenerHidingNodeEndsHover) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    document.appendChild(a);
+
+    document.update();
+
+    auto events = std::vector<std::string>();
+    auto sub = Sub<NodeEvent const&>(a.onEvent, [&](NodeEvent const& event) {
+        if (&event.getNode() != &a) return;
+        events.push_back(eventName(event));
+        if (event.is<MouseEnterNodeEvent>()) {
+            a.setVisible(false);
+            document.update();
+        }
+    });
+
+    _ScriptMove(window, { 50.0f, 25.0f });
+
+    ASSERT_TRUE(events == std::vector<std::string>({ "enter", "move", "exit" }));
+    ASSERT_TRUE(a.isHover() == false);
+}
+
+/* A child's exit listener that destroys the child's parent: the parent is
+   dropped from the pending exits instead of being dispatched to. */
+TEST(Document, ExitListenerDestroyingAncestorIsSafe) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto parent = std::make_unique<Node>();
+    parent->setWidth(200.0f);
+    parent->setHeight(100.0f);
+    document.appendChild(*parent);
+
+    auto child = Node();
+    child.setWidth(100.0f);
+    child.setHeight(50.0f);
+    parent->appendChild(child);
+
+    document.update();
+
+    _ScriptMove(window, { 50.0f, 25.0f });
+    ASSERT_TRUE(child.isHover() == true);
+
+    auto sub = Sub<NodeEvent const&>(child.onEvent, [&](NodeEvent const& event) {
+        if (event.is<MouseExitNodeEvent>() && (&event.getNode() == &child)) {
+            parent->removeChild(child);
+            parent = nullptr;
+        }
+    });
+
+    _ScriptMove(window, { 500.0f, 400.0f });
+
+    ASSERT_TRUE(parent == nullptr);
+    ASSERT_TRUE(child.isHover() == false);
+    ASSERT_TRUE(document.isHover() == false);
+}
+
+/* A begin-drag listener that removes the dragged node ends the drag: no
+   further drag events reach it and nothing dereferences the removed node. */
+TEST(Document, BeginDragListenerRemovingNodeIsSafe) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    document.appendChild(a);
+
+    document.update();
+
+    auto events = std::vector<std::string>();
+    auto sub = Sub<NodeEvent const&>(a.onEvent, [&](NodeEvent const& event) {
+        if (&event.getNode() != &a) return;
+        events.push_back(eventName(event));
+        if (event.is<MouseBeginDragNodeEvent>()) {
+            a.removeFromParent();
+        }
+    });
+
+    _ScriptDrag(window, { 10.0f, 10.0f }, { 60.0f, 10.0f });
+    _ScriptMove(window, { 80.0f, 10.0f });
+
+    ASSERT_TRUE(events == std::vector<std::string>({ "enter", "move", "down", "begindrag" }));
+    ASSERT_TRUE(document.isActive() == false);
+}
+
+/* A click listener that removes the clicked node leaves no stale state. */
+TEST(Document, ClickListenerRemovingNodeIsSafe) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    a.setTabIndex(1);
+    document.appendChild(a);
+
+    document.update();
+
+    auto sub = Sub<NodeEvent const&>(a.onEvent, [&](NodeEvent const& event) {
+        if (event.is<MouseClickNodeEvent>()) {
+            a.removeFromParent();
+            document.update();
+        }
+    });
+
+    _ScriptClick(window, { 50.0f, 25.0f });
+
+    ASSERT_TRUE(a.getParent() == nullptr);
+    ASSERT_TRUE(a.isHover() == false);
+    ASSERT_TRUE(a.isActive() == false);
+    ASSERT_TRUE(a.isFocused() == false);
+    ASSERT_TRUE(document.isActive() == false);
+    ASSERT_TRUE(document.isFocusedWithin() == false);
+
+    _ScriptClick(window, { 50.0f, 25.0f });
+    ASSERT_TRUE(document.isActive() == false);
+}
+
+/* A blur listener that moves focus elsewhere wins: the last focus event names
+   the node that ends up focused. */
+TEST(Document, BlurListenerRedirectingFocusWins) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    document.setDirection(NodeDirection::Horizontal);
+
+    auto a = Node();
+    auto b = Node();
+    auto c = Node();
+    for (auto node : { &a, &b, &c }) {
+        node->setWidth(100.0f);
+        node->setHeight(50.0f);
+        node->setTabIndex(1);
+        document.appendChild(*node);
+    }
+
+    document.update();
+    _ScriptClick(window, { 50.0f, 25.0f });
+    ASSERT_TRUE(a.isFocused() == true);
+
+    auto lastFocus = static_cast<Node*>(nullptr);
+    auto documentSub = Sub<NodeEvent const&>(document.onEvent, [&](NodeEvent const& event) {
+        if (event.is<FocusNodeEvent>()) lastFocus = &event.getNode();
+    });
+    auto aSub = Sub<NodeEvent const&>(a.onEvent, [&](NodeEvent const& event) {
+        if (event.is<BlurNodeEvent>() && (&event.getNode() == &a)) document.focusNode(&c);
+    });
+
+    _ScriptClick(window, { 150.0f, 25.0f });
+
+    ASSERT_TRUE(c.isFocused() == true);
+    ASSERT_TRUE(b.isFocused() == false);
+    ASSERT_TRUE(lastFocus == &c);
+}
+
+/* Leaving the window clears hover and resets the cursor; entering restores
+   both. */
+TEST(Document, MouseExitAndEnterWindow) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    a.setCursor(Cursor::Pointer);
+    document.appendChild(a);
+
+    document.update();
+
+    auto events = std::vector<std::string>();
+    auto sub = Sub<NodeEvent const&>(a.onEvent, [&](NodeEvent const& event) {
+        if (&event.getNode() == &a) events.push_back(eventName(event));
+    });
+
+    _ScriptMove(window, { 50.0f, 25.0f });
+    ASSERT_TRUE(a.isHover() == true);
+    ASSERT_TRUE(window.getCursor() == Cursor::Pointer);
+
+    window.onEvent.publish(MouseExitWindowEvent(window, { 50.0f, 25.0f }, KeyModifiers{}));
+    ASSERT_TRUE(a.isHover() == false);
+    ASSERT_TRUE(document.isHover() == false);
+    ASSERT_TRUE(window.getCursor() == Cursor::Default);
+
+    /* A relayout while outside does not bring hover back. */
+    a.setHeight(60.0f);
+    document.update();
+    ASSERT_TRUE(a.isHover() == false);
+
+    window.onEvent.publish(MouseEnterWindowEvent(window, { 50.0f, 25.0f }, KeyModifiers{}));
+    ASSERT_TRUE(a.isHover() == true);
+    ASSERT_TRUE(window.getCursor() == Cursor::Pointer);
+
+    ASSERT_TRUE(events == std::vector<std::string>({ "enter", "move", "exit", "enter", "move" }));
+}
+
+/* Nothing is hovered until the first mouse event, even a node at the origin. */
+TEST(Document, NothingHoveredBeforeFirstMouseEvent) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    document.appendChild(a);
+
+    document.update();
+    ASSERT_TRUE(a.isHover() == false);
+    ASSERT_TRUE(document.isHover() == false);
+
+    a.setWidth(120.0f);
+    document.update();
+    ASSERT_TRUE(a.isHover() == false);
+}
+
+/* Leaving the window mid-drag keeps the drag; the release outside ends it and
+   then clears hover. */
+TEST(Document, MouseExitWindowDuringDrag) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    document.appendChild(a);
+
+    document.update();
+
+    auto events = std::vector<std::string>();
+    auto sub = Sub<NodeEvent const&>(a.onEvent, [&](NodeEvent const& event) {
+        if (&event.getNode() == &a) events.push_back(eventName(event));
+    });
+
+    _ScriptMove(window, { 10.0f, 10.0f });
+    events.clear();
+
+    window.onEvent.publish(MouseDownWindowEvent(window, Mouse::LeftButton, { 10.0f, 10.0f }, KeyModifiers{}));
+    _ScriptMove(window, { 50.0f, 10.0f });
+    window.onEvent.publish(MouseExitWindowEvent(window, { 700.0f, 10.0f }, KeyModifiers{}));
+    ASSERT_TRUE(a.isActive() == true);
+
+    window.onEvent.publish(MouseUpWindowEvent(window, Mouse::LeftButton, { 700.0f, 10.0f }, KeyModifiers{}));
+
+    ASSERT_TRUE(events == std::vector<std::string>({ "down", "begindrag", "drag", "drag", "up", "enddrag", "exit" }));
+    ASSERT_TRUE(a.isActive() == false);
+    ASSERT_TRUE(a.isHover() == false);
+}
+
+/* Removing the hovered node clears its hover; ancestors still under the
+   pointer stay hovered and get no exit. */
+TEST(Document, RemovingHoveredNodeKeepsAncestorHover) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto parent = Node();
+    parent.setWidth(200.0f);
+    parent.setHeight(100.0f);
+    document.appendChild(parent);
+
+    auto child = Node();
+    child.setWidth(100.0f);
+    child.setHeight(50.0f);
+    parent.appendChild(child);
+
+    document.update();
+
+    _ScriptMove(window, { 50.0f, 25.0f });
+    ASSERT_TRUE(child.isHover() == true);
+
+    auto parentEvents = std::vector<std::string>();
+    auto sub = Sub<NodeEvent const&>(parent.onEvent, [&](NodeEvent const& event) {
+        if (&event.getNode() == &parent) parentEvents.push_back(eventName(event));
+    });
+
+    parent.removeChild(child);
+    document.update();
+
+    ASSERT_TRUE(child.isHover() == false);
+    ASSERT_TRUE(parent.isHover() == true);
+    ASSERT_TRUE(document.isHover() == true);
+    ASSERT_TRUE(parentEvents == std::vector<std::string>({ "move" }));
+
+    /* The parent is now the press target. */
+    window.onEvent.publish(MouseDownWindowEvent(window, Mouse::LeftButton, { 50.0f, 25.0f }, KeyModifiers{}));
+    ASSERT_TRUE(parent.isActive() == true);
+    window.onEvent.publish(MouseUpWindowEvent(window, Mouse::LeftButton, { 50.0f, 25.0f }, KeyModifiers{}));
+}
+
+/* Removing the pressed node mid-press: the release goes to the document, no
+   click fires, and the active chain is cleared. */
+TEST(Document, RemovingActiveNodeMidPress) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    document.appendChild(a);
+
+    document.update();
+
+    auto upTargets = std::vector<Node*>();
+    auto clicks = 0;
+    auto sub = Sub<NodeEvent const&>(document.onEvent, [&](NodeEvent const& event) {
+        if (event.is<MouseUpNodeEvent>()) upTargets.push_back(&event.getNode());
+        if (event.is<MouseClickNodeEvent>()) clicks += 1;
+    });
+
+    _ScriptMove(window, { 50.0f, 25.0f });
+    window.onEvent.publish(MouseDownWindowEvent(window, Mouse::LeftButton, { 50.0f, 25.0f }, KeyModifiers{}));
+    ASSERT_TRUE(a.isActive() == true);
+
+    document.removeChild(a);
+    ASSERT_TRUE(a.isActive() == false);
+
+    window.onEvent.publish(MouseUpWindowEvent(window, Mouse::LeftButton, { 50.0f, 25.0f }, KeyModifiers{}));
+
+    ASSERT_TRUE(upTargets == std::vector<Node*>({ &document }));
+    ASSERT_TRUE(clicks == 0);
+    ASSERT_TRUE(document.isActive() == false);
+}
+
+/* Removing the dragged node mid-drag stops drag events without ending the
+   gesture on a removed node. */
+TEST(Document, RemovingDragNodeMidDrag) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    document.appendChild(a);
+
+    document.update();
+
+    auto events = std::vector<std::string>();
+    auto sub = Sub<NodeEvent const&>(a.onEvent, [&](NodeEvent const& event) {
+        if (&event.getNode() == &a) events.push_back(eventName(event));
+    });
+
+    _ScriptMove(window, { 10.0f, 10.0f });
+    window.onEvent.publish(MouseDownWindowEvent(window, Mouse::LeftButton, { 10.0f, 10.0f }, KeyModifiers{}));
+    _ScriptMove(window, { 50.0f, 10.0f });
+    events.clear();
+
+    document.removeChild(a);
+
+    _ScriptMove(window, { 70.0f, 10.0f });
+    window.onEvent.publish(MouseUpWindowEvent(window, Mouse::LeftButton, { 70.0f, 10.0f }, KeyModifiers{}));
+
+    ASSERT_TRUE(events.empty());
+    ASSERT_TRUE(document.isActive() == false);
+}
+
+/* Removing the focused node clears focus-within on its former ancestors. */
+TEST(Document, RemovingFocusedNodeClearsFocusWithin) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto parent = Node();
+    parent.setWidth(200.0f);
+    parent.setHeight(100.0f);
+    document.appendChild(parent);
+
+    auto focusable = Node();
+    focusable.setWidth(100.0f);
+    focusable.setHeight(50.0f);
+    focusable.setTabIndex(1);
+    parent.appendChild(focusable);
+
+    document.update();
+
+    _ScriptClick(window, { 50.0f, 25.0f });
+    ASSERT_TRUE(focusable.isFocused() == true);
+    ASSERT_TRUE(parent.isFocusedWithin() == true);
+
+    parent.removeChild(focusable);
+
+    ASSERT_TRUE(focusable.isFocused() == false);
+    ASSERT_TRUE(focusable.isFocusedWithin() == false);
+    ASSERT_TRUE(parent.isFocusedWithin() == false);
+    ASSERT_TRUE(document.isFocusedWithin() == false);
+
+    /* Re-attaching does not bring focus back; focusing again works. */
+    parent.appendChild(focusable);
+    document.update();
+    ASSERT_TRUE(focusable.isFocused() == false);
+
+    document.focusNode(&focusable);
+    ASSERT_TRUE(focusable.isFocused() == true);
+    ASSERT_TRUE(parent.isFocusedWithin() == true);
+}
+
+/* Every press gets exactly one release on the same target: the document when
+   the press hit nothing, otherwise the pressed node wherever the release
+   lands, for either button. */
+TEST(Document, MouseUpPairsWithMouseDownTarget) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    document.setDirection(NodeDirection::Horizontal);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    document.appendChild(a);
+
+    auto b = Node();
+    b.setWidth(100.0f);
+    b.setHeight(50.0f);
+    document.appendChild(b);
+
+    document.update();
+
+    auto downTargets = std::vector<Node*>();
+    auto upTargets = std::vector<Node*>();
+    auto sub = Sub<NodeEvent const&>(document.onEvent, [&](NodeEvent const& event) {
+        if (event.is<MouseDownNodeEvent>()) downTargets.push_back(&event.getNode());
+        if (event.is<MouseUpNodeEvent>()) upTargets.push_back(&event.getNode());
+    });
+
+    /* Press on empty space, release over a. */
+    _ScriptMove(window, { 500.0f, 400.0f });
+    window.onEvent.publish(MouseDownWindowEvent(window, Mouse::LeftButton, { 500.0f, 400.0f }, KeyModifiers{}));
+    window.onEvent.publish(MouseUpWindowEvent(window, Mouse::LeftButton, { 50.0f, 25.0f }, KeyModifiers{}));
+
+    /* Press on a, release over b. */
+    _ScriptMove(window, { 50.0f, 25.0f });
+    window.onEvent.publish(MouseDownWindowEvent(window, Mouse::LeftButton, { 50.0f, 25.0f }, KeyModifiers{}));
+    window.onEvent.publish(MouseUpWindowEvent(window, Mouse::LeftButton, { 150.0f, 25.0f }, KeyModifiers{}));
+
+    /* Same with the right button. */
+    _ScriptMove(window, { 50.0f, 25.0f });
+    window.onEvent.publish(MouseDownWindowEvent(window, Mouse::RightButton, { 50.0f, 25.0f }, KeyModifiers{}));
+    window.onEvent.publish(MouseUpWindowEvent(window, Mouse::RightButton, { 150.0f, 25.0f }, KeyModifiers{}));
+
+    ASSERT_TRUE(downTargets == std::vector<Node*>({ &document, &a, &a }));
+    ASSERT_TRUE(upTargets == std::vector<Node*>({ &document, &a, &a }));
+}
+
+/* A layout change that moves a different node under a still pointer moves
+   hover to it: exit on the old node, enter and exactly one move on the new. */
+TEST(Document, LayoutChangeUnderStillPointerRetargetsHover) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    document.setDirection(NodeDirection::Horizontal);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    document.appendChild(a);
+
+    auto b = Node();
+    b.setWidth(100.0f);
+    b.setHeight(50.0f);
+    document.appendChild(b);
+
+    document.update();
+
+    _ScriptMove(window, { 150.0f, 25.0f });
+    ASSERT_TRUE(b.isHover() == true);
+
+    auto aEvents = std::vector<std::string>();
+    auto bEvents = std::vector<std::string>();
+    auto aSub = Sub<NodeEvent const&>(a.onEvent, [&](NodeEvent const& event) {
+        if (&event.getNode() == &a) aEvents.push_back(eventName(event));
+    });
+    auto bSub = Sub<NodeEvent const&>(b.onEvent, [&](NodeEvent const& event) {
+        if (&event.getNode() == &b) bEvents.push_back(eventName(event));
+    });
+
+    auto spacer = Node();
+    spacer.setWidth(100.0f);
+    spacer.setHeight(50.0f);
+    document.insertChild(spacer, 0);
+    document.update();
+
+    ASSERT_TRUE(a.isHover() == true);
+    ASSERT_TRUE(b.isHover() == false);
+    ASSERT_TRUE(aEvents == std::vector<std::string>({ "enter", "move" }));
+    ASSERT_TRUE(bEvents == std::vector<std::string>({ "exit" }));
+}
+
+/* A relayout that leaves the same node under a still pointer dispatches
+   nothing. */
+TEST(Document, RelayoutWithoutHoverChangeDispatchesNothing) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    document.appendChild(a);
+
+    document.update();
+    _ScriptMove(window, { 50.0f, 25.0f });
+
+    auto events = std::vector<std::string>();
+    auto sub = Sub<NodeEvent const&>(a.onEvent, [&](NodeEvent const& event) {
+        events.push_back(eventName(event));
+    });
+
+    a.setHeight(60.0f);
+    document.update();
+    a.setWidth(120.0f);
+    document.update();
+
+    ASSERT_TRUE(events.empty());
+    ASSERT_TRUE(a.isHover() == true);
+}
+
+/* The cursor follows hover changes caused by layout and cursor changes on
+   the hovered node, without any mouse movement. */
+TEST(Document, CursorFollowsLayoutAndCursorChanges) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    document.setDirection(NodeDirection::Horizontal);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    a.setCursor(Cursor::Pointer);
+    document.appendChild(a);
+
+    auto b = Node();
+    b.setWidth(100.0f);
+    b.setHeight(50.0f);
+    document.appendChild(b);
+
+    document.update();
+    _ScriptMove(window, { 150.0f, 25.0f });
+    ASSERT_TRUE(window.getCursor() == Cursor::Default);
+
+    auto spacer = Node();
+    spacer.setWidth(100.0f);
+    spacer.setHeight(50.0f);
+    document.insertChild(spacer, 0);
+    document.update();
+    ASSERT_TRUE(window.getCursor() == Cursor::Pointer);
+
+    a.setCursor(Cursor::Text);
+    document.update();
+    ASSERT_TRUE(window.getCursor() == Cursor::Text);
+}
+
+/* A press dispatches the mouse down before the blur and focus it causes. */
+TEST(Document, PressDispatchesDownBeforeFocusChange) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    document.setDirection(NodeDirection::Horizontal);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    a.setTabIndex(1);
+    document.appendChild(a);
+
+    auto b = Node();
+    b.setWidth(100.0f);
+    b.setHeight(50.0f);
+    b.setTabIndex(1);
+    document.appendChild(b);
+
+    document.update();
+    _ScriptClick(window, { 50.0f, 25.0f });
+
+    auto events = std::vector<std::string>();
+    auto sub = Sub<NodeEvent const&>(document.onEvent, [&](NodeEvent const& event) {
+        auto const name = _EventNameWithFocus(event);
+        auto const target = (&event.getNode() == &a) ? "a" : (&event.getNode() == &b) ? "b" : "?";
+        if ((name != "enter") && (name != "exit") && (name != "move")) {
+            events.push_back(name + ":" + target);
+        }
+    });
+
+    _ScriptClick(window, { 150.0f, 25.0f });
+
+    ASSERT_TRUE(events == std::vector<std::string>({ "down:b", "blur:a", "focus:b", "up:b", "click:b" }));
+}
+
+/* Focus walks up to the nearest focusable ancestor, for clicks and for
+   focusNode() alike; with none, focus is cleared. */
+TEST(Document, FocusWalksUpToFocusableAncestor) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    document.setDirection(NodeDirection::Horizontal);
+
+    auto focusable = Node();
+    focusable.setWidth(200.0f);
+    focusable.setHeight(100.0f);
+    focusable.setTabIndex(1);
+    document.appendChild(focusable);
+
+    auto child = Node();
+    child.setWidth(100.0f);
+    child.setHeight(50.0f);
+    focusable.appendChild(child);
+
+    auto plain = Node();
+    plain.setWidth(100.0f);
+    plain.setHeight(50.0f);
+    document.appendChild(plain);
+
+    document.update();
+
+    _ScriptClick(window, { 50.0f, 25.0f });
+    ASSERT_TRUE(focusable.isFocused() == true);
+    ASSERT_TRUE(child.isFocused() == false);
+
+    document.focusNode(nullptr);
+    ASSERT_TRUE(focusable.isFocused() == false);
+
+    document.focusNode(&child);
+    ASSERT_TRUE(focusable.isFocused() == true);
+    ASSERT_TRUE(child.isFocused() == false);
+
+    document.focusNode(&plain);
+    ASSERT_TRUE(focusable.isFocused() == false);
+    ASSERT_TRUE(plain.isFocused() == false);
+    ASSERT_TRUE(document.isFocusedWithin() == false);
+}
+
+/* Resize and DPI change window events relayout without an explicit update(). */
+TEST(Document, ResizeAndDPIChangeRelayout) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto a = Node();
+    a.setWidth(NodeValue(PercentValue{ 50.0f }));
+    a.setHeight(50.0f);
+    document.appendChild(a);
+
+    document.update();
+    ASSERT_TRUE(a.getComputedBorderRect().width == 320.0f);
+
+    window.setSize({ 800.0f, 480.0f });
+    window.onEvent.publish(ResizeWindowEvent(window));
+    ASSERT_TRUE(a.getComputedBorderRect().width == 400.0f);
+
+    window.setSize({ 1000.0f, 480.0f });
+    window.onEvent.publish(DPIChangeWindowEvent(window));
+    ASSERT_TRUE(a.getComputedBorderRect().width == 500.0f);
+}
+
+/* Wheel deltas arrive in window points and map into document units, both for
+   scrolling and for the MouseWheelNodeEvent payload. */
+TEST(Document, WheelDeltaMapsUnderDocumentScale) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    document.setScale(window.getScale() * 2.0f);
+
+    auto container = Node();
+    container.setWidth(100.0f);
+    container.setHeight(100.0f);
+    container.setOverflowY(NodeOverflow::Scroll);
+    document.appendChild(container);
+
+    auto tall = Node();
+    tall.setWidth(100.0f);
+    tall.setHeight(300.0f);
+    container.appendChild(tall);
+
+    document.update();
+
+    auto const factor = (window.getScale() / document.getScale());
+    auto wheel = Vec2();
+    auto sub = Sub<NodeEvent const&>(container.onEvent, [&](NodeEvent const& event) {
+        if (auto e = event.as<MouseWheelNodeEvent>()) wheel = e->getWheel();
+    });
+
+    _ScriptMove(window, (Vec2(10.0f, 10.0f) / factor));
+    window.onEvent.publish(MouseWheelWindowEvent(window, { 0.0f, -30.0f }, KeyModifiers{}));
+    document.update();
+
+    ASSERT_TRUE(wheel == Vec2(0.0f, (-30.0f * factor)));
+    ASSERT_TRUE(tall.getComputedBorderRect().y == (-30.0f * factor));
+}
+
+/* Like the web's :active, only the primary button activates; other buttons
+   still pair their down and up on the pressed node. */
+TEST(Document, OnlyLeftButtonActivates) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    document.appendChild(a);
+
+    document.update();
+    _ScriptMove(window, { 50.0f, 25.0f });
+
+    auto upTargets = std::vector<Node*>();
+    auto sub = Sub<NodeEvent const&>(document.onEvent, [&](NodeEvent const& event) {
+        if (event.is<MouseUpNodeEvent>()) upTargets.push_back(&event.getNode());
+    });
+
+    for (auto const mouse : { Mouse::RightButton, Mouse::MiddleButton }) {
+        window.onEvent.publish(MouseDownWindowEvent(window, mouse, { 50.0f, 25.0f }, KeyModifiers{}));
+        ASSERT_TRUE(a.isActive() == false);
+        ASSERT_TRUE(document.isActive() == false);
+        window.onEvent.publish(MouseUpWindowEvent(window, mouse, { 50.0f, 25.0f }, KeyModifiers{}));
+    }
+
+    window.onEvent.publish(MouseDownWindowEvent(window, Mouse::LeftButton, { 50.0f, 25.0f }, KeyModifiers{}));
+    ASSERT_TRUE(a.isActive() == true);
+    window.onEvent.publish(MouseUpWindowEvent(window, Mouse::LeftButton, { 50.0f, 25.0f }, KeyModifiers{}));
+
+    ASSERT_TRUE(upTargets == std::vector<Node*>({ &a, &a, &a }));
+}
+
+/* Like the web, the left and right buttons move focus; other buttons do not. */
+TEST(Document, LeftAndRightButtonsFocus) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    document.setDirection(NodeDirection::Horizontal);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    a.setTabIndex(1);
+    document.appendChild(a);
+
+    auto b = Node();
+    b.setWidth(100.0f);
+    b.setHeight(50.0f);
+    b.setTabIndex(1);
+    document.appendChild(b);
+
+    document.update();
+
+    auto press = [&](Mouse mouse, Vec2 const& position) {
+        _ScriptMove(window, position);
+        window.onEvent.publish(MouseDownWindowEvent(window, mouse, position, KeyModifiers{}));
+        window.onEvent.publish(MouseUpWindowEvent(window, mouse, position, KeyModifiers{}));
+    };
+
+    press(Mouse::RightButton, { 50.0f, 25.0f });
+    ASSERT_TRUE(a.isFocused() == true);
+
+    press(Mouse::MiddleButton, { 150.0f, 25.0f });
+    ASSERT_TRUE(a.isFocused() == true);
+    ASSERT_TRUE(b.isFocused() == false);
+
+    press(Mouse::LeftButton, { 150.0f, 25.0f });
+    ASSERT_TRUE(b.isFocused() == true);
+}
+
+/* Like the web, focusing is the default action of a press: preventDefault()
+   on the mouse down keeps focus where it was, while the press, release and
+   click still arrive. */
+TEST(Document, PreventDefaultOnMouseDownKeepsFocus) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    document.setDirection(NodeDirection::Horizontal);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    a.setTabIndex(1);
+    document.appendChild(a);
+
+    auto b = Node();
+    b.setWidth(100.0f);
+    b.setHeight(50.0f);
+    b.setTabIndex(1);
+    document.appendChild(b);
+
+    document.update();
+    _ScriptClick(window, { 50.0f, 25.0f });
+    ASSERT_TRUE(a.isFocused() == true);
+
+    auto events = std::vector<std::string>();
+    auto sub = Sub<NodeEvent const&>(b.onEvent, [&](NodeEvent const& event) {
+        if (&event.getNode() != &b) return;
+        events.push_back(_EventNameWithFocus(event));
+        if (event.is<MouseDownNodeEvent>()) event.preventDefault();
+    });
+
+    _ScriptClick(window, { 150.0f, 25.0f });
+
+    ASSERT_TRUE(a.isFocused() == true);
+    ASSERT_TRUE(b.isFocused() == false);
+    ASSERT_TRUE(events == std::vector<std::string>({ "enter", "move", "down", "up", "click" }));
+}
+
+/* Like the web, preventDefault() on a wheel event cancels the scroll it would
+   cause. */
+TEST(Document, PreventDefaultOnWheelCancelsScroll) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto container = Node();
+    container.setWidth(100.0f);
+    container.setHeight(100.0f);
+    container.setOverflowY(NodeOverflow::Scroll);
+    document.appendChild(container);
+
+    auto tall = Node();
+    tall.setWidth(100.0f);
+    tall.setHeight(300.0f);
+    container.appendChild(tall);
+
+    document.update();
+    _ScriptMove(window, { 10.0f, 10.0f });
+
+    auto prevent = true;
+    auto sub = Sub<NodeEvent const&>(container.onEvent, [&](NodeEvent const& event) {
+        if (event.is<MouseWheelNodeEvent>() && prevent) event.preventDefault();
+    });
+
+    window.onEvent.publish(MouseWheelWindowEvent(window, { 0.0f, -30.0f }, KeyModifiers{}));
+    document.update();
+    ASSERT_TRUE(tall.getComputedBorderRect().y == 0.0f);
+
+    prevent = false;
+    window.onEvent.publish(MouseWheelWindowEvent(window, { 0.0f, -30.0f }, KeyModifiers{}));
+    document.update();
+    ASSERT_TRUE(tall.getComputedBorderRect().y == -30.0f);
+}
