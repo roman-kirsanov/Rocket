@@ -254,77 +254,6 @@ void Document::needsRender() {
     _needsRender = true;
 }
 
-Vec2 Document::_getTextLocalPosition(_InputState const& inputState, Vec2 const& position) const {
-    PROFILE
-
-    return ((position - (inputState.textNode._computedBorderRectInDocument.origin + inputState.textNode._computedTextRect.origin)) * _scale)
-        + Vec2{ inputState.textNode._textScrollX, 0.0f };
-}
-
-Node* Document::_findNodeAtPosition(Vec2 const& position) {
-    PROFILE
-
-    Node* found = nullptr;
-
-    auto find = [&](Node* node, auto&& find) {
-        if (node->_mouseEvents == false) {
-            return;
-        }
-
-        if (node->_visible == false) {
-            return;
-        }
-
-        if (node->_skip == true) {
-            return;
-        }
-
-        auto const clipped = (
-            (node->_clipped == true) &&
-            (node->_parent != nullptr)
-        );
-
-        if (
-            (clipped == false || position.inRect(node->_parent->_computedClipRectInDocument)) &&
-            position.inRect(node->_computedBorderRectInDocument)
-        ) {
-            if (found != nullptr) {
-                if (found->_computedZIndex <= node->_computedZIndex) {
-                    found = node;
-                }
-            } else {
-                found = node;
-            }
-        }
-
-        for (auto child = node->_firstChild; child != nullptr; child = child->_nextSibling) {
-            find(child, find);
-        }
-    };
-
-    for (auto child = _firstChild; child != nullptr; child = child->_nextSibling) {
-        find(child, find);
-    }
-
-    return found;
-}
-
-bool Document::_isNodeFocusable(Node const& node) const {
-    PROFILE
-
-    return (node._display.value_or(NodeDisplay::Box) == NodeDisplay::Box)
-        && (node._tabIndex > 0);
-}
-
-bool Document::_isNodeEditable(Node const& node) const {
-    PROFILE
-
-    return (node._display.value_or(NodeDisplay::Box) == NodeDisplay::Box)
-        && (node._contentEditable == true)
-        && (node._firstChild != nullptr)
-        && (node._firstChild->_display == NodeDisplay::Text);
-}
-
 void Document::_handleEvent(WindowEvent const& event) {
     PROFILE
 
@@ -1090,32 +1019,6 @@ void Document::_applyText(_InputState const& inputState, std::string const& cont
     }
 }
 
-Node* Document::_getTextInputNode() const {
-    PROFILE
-
-    /* the focused node takes text when it has key events and is an editable or draws its own text (an input area) */
-    if (
-        (_focusState.focusedNode == nullptr) ||
-        (_focusState.focusedNode->_keyEvents == false) ||
-        (
-            (_isNodeEditable(*_focusState.focusedNode) == false) &&
-            (_focusState.focusedNode->_inputArea.has_value() == false)
-        )
-    ) {
-        return nullptr;
-    }
-
-    return _focusState.focusedNode;
-}
-
-bool Document::_isSingleLineText(Node const& node) const {
-    PROFILE
-
-    return (node._textObject != nullptr)
-        && (node._textObject->getMultiLine() == false)
-        && (node._parent != nullptr);
-}
-
 void Document::_syncInputArea() {
     PROFILE
 
@@ -1151,6 +1054,43 @@ void Document::_syncInputArea() {
         _windowInputArea = area;
         _window.setInputArea(area);
     }
+}
+
+float Document::_getTextVisibleWidth(Node const& node) const {
+    PROFILE
+
+    /* the slot a box gives its single-line text, in pixels: the box's border
+       rect minus its border and, mirrored, the text's left inset */
+    auto const& parent = *node._parent;
+    auto const inset = (node._computedBorderRectInDocument.x - parent._computedBorderRectInDocument.x - parent._computedBorderEdge.left);
+    auto const visibleMaxX = (parent._computedBorderRectInDocument.getMaxX() - parent._computedBorderEdge.right - inset);
+
+    return std::max(1.0f, ((visibleMaxX - node._computedBorderRectInDocument.x) * _scale));
+}
+
+Vec2 Document::_getTextLocalPosition(_InputState const& inputState, Vec2 const& position) const {
+    PROFILE
+
+    return ((position - (inputState.textNode._computedBorderRectInDocument.origin + inputState.textNode._computedTextRect.origin)) * _scale)
+        + Vec2{ inputState.textNode._textScrollX, 0.0f };
+}
+
+Node* Document::_getTextInputNode() const {
+    PROFILE
+
+    /* the focused node takes text when it has key events and is an editable or draws its own text (an input area) */
+    if (
+        (_focusState.focusedNode == nullptr) ||
+        (_focusState.focusedNode->_keyEvents == false) ||
+        (
+            (_isNodeEditable(*_focusState.focusedNode) == false) &&
+            (_focusState.focusedNode->_inputArea.has_value() == false)
+        )
+    ) {
+        return nullptr;
+    }
+
+    return _focusState.focusedNode;
 }
 
 std::optional<Document::_InputState> Document::_ensureInputState() {
@@ -1432,7 +1372,7 @@ void Document::_updateText(Node& node) {
     if (node._textObject == nullptr) return;
 
     auto const text = node._textObject.get();
-    auto const singleLine = _isSingleLineText(node);
+    auto const singleLine = _isNodeSingleLineText(node);
 
     /* layout measured the text against its constraints; settle it at its final size */
     text->setMaxWidth(std::nullopt);
@@ -1452,7 +1392,7 @@ void Document::_updateTextScroll(Node& node) {
     auto const text = node._textObject.get();
     if (text == nullptr) return;
 
-    auto const singleLine = _isSingleLineText(node);
+    auto const singleLine = _isNodeSingleLineText(node);
     auto scrollX = node._textScrollX;
 
     /* A single-line surface never wraps. While it is being edited it scrolls
@@ -1478,18 +1418,6 @@ void Document::_updateTextScroll(Node& node) {
         node._textScrollX = scrollX;
         _needsRender = true;
     }
-}
-
-float Document::_getTextVisibleWidth(Node const& node) const {
-    PROFILE
-
-    /* the slot a box gives its single-line text, in pixels: the box's border
-       rect minus its border and, mirrored, the text's left inset */
-    auto const& parent = *node._parent;
-    auto const inset = (node._computedBorderRectInDocument.x - parent._computedBorderRectInDocument.x - parent._computedBorderEdge.left);
-    auto const visibleMaxX = (parent._computedBorderRectInDocument.getMaxX() - parent._computedBorderEdge.right - inset);
-
-    return std::max(1.0f, ((visibleMaxX - node._computedBorderRectInDocument.x) * _scale));
 }
 
 void Document::_updateCursor() {
@@ -1707,14 +1635,6 @@ void Document::_renderNodeBorder(Node& node, _RenderInfo const& info) {
     }
 }
 
-void Document::_renderNodeForeground(Node& node, _RenderInfo const& info) {
-    PROFILE
-
-    if (node._foreground) {
-        _painter.paint(info.borderShape, *node._foreground, { .scissor = info.scissorRect });
-    }
-}
-
 void Document::_renderNodeText(Node& node, _RenderInfo const& info) {
     PROFILE
 
@@ -1724,7 +1644,7 @@ void Document::_renderNodeText(Node& node, _RenderInfo const& info) {
     auto const text = node._textObject.get();
 
     auto const editable = text->getEditable();
-    auto const singleLine = _isSingleLineText(node);
+    auto const singleLine = _isNodeSingleLineText(node);
 
     auto const textOrigin = (info.borderShape.rect.origin + (node._computedTextRect.origin * _scale));
     auto textClipRect = info.clipRect;
@@ -1780,6 +1700,14 @@ void Document::_renderNodePaint(Node& node, _RenderInfo const& info) {
 
     if (node.onPaint.hasSubs()) {
         node.onPaint.publish(_painter, info.borderShape.rect);
+    }
+}
+
+void Document::_renderNodeForeground(Node& node, _RenderInfo const& info) {
+    PROFILE
+
+    if (node._foreground) {
+        _painter.paint(info.borderShape, *node._foreground, { .scissor = info.scissorRect });
     }
 }
 
@@ -2019,6 +1947,78 @@ void Document::_triggerKeyUp(Scancode scancode, std::string const& keycode, KeyM
     targetNode->dispatchEvent(
         KeyUpNodeEvent(*targetNode, scancode, keycode, modifiers)
     );
+}
+
+Node* Document::_findNodeAtPosition(Vec2 const& position) {
+    PROFILE
+
+    Node* found = nullptr;
+
+    auto find = [&](Node* node, auto&& find) {
+        if (node->_mouseEvents == false) {
+            return;
+        }
+
+        if (node->_visible == false) {
+            return;
+        }
+
+        if (node->_skip == true) {
+            return;
+        }
+
+        auto const clipped = (
+            (node->_clipped == true) &&
+            (node->_parent != nullptr)
+        );
+
+        if (
+            (clipped == false || position.inRect(node->_parent->_computedClipRectInDocument)) &&
+            position.inRect(node->_computedBorderRectInDocument)
+        ) {
+            if (found != nullptr) {
+                if (found->_computedZIndex <= node->_computedZIndex) {
+                    found = node;
+                }
+            } else {
+                found = node;
+            }
+        }
+
+        for (auto child = node->_firstChild; child != nullptr; child = child->_nextSibling) {
+            find(child, find);
+        }
+    };
+
+    for (auto child = _firstChild; child != nullptr; child = child->_nextSibling) {
+        find(child, find);
+    }
+
+    return found;
+}
+
+bool Document::_isNodeFocusable(Node const& node) const {
+    PROFILE
+
+    return (node._display.value_or(NodeDisplay::Box) == NodeDisplay::Box)
+        && (node._tabIndex > 0);
+}
+
+bool Document::_isNodeEditable(Node const& node) const {
+    PROFILE
+
+    return (node._display.value_or(NodeDisplay::Box) == NodeDisplay::Box)
+        && (node._contentEditable == true)
+        && (node._firstChild != nullptr)
+        && (node._firstChild->_display == NodeDisplay::Text);
+}
+
+bool Document::_isNodeSingleLineText(Node const& node) const {
+    PROFILE
+
+    return (node._textObject != nullptr)
+        && (node._textObject->getMultiLine() == false)
+        && (node._parent != nullptr);
 }
 
 } /* namespace Rocket */

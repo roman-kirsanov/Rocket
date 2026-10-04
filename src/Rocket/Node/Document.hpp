@@ -298,8 +298,9 @@ private:
     void _insertText(std::string const&);
     void _applyText(_InputState const&, std::string const&);
     void _syncInputArea();
+    float _getTextVisibleWidth(Node const&) const;
+    Vec2 _getTextLocalPosition(_InputState const&, Vec2 const&) const;
     Node* _getTextInputNode() const;
-    bool _isSingleLineText(Node const&) const;
     std::optional<_InputState> _ensureInputState();
     void _restartCaretBlink();
     Vec2 _convertPoint(Vec2 const&) const;
@@ -309,7 +310,6 @@ private:
     void _updateNode(Node&);
     void _updateText(Node&);
     void _updateTextScroll(Node&);
-    float _getTextVisibleWidth(Node const&) const;
     void _updateCursor();
     void _updateAll();
     void _renderNode(Node&, Vec2 const&, int);
@@ -328,10 +328,10 @@ private:
     void _triggerKeyDown(Scancode, std::string const&, KeyModifiers const&, bool, bool&);
     void _triggerBeforeInput(std::string const&, bool&);
     void _triggerKeyUp(Scancode, std::string const&, KeyModifiers const&);
-    Vec2 _getTextLocalPosition(_InputState const&, Vec2 const&) const;
     Node* _findNodeAtPosition(Vec2 const&);
     bool _isNodeFocusable(Node const&) const;
     bool _isNodeEditable(Node const&) const;
+    bool _isNodeSingleLineText(Node const&) const;
 
     friend class Node;
 };
