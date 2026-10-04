@@ -8,6 +8,7 @@
 #include <cmath>
 #include <string>
 #include <vector>
+#include <stdexcept>
 #include <gmock/gmock.h>
 #include <Rocket/Node/Document.hpp>
 #include <Rocket/Paint/Color.hpp>
@@ -66,7 +67,7 @@ void Painter::endPaint() {
     if (_sink != nullptr) _sink->endPaint();
 }
 
-void Painter::paint(Shape const& shape, Brush const& brush, PaintOptions const& options) {
+void Painter::paint(Shape const& shape, Brush const& brush, PaintOptions const& options) const {
     if (_sink != nullptr) _sink->paint(shape, brush, options);
 }
 
@@ -3426,4 +3427,267 @@ TEST(Document, PreventDefaultOnWheelCancelsScroll) {
     window.onEvent.publish(MouseWheelWindowEvent(window, { 0.0f, -30.0f }, KeyModifiers{}));
     document.update();
     ASSERT_TRUE(tall.getComputedBorderRect().y == -30.0f);
+}
+
+/* needsUpdate() makes the next update() run a layout pass although nothing in
+   the tree was invalidated; a layout pass always schedules a repaint. */
+TEST(Document, NeedsUpdateForcesLayoutPass) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto box = Node();
+    box.setWidth(100.0f);
+    box.setHeight(50.0f);
+    document.appendChild(box);
+
+    auto sink = NiceMock<PainterSink>();
+    auto scope = SinkScope(sink);
+
+    auto paintPasses = 0;
+    ON_CALL(sink, beginPaint(_)).WillByDefault(Invoke([&paintPasses](PaintTarget const&) {
+        paintPasses += 1;
+    }));
+
+    document.update();
+    document.render();
+    auto const passes = paintPasses;
+
+    document.update();
+    document.render();
+    ASSERT_TRUE(paintPasses == passes);
+
+    document.needsUpdate();
+    document.update();
+    document.render();
+    ASSERT_TRUE(paintPasses == (passes + 1));
+}
+
+/* needsRender() makes the next render() repaint although nothing changed. */
+TEST(Document, NeedsRenderForcesRepaint) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto box = Node();
+    box.setWidth(100.0f);
+    box.setHeight(50.0f);
+    document.appendChild(box);
+
+    auto sink = NiceMock<PainterSink>();
+    auto scope = SinkScope(sink);
+
+    auto paintPasses = 0;
+    ON_CALL(sink, beginPaint(_)).WillByDefault(Invoke([&paintPasses](PaintTarget const&) {
+        paintPasses += 1;
+    }));
+
+    document.update();
+    document.render();
+    auto const passes = paintPasses;
+
+    document.render();
+    ASSERT_TRUE(paintPasses == passes);
+
+    document.needsRender();
+    document.render();
+    ASSERT_TRUE(paintPasses == (passes + 1));
+}
+
+/* onPaint fires once per render on the node it is subscribed to, with the
+   node's border box in paint-target pixels, after the node's background and
+   before its children. */
+TEST(Document, RenderPublishesOnPaintBeforeChildren) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto box = Node();
+    box.setWidth(100.0f);
+    box.setHeight(50.0f);
+    box.setBackground(ColorBrush{ .color = COLOR_WHITE });
+    document.appendChild(box);
+
+    auto child = Node();
+    child.setWidth(20.0f);
+    child.setHeight(20.0f);
+    child.setBackground(ColorBrush{ .color = COLOR_BLACK });
+    box.appendChild(child);
+
+    document.update();
+
+    auto sink = NiceMock<PainterSink>();
+    auto scope = SinkScope(sink);
+
+    auto order = std::vector<std::string>();
+    ON_CALL(sink, paint(_, _, _)).WillByDefault(Invoke([&order](Shape const&, Brush const& brush, PaintOptions const&) {
+        if (auto color = brush.as<ColorBrush>()) {
+            order.push_back((color->color == COLOR_WHITE) ? "background" : (color->color == COLOR_BLACK) ? "child" : "custom");
+        }
+    }));
+
+    auto paints = 0;
+    auto paintRect = Vec4();
+    auto sub = Sub<Painter const&, Vec4 const&>(box.onPaint, [&](Painter const& painter, Vec4 const& rect) {
+        paints += 1;
+        paintRect = rect;
+        painter.paint(QuadShape{ .rect = rect }, ColorBrush{ .color = Vec4{ 1.0f, 0.0f, 0.0f, 1.0f } });
+    });
+
+    document.render();
+
+    ASSERT_TRUE(paints == 1);
+    ASSERT_TRUE(paintRect == (box.getComputedBorderRect() * document.getScale()));
+    ASSERT_TRUE(order == std::vector<std::string>({ "background", "custom", "child" }));
+}
+
+/* Changing the tree from a paint listener throws and leaves the tree as it
+   was; once rendering is over the tree can change again, also after a
+   listener threw out of render(). */
+TEST(Document, ChangingTreeWhileRenderingThrows) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto box = Node();
+    box.setWidth(100.0f);
+    box.setHeight(50.0f);
+    document.appendChild(box);
+
+    auto extra = Node();
+    auto throws = 0;
+    auto fail = false;
+
+    auto sub = Sub<Painter const&, Vec4 const&>(box.onPaint, [&](Painter const&, Vec4 const&) {
+        try { document.appendChild(extra); } catch (std::runtime_error const&) { throws += 1; }
+        try { document.removeChild(box); } catch (std::runtime_error const&) { throws += 1; }
+        if (fail) throw std::logic_error("listener failure");
+    });
+
+    document.update();
+    document.render();
+
+    ASSERT_TRUE(throws == 2);
+    ASSERT_TRUE(extra.getParent() == nullptr);
+    ASSERT_TRUE(box.getParent() == &document);
+
+    fail = true;
+    document.needsRender();
+    ASSERT_THROW(document.render(), std::logic_error);
+
+    document.appendChild(extra);
+    ASSERT_TRUE(extra.getParent() == &document);
+}
+
+/* The onPaint rect follows scrolling: it is the node's border box after its
+   scroll containers are scrolled, in paint-target pixels. Inside an opacity
+   layer it is relative to the layer image the listener is painting into. */
+TEST(Document, OnPaintRectFollowsScrollAndLayers) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto container = Node();
+    container.setMarginLeft(50.0f);
+    container.setWidth(100.0f);
+    container.setHeight(100.0f);
+    container.setOverflowY(NodeOverflow::Scroll);
+    container.setDirection(NodeDirection::Vertical);
+    document.appendChild(container);
+
+    auto above = Node();
+    above.setWidth(100.0f);
+    above.setHeight(40.0f);
+    container.appendChild(above);
+
+    auto target = Node();
+    target.setWidth(100.0f);
+    target.setHeight(40.0f);
+    container.appendChild(target);
+
+    auto filler = Node();
+    filler.setWidth(100.0f);
+    filler.setHeight(300.0f);
+    container.appendChild(filler);
+
+    auto paintRect = Vec4();
+    auto sub = Sub<Painter const&, Vec4 const&>(target.onPaint, [&](Painter const&, Vec4 const& rect) {
+        paintRect = rect;
+    });
+
+    auto const scale = document.getScale();
+
+    document.update();
+    document.render();
+    ASSERT_TRUE(paintRect == (Vec4{ 50.0f, 40.0f, 100.0f, 40.0f } * scale));
+
+    document.scrollNode(target, { 0.0f, -30.0f });
+    document.update();
+    document.render();
+    ASSERT_TRUE(paintRect == (Vec4{ 50.0f, 10.0f, 100.0f, 40.0f } * scale));
+
+    /* With the container in a layer the listener paints into the layer image,
+       whose origin is the container's border box. */
+    container.setOpacity(0.5f);
+    document.update();
+    document.render();
+    ASSERT_TRUE(paintRect == (Vec4{ 0.0f, 10.0f, 100.0f, 40.0f } * scale));
+}
+
+/* convertPointFromDocument() maps a document point into a node's local
+   coordinates (origin at its border box, scroll applied), so a listener on
+   any node of the path can localize a bubbling mouse event;
+   convertPointToDocument() is its inverse. */
+TEST(Document, ConvertPointBetweenDocumentAndNode) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto container = Node();
+    container.setMarginLeft(50.0f);
+    container.setMarginTop(20.0f);
+    container.setWidth(100.0f);
+    container.setHeight(100.0f);
+    container.setOverflowY(NodeOverflow::Scroll);
+    container.setDirection(NodeDirection::Vertical);
+    document.appendChild(container);
+
+    auto above = Node();
+    above.setWidth(100.0f);
+    above.setHeight(40.0f);
+    container.appendChild(above);
+
+    auto target = Node();
+    target.setWidth(100.0f);
+    target.setHeight(300.0f);
+    container.appendChild(target);
+
+    document.update();
+    document.scrollNode(target, { 0.0f, -30.0f });
+    document.update();
+
+    /* target's border box starts at (50, 20 + 40 - 30) in the document. */
+    ASSERT_TRUE(target.convertPointFromDocument({ 60.0f, 35.0f }) == Vec2(10.0f, 5.0f));
+    ASSERT_TRUE(target.convertPointToDocument({ 10.0f, 5.0f }) == Vec2(60.0f, 35.0f));
+    ASSERT_TRUE(container.convertPointFromDocument({ 60.0f, 35.0f }) == Vec2(10.0f, 15.0f));
+
+    auto containerLocal = Vec2();
+    auto targetLocal = Vec2();
+    auto sub = Sub<NodeEvent const&>(container.onEvent, [&](NodeEvent const& event) {
+        if (auto e = event.as<MouseMoveNodeEvent>()) {
+            containerLocal = container.convertPointFromDocument(e->getPosition());
+            targetLocal = e->getNode().convertPointFromDocument(e->getPosition());
+        }
+    });
+
+    _ScriptMove(window, { 60.0f, 35.0f });
+
+    ASSERT_TRUE(containerLocal == Vec2(10.0f, 15.0f));
+    ASSERT_TRUE(targetLocal == Vec2(10.0f, 5.0f));
 }

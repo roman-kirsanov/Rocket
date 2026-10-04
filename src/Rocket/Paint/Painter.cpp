@@ -52,7 +52,7 @@ void Painter::endPaint() {
     __endPaint();
 }
 
-void Painter::paint(Shape const& shape, Brush const& brush, PaintOptions const& options) {
+void Painter::paint(Shape const& shape, Brush const& brush, PaintOptions const& options) const {
     PROFILE
 
     auto const colorBrush = brush.as<ColorBrush>();

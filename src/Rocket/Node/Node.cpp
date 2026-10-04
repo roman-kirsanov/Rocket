@@ -10,6 +10,7 @@
 #include <cassert>
 #include <algorithm>
 #include <limits>
+#include <stdexcept>
 #include <yoga/Yoga.h>
 #include <Rocket/Base/Profile.hpp>
 #include <Rocket/Paint/Text.hpp>
@@ -310,6 +311,18 @@ float Node::getComputedLineHeight() const {
     PROFILE
 
     return _computedLineHeight;
+}
+
+Vec2 Node::convertPointFromDocument(Vec2 const& point) const {
+    PROFILE
+
+    return (point - _computedBorderRectInDocument.origin);
+}
+
+Vec2 Node::convertPointToDocument(Vec2 const& point) const {
+    PROFILE
+
+    return (point + _computedBorderRectInDocument.origin);
 }
 
 std::optional<NodeDisplay> const& Node::getDisplay() const {
@@ -1602,6 +1615,13 @@ void Node::appendChild(Node& child) {
 void Node::insertChild(Node& child, std::int64_t index) {
     PROFILE
 
+    if (
+        _document != nullptr &&
+        _document->_isRendering == true
+    ) {
+        throw std::runtime_error("Node::insertChild: the tree cannot change while the document is rendering");
+    }
+
     if (&child == this) {
         return;
     }
@@ -1676,6 +1696,13 @@ void Node::insertChild(Node& child, std::int64_t index) {
 
 void Node::removeChild(Node& child) {
     PROFILE
+
+    if (
+        _document != nullptr &&
+        _document->_isRendering == true
+    ) {
+        throw std::runtime_error("Node::removeChild: the tree cannot change while the document is rendering");
+    }
 
     if (child._parent != this) {
         return;

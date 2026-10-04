@@ -832,7 +832,7 @@ void Painter::__endPaint() {
     }
 }
 
-void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const& options, Vec4 const& bounds) {
+void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const& options, Vec4 const& bounds) const {
     PROFILE
 
     if (_impl->renderPassStack.empty()) {

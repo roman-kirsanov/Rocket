@@ -136,6 +136,14 @@ public:
      *  before the bubbling phase begins. */
     Pub<NodeEvent const&> onCaptureEvent;
 
+    /** Paint channel. Fires during Document::render() after the node's
+     *  background, border and text and before its children, with the active
+     *  painter and the node's border box in paint-target pixels (already
+     *  scaled and offset for scrolling and layers). Fires on this node only and
+     *  never bubbles. Shapes are given in the same pixels; clipping is up to
+     *  the listener, and changing the tree from a listener throws. */
+    Pub<class Painter const&, Vec4 const&> onPaint;
+
     Node();
     Node(Node &&) = delete;
     Node(Node const&) = delete;
@@ -192,6 +200,23 @@ public:
 
     /** Returns the most recently computed line height, inherited from ancestors, as a unitless multiplier of the font size. */
     float getComputedLineHeight() const;
+
+    /**
+     * Converts a point from document coordinates to this node's local
+     * coordinates, whose origin is the top-left of the node's border box
+     * (ancestor scroll applied). Uses the layout of the last update.
+     *
+     * @param point A point in document coordinates, e.g. a mouse event position.
+     */
+    Vec2 convertPointFromDocument(Vec2 const& point) const;
+
+    /**
+     * Converts a point from this node's local coordinates to document
+     * coordinates; the inverse of convertPointFromDocument().
+     *
+     * @param point A point in this node's local coordinates.
+     */
+    Vec2 convertPointToDocument(Vec2 const& point) const;
 
     /** Returns the display mode if set, otherwise std::nullopt. */
     std::optional<NodeDisplay> const& getDisplay() const;

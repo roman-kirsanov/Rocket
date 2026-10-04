@@ -58,6 +58,7 @@ Document::Document(Window& window)
     , _scale(1.0f)
     , _isUpdating(false)
     , _isFlushing(false)
+    , _isRendering(false)
     , _needsUpdate(true)
     , _needsRender(true)
     , _needsCursor(true)
@@ -136,6 +137,18 @@ void Document::render() {
     PROFILE
 
     _renderAll();
+}
+
+void Document::needsUpdate() {
+    PROFILE
+
+    _needsUpdate = true;
+}
+
+void Document::needsRender() {
+    PROFILE
+
+    _needsRender = true;
 }
 
 Vec2 Document::_getTextLocalPosition(_InputState const& inputState, Vec2 const& position) const {
@@ -1335,6 +1348,7 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
     _renderNodeBackground(node, info);
     _renderNodeBorder(node, info);
     _renderNodeText(node, info);
+    _renderNodePaint(node, info);
 
     for (auto child = node._firstChild; child != nullptr; child = child->_nextSibling) {
         _renderNode(*child, info.offset, zIndex);
@@ -1577,6 +1591,14 @@ void Document::_renderNodeText(Node& node, _RenderInfo const& info) {
     }
 }
 
+void Document::_renderNodePaint(Node& node, _RenderInfo const& info) {
+    PROFILE
+
+    if (node.onPaint.hasSubs()) {
+        node.onPaint.publish(_painter, info.borderShape.rect);
+    }
+}
+
 void Document::_renderNodeShadow(Node& node, _RenderInfo const& info, ImageBrush const& brush) {
     PROFILE
 
@@ -1700,11 +1722,20 @@ void Document::_renderAll() {
         }
     );
 
-    for (auto& [ zIndex, nodes ] : _renderList) {
-        for (auto& node : nodes) {
-            _renderNode(*node, { 0.0f, 0.0f }, zIndex);
+    _isRendering = true;
+
+    try {
+        for (auto& [ zIndex, nodes ] : _renderList) {
+            for (auto& node : nodes) {
+                _renderNode(*node, { 0.0f, 0.0f }, zIndex);
+            }
         }
+    } catch (...) {
+        _isRendering = false;
+        throw;
     }
+
+    _isRendering = false;
 
     _painter.endPaint();
 }

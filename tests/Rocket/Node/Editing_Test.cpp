@@ -47,7 +47,7 @@ Painter::~Painter() {}
 void Painter::beginPaint(PaintTarget const&) {}
 void Painter::endPaint() {}
 
-void Painter::paint(Shape const& shape, Brush const& brush, PaintOptions const& options) {
+void Painter::paint(Shape const& shape, Brush const& brush, PaintOptions const& options) const {
     if (_record != nullptr) {
         auto record = _PaintRecord{};
         if (auto quad = shape.as<QuadShape>()) record.rect = quad->rect;

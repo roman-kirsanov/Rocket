@@ -155,6 +155,20 @@ public:
      */
     void render();
 
+    /**
+     * Marks the document for update: the next update() recomputes layout
+     * and hover even if nothing in the tree was invalidated. Use it when
+     * layout depends on state the document cannot observe.
+     */
+    void needsUpdate();
+
+    /**
+     * Marks the document for render: the next render() repaints even if
+     * nothing changed. Use it when what a node paints depends on state the
+     * document cannot observe.
+     */
+    void needsRender();
+
     virtual ~Document();
 private:
     struct _InputState {
@@ -240,6 +254,7 @@ private:
     float _scale;
     bool _isUpdating;
     bool _isFlushing;
+    bool _isRendering;
     bool _needsUpdate;
     bool _needsRender;
     bool _needsCursor;
@@ -293,6 +308,7 @@ private:
     void _renderNodeBackground(Node&, _RenderInfo const&);
     void _renderNodeBorder(Node&, _RenderInfo const&);
     void _renderNodeText(Node&, _RenderInfo const&);
+    void _renderNodePaint(Node&, _RenderInfo const&);
     void _renderNodeForeground(Node&, _RenderInfo const&);
     void _renderNodeShadow(Node&, _RenderInfo const&, ImageBrush const&);
     void _renderAll();

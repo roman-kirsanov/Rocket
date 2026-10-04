@@ -118,11 +118,14 @@ public:
      * shadow of the shape's silhouette instead of the shape itself; callers
      * that want both must paint the shape in a separate call.
      *
+     * Const because drawing never changes which target or pass is active, so
+     * code handed a Painter const& can paint but cannot begin or end passes.
+     *
      * @param shape   The shape to draw.
      * @param brush   The brush to fill the shape with.
      * @param options Transform, scissor, opacity, and filter overrides (default none).
      */
-    void paint(Shape const& shape, Brush const& brush, PaintOptions const& options = {});
+    void paint(Shape const& shape, Brush const& brush, PaintOptions const& options = {}) const;
 private:
     struct _Painter;
     _Painter* _impl;
@@ -131,7 +134,7 @@ private:
     void __done();
     void __beginPaint(PaintTarget const&);
     void __endPaint();
-    void __paint(Shape const&, Brush const&, PaintOptions const&, Vec4 const& bounds);
+    void __paint(Shape const&, Brush const&, PaintOptions const&, Vec4 const& bounds) const;
 };
 
 } /* namespace Rocket */
