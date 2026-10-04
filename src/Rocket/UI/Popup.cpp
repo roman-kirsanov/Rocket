@@ -16,6 +16,10 @@ namespace Rocket {
 /* Per-instance component state. */
 struct _PopupState {
     std::function<void()> onClose;
+    /* Correction, in points, that keeps an adjusted popup inside the document. */
+    Vec2 shift;
+    /* False until an adjusted popup has a layout to measure; it stays hidden until then. */
+    bool measured = false;
 };
 
 /* Palette (fuego's popup.scss and colors.scss). */
@@ -27,6 +31,24 @@ static auto const _borderWidth = 1.0f;
 static auto const _borderRadius = 5.0f;
 static auto const _shadowOffset = Vec2{ 0.0f, 4.0f };
 static auto const _shadowBlur = 6.0f;
+/* Gap kept between an adjusted popup and the document's edge. */
+static auto const _edgeGap = 4.0f;
+
+/* Returns how far to move a span of `size` starting at `start` so that it
+   fits in [0, limit]; the start edge wins when the span is longer than that. */
+static float _GetShift(float start, float size, float limit) {
+    auto shift = 0.0f;
+
+    if (start + size > limit - _edgeGap) {
+        shift = (limit - _edgeGap) - (start + size);
+    }
+
+    if (start + shift < _edgeGap) {
+        shift = _edgeGap - start;
+    }
+
+    return shift;
+}
 
 void Popup(PopupProps const& props, std::function<void()> const& children) {
     PROFILE
@@ -57,6 +79,26 @@ void Popup(PopupProps const& props, std::function<void()> const& children) {
             }
         }
     });
+
+    auto const adjust = props.adjust.value_or(false);
+
+    /* The rect comes from the last update and includes the shift applied
+       then, so the unshifted position is the rect minus that shift. */
+    if (adjust == true && nodeRef != nullptr && nodeRef->getComputedBorderRect().width > 0.0f) {
+        auto const& rect = nodeRef->getComputedBorderRect();
+        auto const size = document.getSize();
+
+        state.shift = Vec2{
+            _GetShift(rect.x - state.shift.x, rect.width, size.width),
+            _GetShift(rect.y - state.shift.y, rect.height, size.height)
+        };
+        state.measured = true;
+    } else if (adjust == false) {
+        state.shift = Vec2{ 0.0f, 0.0f };
+        state.measured = false;
+    }
+
+    auto const shifted = (state.shift.x != 0.0f || state.shift.y != 0.0f);
 
     auto const anchorOrigin = props.anchorOrigin.value_or(PopupOrigin{ PopupVerticalOrigin::Top, PopupHorizontalOrigin::Left });
     auto const transformOrigin = props.transformOrigin.value_or(PopupOrigin{ PopupVerticalOrigin::Top, PopupHorizontalOrigin::Left });
@@ -100,10 +142,28 @@ void Popup(PopupProps const& props, std::function<void()> const& children) {
     node.borderWidth = node.borderWidth.value_or(_borderWidth);
     node.borderRadius = node.borderRadius.value_or(_borderRadius);
     node.zIndex = node.zIndex.value_or(POPUP_ZINDEX);
-    node.transform = node.transform.value_or(NodeTransform{
-        .translateX = PercentValue{ translateX },
-        .translateY = PercentValue{ translateY }
-    });
+
+    if (shifted == true) {
+        /* A translation is either a percentage or points, so once there is
+           a shift to add, the origin's percentage is resolved against the
+           measured size. */
+        auto const& rect = nodeRef->getComputedBorderRect();
+
+        node.transform = node.transform.value_or(NodeTransform{
+            .translateX = (translateX / 100.0f) * rect.width + state.shift.x,
+            .translateY = (translateY / 100.0f) * rect.height + state.shift.y
+        });
+    } else {
+        node.transform = node.transform.value_or(NodeTransform{
+            .translateX = PercentValue{ translateX },
+            .translateY = PercentValue{ translateY }
+        });
+    }
+
+    if (adjust == true && state.measured == false) {
+        node.visible = false;
+    }
+
     node.cursor = node.cursor.value_or(Cursor::Default);
     node.background = node.background.value_or(ColorBrush{ _white });
     node.border = node.border.value_or(ColorBrush{ _gray300 });

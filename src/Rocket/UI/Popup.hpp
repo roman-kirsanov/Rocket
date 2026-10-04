@@ -42,6 +42,8 @@ struct PopupProps {
     std::optional<PopupOrigin> anchorOrigin;
     /** Which point of the popup aligns to the anchor (default top-left). */
     std::optional<PopupOrigin> transformOrigin;
+    /** When true, a popup that would run past an edge of the document is shifted back inside it; it stays hidden for the render before it can be measured (default false). */
+    std::optional<bool> adjust;
     /** Invoked when a press occurs outside the popup's parent. */
     std::function<void()> onClose;
     /** Renders content pinned above the scrolling content. */
@@ -58,7 +60,10 @@ struct PopupProps {
  * Renders an absolutely-positioned overlay with a themed background, anchored
  * relative to its parent: an optional header, a scrolling content area
  * holding `children`, and an optional footer. Calls `onClose` when a press
- * lands outside its parent.
+ * lands outside its parent. With `adjust`, the popup is kept inside the
+ * document: it is measured from the layout of the last update and shifted
+ * by however far it runs past an edge, so the correction follows the
+ * anchor one render behind.
  *
  * @param props    Desired popup configuration for this render.
  * @param children Rendered inside the popup; default no-op.

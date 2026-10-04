@@ -205,3 +205,86 @@ TEST(Popup, HeaderAndFooter) {
     ASSERT_FLOAT_EQ(footer->getComputedBorderRect().height, 20.0f);
     ASSERT_FLOAT_EQ(h.area->getComputedBorderRect().height, 60.0f - 2.0f - 40.0f);
 }
+
+TEST(Popup, AdjustOffLeavesThePopupWhereItIs) {
+    auto h = _PopupHarness();
+    h.props.nodeProps.left = NodeValue(600.0f);
+    h.render();
+    h.render();
+
+    /* Past the right edge and left there: nothing is measured or hidden. */
+    ASSERT_TRUE(h.popup->getVisible().value_or(true) == true);
+    ASSERT_TRUE(h.popup->getTransform()->translateX == NodeValue(PercentValue{ 0.0f }));
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().x, 650.0f);
+}
+
+TEST(Popup, AdjustKeepsThePopupInsideTheDocument) {
+    auto h = _PopupHarness();
+    auto const size = h.document.getSize();
+    h.props.adjust = true;
+
+    /* A popup that fits is hidden for the render before it is measured,
+       then shown where it would have been anyway. */
+    h.render();
+    ASSERT_TRUE(h.popup->getVisible() == false);
+    h.render();
+    ASSERT_TRUE(h.popup->getVisible().value_or(true) == true);
+    ASSERT_TRUE(h.popup->getTransform()->translateX == NodeValue(PercentValue{ 0.0f }));
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().x, 50.0f);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().y, 50.0f);
+
+    /* Past the right and bottom edges: shifted back, a gap short of them,
+       and it stays there on later renders. */
+    h.props.nodeProps.left = NodeValue(600.0f);
+    h.props.nodeProps.top = NodeValue(440.0f);
+    h.render();
+    h.render();
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxX(), size.width - 4.0f);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxY(), size.height - 4.0f);
+    h.render();
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxX(), size.width - 4.0f);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxY(), size.height - 4.0f);
+
+    /* Past the left and top edges. */
+    h.props.nodeProps.left = NodeValue(-200.0f);
+    h.props.nodeProps.top = NodeValue(-200.0f);
+    h.render();
+    h.render();
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().x, 4.0f);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().y, 4.0f);
+
+    /* Back in range, the shift goes and the origin is a percentage again. */
+    h.props.nodeProps.left = std::nullopt;
+    h.props.nodeProps.top = std::nullopt;
+    h.render();
+    h.render();
+    ASSERT_TRUE(h.popup->getTransform()->translateX == NodeValue(PercentValue{ 0.0f }));
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().x, 50.0f);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().y, 50.0f);
+}
+
+TEST(Popup, AdjustKeepsTheTransformOrigin) {
+    auto h = _PopupHarness();
+    auto const size = h.document.getSize();
+    h.props.adjust = true;
+
+    /* Hanging up and to the left of a point near the top-left corner: the
+       origin's percentage and the shift are applied together. */
+    h.props.transformOrigin = PopupOrigin{ PopupVerticalOrigin::Bottom, PopupHorizontalOrigin::Right };
+    h.props.nodeProps.left = NodeValue(-40.0f);
+    h.props.nodeProps.top = NodeValue(-40.0f);
+    h.render();
+    h.render();
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().x, 4.0f);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().y, 4.0f);
+
+    /* Same origin, but in range: placed by the percentage alone. */
+    h.props.nodeProps.left = NodeValue(300.0f);
+    h.props.nodeProps.top = NodeValue(300.0f);
+    h.render();
+    h.render();
+    ASSERT_TRUE(h.popup->getTransform()->translateX == NodeValue(PercentValue{ -100.0f }));
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxX(), 350.0f);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxY(), 350.0f);
+    ASSERT_TRUE(size.width > 350.0f);
+}
