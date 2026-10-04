@@ -719,20 +719,25 @@ void Document::_clickNode() {
 void Document::_pressText(bool focusChanged) {
     PROFILE
 
-    auto const leftButton = (_mouseState.mouse == Mouse::LeftButton);
-    auto const rightButton = (_mouseState.mouse == Mouse::RightButton);
-
     if (_mouseState.defaultPrevented == true) return;
-    if ((leftButton == false) && (rightButton == false)) return;
+    if (
+        _mouseState.mouse != Mouse::LeftButton &&
+        _mouseState.mouse != Mouse::RightButton
+    ) {
+        return;
+    }
 
-    /* like the web, a right press leaves an existing caret alone and only
-       places it when the press is what focused the editable */
-    if (rightButton && (focusChanged == false)) return;
+    if (
+        _mouseState.mouse == Mouse::RightButton &&
+        focusChanged == false
+    ) {
+        return;
+    }
 
     if (auto inputState = _ensureInputState()) {
         auto const position = _getTextLocalPosition(*inputState, _convertPoint(_mouseState.position));
 
-        if (leftButton) {
+        if (_mouseState.mouse == Mouse::LeftButton) {
             inputState->textObject.mouseDown(
                 position,
                 _mouseState.modifiers.shift,
