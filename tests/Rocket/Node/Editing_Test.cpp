@@ -600,6 +600,16 @@ TEST(Editing, RightClickDoesNotMoveCaret) {
     EXPECT_EQ(e.content(), "heXllo");
 }
 
+/* A right click that focuses an editable places the caret under the pointer,
+   like the web, without starting a selection. */
+TEST(Editing, RightClickFocusPlacesCaretAtPointer) {
+    auto e = _Editor("hello");
+    e.click(e.glyphPoint(2), {}, Mouse::RightButton);
+    ASSERT_TRUE(e.box.isFocused());
+    e.type("X");
+    EXPECT_EQ(e.content(), "heXllo");
+}
+
 /* Clicking from one editable into another moves focus and typing with it. */
 TEST(Editing, ClickSwitchesBetweenEditables) {
     auto e = _Editor("first");

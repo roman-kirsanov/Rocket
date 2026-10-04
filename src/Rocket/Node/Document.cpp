@@ -273,6 +273,8 @@ void Document::_handleMouseDownEvent(MouseDownWindowEvent const& event) {
     _mouseState.clickCount = event.getClickCount();
     _mouseState.defaultPrevented = false;
 
+    auto const focusedNode = _focusState.focusedNode;
+
     _pressNode();
     _triggerMouseDown(event.getMouse(), event.getModifiers(), _mouseState.defaultPrevented);
 
@@ -285,7 +287,7 @@ void Document::_handleMouseDownEvent(MouseDownWindowEvent const& event) {
         }
     }
 
-    _pressText();
+    _pressText(_focusState.focusedNode != focusedNode);
     _updateAll();
 }
 
@@ -714,20 +716,32 @@ void Document::_clickNode() {
     }
 }
 
-void Document::_pressText() {
+void Document::_pressText(bool focusChanged) {
     PROFILE
 
-    if (_mouseState.mouse != Mouse::LeftButton) return;
+    auto const leftButton = (_mouseState.mouse == Mouse::LeftButton);
+    auto const rightButton = (_mouseState.mouse == Mouse::RightButton);
+
     if (_mouseState.defaultPrevented == true) return;
+    if ((leftButton == false) && (rightButton == false)) return;
+
+    /* like the web, a right press leaves an existing caret alone and only
+       places it when the press is what focused the editable */
+    if (rightButton && (focusChanged == false)) return;
 
     if (auto inputState = _ensureInputState()) {
-        auto const position = _convertPoint(_mouseState.position);
+        auto const position = _getTextLocalPosition(*inputState, _convertPoint(_mouseState.position));
 
-        inputState->textObject.mouseDown(
-            _getTextLocalPosition(*inputState, position),
-            _mouseState.modifiers.shift,
-            _mouseState.clickCount
-        );
+        if (leftButton) {
+            inputState->textObject.mouseDown(
+                position,
+                _mouseState.modifiers.shift,
+                _mouseState.clickCount
+            );
+        } else {
+            inputState->textObject.mouseDown(position, false, 1);
+            inputState->textObject.mouseUp(position);
+        }
 
         _restartCaretBlink();
         _needsRender = true;

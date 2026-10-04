@@ -271,7 +271,7 @@ private:
     void _dragNode();
     void _dropNode();
     void _clickNode();
-    void _pressText();
+    void _pressText(bool);
     void _dragText();
     void _releaseText();
     void _focusNext(bool);
