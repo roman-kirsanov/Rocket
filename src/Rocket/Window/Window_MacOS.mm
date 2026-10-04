@@ -15,23 +15,34 @@
 
 namespace Rocket {
 
-static Key _KeyConvert(std::int32_t);
-static std::string _SanitizeKeyInput(NSString*);
+static Scancode _KeyConvert(std::int32_t);
+static KeyModifiers _ModifiersConvert(NSEventModifierFlags);
+static std::string _GetKeycode(NSEvent*, Scancode);
+static std::string _SanitizeInput(NSString*);
 
 } /* namespace Rocket */
 
 /* The content view is the first responder and an NSTextInputClient, so key
    presses go through the input context: dead keys compose ("´" then "e" is
    "é"), the press-and-hold accent picker and input methods commit through
-   insertText:, and only the composed text reaches the window's key handler.
+   insertText:. Committed text is published as input and marked (in-progress)
+   text as composition, both after the key event that produced them; text
+   that arrives without a key (emoji picker, dictation) is published at once.
+   The text system only runs while an input area is set (see
+   Window::setInputArea); otherwise keys are plain key events. While an input
+   method composes, it owns the keys: they are not dispatched as key events.
    Editing commands the context suggests (doCommandBySelector:) are ignored;
-   the document maps them from the key event itself. Marked (in-progress)
-   composition text is tracked but not drawn. */
+   the document maps them from the key event itself. */
 @interface __NSMetalView : NSView<NSTextInputClient>
 
 @property (strong, nonatomic) NSCursor* activeCursor;
 @property (copy, nonatomic) void(^onDisplay)(void);
-@property (copy, nonatomic) void(^onKeyDown)(NSEvent*, NSString*);
+@property (copy, nonatomic) void(^onKeyDown)(NSEvent*);
+@property (copy, nonatomic) void(^onInput)(NSString*);
+@property (copy, nonatomic) void(^onComposition)(NSString*, NSInteger, NSInteger);
+
+/** The caret rectangle in view points with a top-left origin; nil keeps the text system off (see Window::setInputArea). */
+@property (strong, nonatomic) NSValue* inputArea;
 
 @end
 
@@ -40,6 +51,9 @@ static std::string _SanitizeKeyInput(NSString*);
     NSTrackingArea* _trackingArea;
     NSMutableString* _composedInput;
     NSString* _markedText;
+    NSRange _markedSelection;
+    BOOL _handlingKey;
+    BOOL _compositionChanged;
 }
 
 - (BOOL)acceptsFirstResponder {
@@ -49,37 +63,101 @@ static std::string _SanitizeKeyInput(NSString*);
 - (void)keyDown:(NSEvent*)event {
     PROFILE
 
+    if (self.inputArea == nil) {
+        /* no text field: keys are plain key events */
+        if (self.onKeyDown != nil) {
+            self.onKeyDown(event);
+        }
+        return;
+    }
+
     _composedInput = [NSMutableString string];
+    _compositionChanged = NO;
+    _handlingKey = YES;
 
     [self interpretKeyEvents: @[event]];
 
-    if (_markedText != nil) {
-        return; /* composition in progress: the input method owns the keys until it commits */
+    _handlingKey = NO;
+
+    /* composition in progress: the input method owns the keys until it commits */
+    if (_markedText == nil && self.onKeyDown != nil) {
+        self.onKeyDown(event);
     }
 
-    if (self.onKeyDown != nil) {
-        self.onKeyDown(event, _composedInput);
+    if (_compositionChanged) {
+        [self publishComposition];
+    }
+
+    if (_composedInput.length > 0 && self.onInput != nil) {
+        self.onInput(_composedInput);
     }
 }
 
 - (void)insertText:(id)string replacementRange:(NSRange)replacementRange {
     NSString* text = [string isKindOfClass: [NSAttributedString class]] ? [string string] : string;
 
-    if (text != nil) {
-        [_composedInput appendString: text];
+    if (_markedText != nil) {
+        _markedText = nil;
+        [self compositionDidChange];
     }
 
-    _markedText = nil;
+    if (text.length == 0) {
+        return;
+    }
+
+    if (_handlingKey) {
+        [_composedInput appendString: text];
+    } else if (self.onInput != nil) {
+        self.onInput(text); /* no key event: the emoji picker, dictation */
+    }
 }
 
 - (void)setMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange {
     NSString* text = [string isKindOfClass: [NSAttributedString class]] ? [string string] : string;
 
-    _markedText = (text.length > 0) ? text : nil;
+    if (text.length == 0 && _markedText == nil) {
+        return;
+    }
+
+    _markedText = (text.length > 0) ? [text copy] : nil;
+    _markedSelection = selectedRange;
+    [self compositionDidChange];
 }
 
 - (void)unmarkText {
-    _markedText = nil;
+    if (_markedText != nil) {
+        _markedText = nil;
+        [self compositionDidChange];
+    }
+}
+
+- (void)compositionDidChange {
+    if (_handlingKey) {
+        _compositionChanged = YES; /* published after the key event */
+    } else {
+        [self publishComposition];
+    }
+}
+
+- (void)publishComposition {
+    if (self.onComposition == nil) {
+        return;
+    }
+
+    /* AppKit ranges count UTF-16 units; events count characters */
+    auto const characters = [](NSString* string) {
+        return static_cast<NSInteger>([string lengthOfBytesUsingEncoding: NSUTF32StringEncoding] / 4);
+    };
+
+    NSString* text = (_markedText != nil) ? _markedText : @"";
+    NSUInteger const start = MIN(_markedSelection.location, text.length);
+    NSUInteger const end = MIN((start + _markedSelection.length), text.length);
+
+    self.onComposition(
+        text,
+        characters([text substringToIndex: start]),
+        characters([text substringWithRange: NSMakeRange(start, (end - start))])
+    );
 }
 
 - (BOOL)hasMarkedText {
@@ -103,7 +181,13 @@ static std::string _SanitizeKeyInput(NSString*);
 }
 
 - (NSRect)firstRectForCharacterRange:(NSRange)range actualRange:(NSRangePointer)actualRange {
-    /* the candidate window is anchored at the pointer: the view does not know where the caret is */
+    if (self.inputArea != nil && self.window != nil) {
+        NSRect const area = self.inputArea.rectValue;
+        NSRect const local = NSMakeRect(area.origin.x, (self.bounds.size.height - area.origin.y - area.size.height), area.size.width, area.size.height);
+        return [self.window convertRectToScreen: [self convertRect: local toView: nil]];
+    }
+
+    /* no caret known: anchor the candidate window at the pointer */
     NSPoint point = [NSEvent mouseLocation];
     return NSMakeRect(point.x, point.y, 1.0, 1.0);
 }
@@ -228,12 +312,7 @@ static std::string _SanitizeKeyInput(NSString*);
 
     if (self->_onMouseMove != nil) {
         self->_mousePosition = position;
-        self->_onMouseMove(position, {
-            .control = static_cast<bool>((flags & NSEventModifierFlagControl)),
-            .shift = static_cast<bool>((flags & NSEventModifierFlagShift)),
-            .meta = static_cast<bool>((flags & NSEventModifierFlagCommand)),
-            .alt = static_cast<bool>((flags & NSEventModifierFlagOption))
-        });
+        self->_onMouseMove(position, Rocket::_ModifiersConvert(flags));
     }
 }
 
@@ -270,12 +349,7 @@ static std::string _SanitizeKeyInput(NSString*);
         self->_onMouseDown(Rocket::Mouse::LeftButton, {
             static_cast<float>(point.x),
             static_cast<float>(self.contentView.frame.size.height - point.y)
-        }, {
-            .control = static_cast<bool>((event.modifierFlags & NSEventModifierFlagControl)),
-            .shift = static_cast<bool>((event.modifierFlags & NSEventModifierFlagShift)),
-            .meta = static_cast<bool>((event.modifierFlags & NSEventModifierFlagCommand)),
-            .alt = static_cast<bool>((event.modifierFlags & NSEventModifierFlagOption))
-        }, static_cast<int>(event.clickCount));
+        }, Rocket::_ModifiersConvert(event.modifierFlags), static_cast<int>(event.clickCount));
         self->_leftMouseDown = YES;
     }
 }
@@ -302,12 +376,7 @@ static std::string _SanitizeKeyInput(NSString*);
         self->_onMouseDown(Rocket::Mouse::RightButton, {
             static_cast<float>(point.x),
             static_cast<float>(self.contentView.frame.size.height - point.y)
-        }, {
-            .control = static_cast<bool>((event.modifierFlags & NSEventModifierFlagControl)),
-            .shift = static_cast<bool>((event.modifierFlags & NSEventModifierFlagShift)),
-            .meta = static_cast<bool>((event.modifierFlags & NSEventModifierFlagCommand)),
-            .alt = static_cast<bool>((event.modifierFlags & NSEventModifierFlagOption))
-        }, static_cast<int>(event.clickCount));
+        }, Rocket::_ModifiersConvert(event.modifierFlags), static_cast<int>(event.clickCount));
         self->_rightMouseDown = YES;
     }
 }
@@ -327,12 +396,7 @@ static std::string _SanitizeKeyInput(NSString*);
         self->_onMouseUp(Rocket::Mouse::LeftButton, {
             static_cast<float>(point.x),
             static_cast<float>(self.contentView.frame.size.height - point.y)
-        }, {
-            .control = static_cast<bool>((event.modifierFlags & NSEventModifierFlagControl)),
-            .shift = static_cast<bool>((event.modifierFlags & NSEventModifierFlagShift)),
-            .meta = static_cast<bool>((event.modifierFlags & NSEventModifierFlagCommand)),
-            .alt = static_cast<bool>((event.modifierFlags & NSEventModifierFlagOption))
-        });
+        }, Rocket::_ModifiersConvert(event.modifierFlags));
     }
 
     self->_leftMouseDown = NO;
@@ -347,12 +411,7 @@ static std::string _SanitizeKeyInput(NSString*);
         self->_onMouseUp(Rocket::Mouse::RightButton, {
             static_cast<float>(point.x),
             static_cast<float>(self.contentView.frame.size.height - point.y)
-        }, {
-            .control = static_cast<bool>((event.modifierFlags & NSEventModifierFlagControl)),
-            .shift = static_cast<bool>((event.modifierFlags & NSEventModifierFlagShift)),
-            .meta = static_cast<bool>((event.modifierFlags & NSEventModifierFlagCommand)),
-            .alt = static_cast<bool>((event.modifierFlags & NSEventModifierFlagOption))
-        });
+        }, Rocket::_ModifiersConvert(event.modifierFlags));
     }
 
     self->_rightMouseDown = NO;
@@ -390,12 +449,7 @@ static std::string _SanitizeKeyInput(NSString*);
         self->_onMouseEnter({
             static_cast<float>(point.x),
             static_cast<float>(self.contentView.frame.size.height - point.y)
-        }, {
-            .control = static_cast<bool>((event.modifierFlags & NSEventModifierFlagControl)),
-            .shift = static_cast<bool>((event.modifierFlags & NSEventModifierFlagShift)),
-            .meta = static_cast<bool>((event.modifierFlags & NSEventModifierFlagCommand)),
-            .alt = static_cast<bool>((event.modifierFlags & NSEventModifierFlagOption))
-        });
+        }, Rocket::_ModifiersConvert(event.modifierFlags));
     }
 
 
@@ -409,12 +463,7 @@ static std::string _SanitizeKeyInput(NSString*);
         self->_onMouseExit({
             static_cast<float>(point.x),
             static_cast<float>(self.contentView.frame.size.height - point.y)
-        }, {
-            .control = static_cast<bool>((event.modifierFlags & NSEventModifierFlagControl)),
-            .shift = static_cast<bool>((event.modifierFlags & NSEventModifierFlagShift)),
-            .meta = static_cast<bool>((event.modifierFlags & NSEventModifierFlagCommand)),
-            .alt = static_cast<bool>((event.modifierFlags & NSEventModifierFlagOption))
-        });
+        }, Rocket::_ModifiersConvert(event.modifierFlags));
     }
 }
 
@@ -432,12 +481,7 @@ static std::string _SanitizeKeyInput(NSString*);
     // auto isPrecise = event.hasPreciseScrollingDeltas;
 
     if (self->_onMouseWheel != nil) {
-        self->_onMouseWheel({ deltaX, deltaY }, {
-            .control = static_cast<bool>((event.modifierFlags & NSEventModifierFlagControl)),
-            .shift = static_cast<bool>((event.modifierFlags & NSEventModifierFlagShift)),
-            .meta = static_cast<bool>((event.modifierFlags & NSEventModifierFlagCommand)),
-            .alt = static_cast<bool>((event.modifierFlags & NSEventModifierFlagOption))
-        });
+        self->_onMouseWheel({ deltaX, deltaY }, Rocket::_ModifiersConvert(event.modifierFlags));
     }
 }
 
@@ -457,22 +501,21 @@ static std::string _SanitizeKeyInput(NSString*);
     PROFILE
 
     /* reached only while the content view is not the first responder */
-    [self dispatchKeyDown: event input: event.characters];
+    [self dispatchKeyDown: event];
 }
 
-- (void)dispatchKeyDown:(NSEvent*)event input:(NSString*)characters {
+- (void)dispatchKeyDown:(NSEvent*)event {
     PROFILE
 
     if (self->_onKeyDown != nil) {
-        auto const input = Rocket::_SanitizeKeyInput(characters);
+        auto const scancode = Rocket::_KeyConvert(event.keyCode);
+        auto const keycode = Rocket::_GetKeycode(event, scancode);
 
         self->_onKeyDown(
-            Rocket::_KeyConvert(event.keyCode),
-            { .control = static_cast<bool>((event.modifierFlags & NSEventModifierFlagControl)),
-              .shift = static_cast<bool>((event.modifierFlags & NSEventModifierFlagShift)),
-              .meta = static_cast<bool>((event.modifierFlags & NSEventModifierFlagCommand)),
-              .alt = static_cast<bool>((event.modifierFlags & NSEventModifierFlagOption)) },
-            input.c_str()
+            scancode,
+            keycode.c_str(),
+            Rocket::_ModifiersConvert(event.modifierFlags),
+            static_cast<bool>(event.isARepeat)
         );
     }
 }
@@ -481,15 +524,13 @@ static std::string _SanitizeKeyInput(NSString*);
     PROFILE
 
     if (self->_onKeyUp != nil) {
+        auto const scancode = Rocket::_KeyConvert(event.keyCode);
+        auto const keycode = Rocket::_GetKeycode(event, scancode);
+
         self->_onKeyUp(
-            Rocket::_KeyConvert(event.keyCode),
-            { .control = static_cast<bool>((event.modifierFlags & NSEventModifierFlagControl)),
-              .shift = static_cast<bool>((event.modifierFlags & NSEventModifierFlagShift)),
-              .meta = static_cast<bool>((event.modifierFlags & NSEventModifierFlagCommand)),
-              .alt = static_cast<bool>((event.modifierFlags & NSEventModifierFlagOption)) },
-            (event.characters != NULL)
-                ? [event.characters cStringUsingEncoding: NSUTF8StringEncoding]
-                : ""
+            scancode,
+            keycode.c_str(),
+            Rocket::_ModifiersConvert(event.modifierFlags)
         );
     }
 }
@@ -514,6 +555,10 @@ static std::string _SanitizeKeyInput(NSString*);
 - (void)windowDidBecomeKey:(NSNotification*)notification {
     PROFILE
 
+    if (self->_onFocus != nil) {
+        self->_onFocus();
+    }
+
     /* macOS sends no mouseMoved while the window is not key, so report the
        cursor position on activation to refresh hover without a move */
     NSPoint point = [self mouseLocationOutsideOfEventStream];
@@ -523,6 +568,14 @@ static std::string _SanitizeKeyInput(NSString*);
     }
 
     [self _dispatchMouseMove: point flags: [NSEvent modifierFlags]];
+}
+
+- (void)windowDidResignKey:(NSNotification*)notification {
+    PROFILE
+
+    if (self->_onBlur != nil) {
+        self->_onBlur();
+    }
 }
 
 - (void)windowDidResize:(NSNotification*)notification {
@@ -586,132 +639,210 @@ static std::string _SanitizeKeyInput(NSString*);
 
 namespace Rocket {
 
-static auto const _keyMap = std::map<std::int32_t, Key>({
-    { kVK_ANSI_0, Key::Digit0 },
-    { kVK_ANSI_1, Key::Digit1 },
-    { kVK_ANSI_2, Key::Digit2 },
-    { kVK_ANSI_3, Key::Digit3 },
-    { kVK_ANSI_4, Key::Digit4 },
-    { kVK_ANSI_5, Key::Digit5 },
-    { kVK_ANSI_6, Key::Digit6 },
-    { kVK_ANSI_7, Key::Digit7 },
-    { kVK_ANSI_8, Key::Digit8 },
-    { kVK_ANSI_9, Key::Digit9 },
-    { kVK_ANSI_A, Key::KeyA },
-    { kVK_ANSI_B, Key::KeyB },
-    { kVK_ANSI_C, Key::KeyC },
-    { kVK_ANSI_D, Key::KeyD },
-    { kVK_ANSI_E, Key::KeyE },
-    { kVK_ANSI_F, Key::KeyF },
-    { kVK_ANSI_G, Key::KeyG },
-    { kVK_ANSI_H, Key::KeyH },
-    { kVK_ANSI_I, Key::KeyI },
-    { kVK_ANSI_J, Key::KeyJ },
-    { kVK_ANSI_K, Key::KeyK },
-    { kVK_ANSI_L, Key::KeyL },
-    { kVK_ANSI_M, Key::KeyM },
-    { kVK_ANSI_N, Key::KeyN },
-    { kVK_ANSI_O, Key::KeyO },
-    { kVK_ANSI_P, Key::KeyP },
-    { kVK_ANSI_Q, Key::KeyQ },
-    { kVK_ANSI_R, Key::KeyR },
-    { kVK_ANSI_S, Key::KeyS },
-    { kVK_ANSI_T, Key::KeyT },
-    { kVK_ANSI_U, Key::KeyU },
-    { kVK_ANSI_V, Key::KeyV },
-    { kVK_ANSI_W, Key::KeyW },
-    { kVK_ANSI_X, Key::KeyX },
-    { kVK_ANSI_Y, Key::KeyY },
-    { kVK_ANSI_Z, Key::KeyZ },
-    { kVK_F1, Key::F1 },
-    { kVK_F2, Key::F2 },
-    { kVK_F3, Key::F3 },
-    { kVK_F4, Key::F4 },
-    { kVK_F5, Key::F5 },
-    { kVK_F6, Key::F6 },
-    { kVK_F7, Key::F7 },
-    { kVK_F8, Key::F8 },
-    { kVK_F9, Key::F9 },
-    { kVK_F10, Key::F10 },
-    { kVK_F11, Key::F11 },
-    { kVK_F12, Key::F12 },
-    { kVK_F13, Key::F13 },
-    { kVK_F14, Key::F14 },
-    { kVK_F15, Key::F15 },
-    { kVK_F16, Key::F16 },
-    { kVK_F17, Key::F17 },
-    { kVK_F18, Key::F18 },
-    { kVK_F19, Key::F19 },
-    { kVK_F20, Key::F20 },
-    { kVK_Option, Key::Alt },
-    { kVK_DownArrow, Key::ArrowDown },
-    { kVK_LeftArrow, Key::ArrowLeft },
-    { kVK_RightArrow, Key::ArrowRight },
-    { kVK_UpArrow, Key::ArrowUp },
-    { kVK_ANSI_Backslash, Key::Backslash },
-    { kVK_ANSI_LeftBracket, Key::BracketLeft },
-    { kVK_ANSI_RightBracket, Key::BracketRight },
-    { kVK_CapsLock, Key::Capslock },
-    { kVK_ANSI_Comma, Key::Comma },
-    { kVK_Control, Key::Control },
-    { kVK_Delete, Key::Backspace },
-    { kVK_End, Key::End },
-    { kVK_ANSI_Equal, Key::Equal },
-    { kVK_Escape, Key::Escape },
-    { kVK_ForwardDelete, Key::Delete },
-    { kVK_Function, Key::Function },
-    { kVK_ANSI_Grave, Key::Backquote },
-    { kVK_Help, Key::Help },
-    { kVK_Home, Key::Home },
-    { kVK_Command, Key::Meta },
-    { kVK_ANSI_Minus, Key::Minus },
-    { kVK_Mute, Key::Mute },
-    { kVK_PageDown, Key::PageDown },
-    { kVK_PageUp, Key::PageUp },
-    { kVK_ANSI_Period, Key::Period },
-    { kVK_ANSI_Quote, Key::Quote },
-    { kVK_Return, Key::Enter },
-    { kVK_RightOption, Key::AltRight },
-    { kVK_RightControl, Key::ControlRight },
-    { kVK_RightShift, Key::ShiftRight },
-    { kVK_ANSI_Semicolon, Key::Semicolon },
-    { kVK_Shift, Key::Shift },
-    { kVK_ANSI_Slash, Key::Slash },
-    { kVK_Space, Key::Space },
-    { kVK_Tab, Key::Tab },
-    { kVK_VolumeDown, Key::VolumeDown },
-    { kVK_VolumeUp, Key::VolumeUp },
-    { kVK_ANSI_KeypadClear, Key::NumpadClear },
-    { kVK_ANSI_KeypadDecimal, Key::NumpadDecimal },
-    { kVK_ANSI_KeypadDivide, Key::NumpadDivide },
-    { kVK_ANSI_KeypadEnter, Key::NumpadEnter },
-    { kVK_ANSI_KeypadEquals, Key::NumpadEqual },
-    { kVK_ANSI_KeypadMinus, Key::NumpadMinus },
-    { kVK_ANSI_KeypadMultiply, Key::NumpadMultiply },
-    { kVK_ANSI_KeypadPlus, Key::NumpadAdd },
-    { kVK_ANSI_Keypad0, Key::Numpad0 },
-    { kVK_ANSI_Keypad1, Key::Numpad1 },
-    { kVK_ANSI_Keypad2, Key::Numpad2 },
-    { kVK_ANSI_Keypad3, Key::Numpad3 },
-    { kVK_ANSI_Keypad4, Key::Numpad4 },
-    { kVK_ANSI_Keypad5, Key::Numpad5 },
-    { kVK_ANSI_Keypad6, Key::Numpad6 },
-    { kVK_ANSI_Keypad7, Key::Numpad7 },
-    { kVK_ANSI_Keypad8, Key::Numpad8 },
-    { kVK_ANSI_Keypad9, Key::Numpad9 }
+static auto const _keyMap = std::map<std::int32_t, Scancode>({
+    { kVK_ANSI_0, Scancode::Digit0 },
+    { kVK_ANSI_1, Scancode::Digit1 },
+    { kVK_ANSI_2, Scancode::Digit2 },
+    { kVK_ANSI_3, Scancode::Digit3 },
+    { kVK_ANSI_4, Scancode::Digit4 },
+    { kVK_ANSI_5, Scancode::Digit5 },
+    { kVK_ANSI_6, Scancode::Digit6 },
+    { kVK_ANSI_7, Scancode::Digit7 },
+    { kVK_ANSI_8, Scancode::Digit8 },
+    { kVK_ANSI_9, Scancode::Digit9 },
+    { kVK_ANSI_A, Scancode::KeyA },
+    { kVK_ANSI_B, Scancode::KeyB },
+    { kVK_ANSI_C, Scancode::KeyC },
+    { kVK_ANSI_D, Scancode::KeyD },
+    { kVK_ANSI_E, Scancode::KeyE },
+    { kVK_ANSI_F, Scancode::KeyF },
+    { kVK_ANSI_G, Scancode::KeyG },
+    { kVK_ANSI_H, Scancode::KeyH },
+    { kVK_ANSI_I, Scancode::KeyI },
+    { kVK_ANSI_J, Scancode::KeyJ },
+    { kVK_ANSI_K, Scancode::KeyK },
+    { kVK_ANSI_L, Scancode::KeyL },
+    { kVK_ANSI_M, Scancode::KeyM },
+    { kVK_ANSI_N, Scancode::KeyN },
+    { kVK_ANSI_O, Scancode::KeyO },
+    { kVK_ANSI_P, Scancode::KeyP },
+    { kVK_ANSI_Q, Scancode::KeyQ },
+    { kVK_ANSI_R, Scancode::KeyR },
+    { kVK_ANSI_S, Scancode::KeyS },
+    { kVK_ANSI_T, Scancode::KeyT },
+    { kVK_ANSI_U, Scancode::KeyU },
+    { kVK_ANSI_V, Scancode::KeyV },
+    { kVK_ANSI_W, Scancode::KeyW },
+    { kVK_ANSI_X, Scancode::KeyX },
+    { kVK_ANSI_Y, Scancode::KeyY },
+    { kVK_ANSI_Z, Scancode::KeyZ },
+    { kVK_F1, Scancode::F1 },
+    { kVK_F2, Scancode::F2 },
+    { kVK_F3, Scancode::F3 },
+    { kVK_F4, Scancode::F4 },
+    { kVK_F5, Scancode::F5 },
+    { kVK_F6, Scancode::F6 },
+    { kVK_F7, Scancode::F7 },
+    { kVK_F8, Scancode::F8 },
+    { kVK_F9, Scancode::F9 },
+    { kVK_F10, Scancode::F10 },
+    { kVK_F11, Scancode::F11 },
+    { kVK_F12, Scancode::F12 },
+    { kVK_F13, Scancode::F13 },
+    { kVK_F14, Scancode::F14 },
+    { kVK_F15, Scancode::F15 },
+    { kVK_F16, Scancode::F16 },
+    { kVK_F17, Scancode::F17 },
+    { kVK_F18, Scancode::F18 },
+    { kVK_F19, Scancode::F19 },
+    { kVK_F20, Scancode::F20 },
+    { kVK_Option, Scancode::Alt },
+    { kVK_DownArrow, Scancode::ArrowDown },
+    { kVK_LeftArrow, Scancode::ArrowLeft },
+    { kVK_RightArrow, Scancode::ArrowRight },
+    { kVK_UpArrow, Scancode::ArrowUp },
+    { kVK_ANSI_Backslash, Scancode::Backslash },
+    { kVK_ANSI_LeftBracket, Scancode::BracketLeft },
+    { kVK_ANSI_RightBracket, Scancode::BracketRight },
+    { kVK_CapsLock, Scancode::Capslock },
+    { kVK_ANSI_Comma, Scancode::Comma },
+    { kVK_Control, Scancode::Control },
+    { kVK_Delete, Scancode::Backspace },
+    { kVK_End, Scancode::End },
+    { kVK_ANSI_Equal, Scancode::Equal },
+    { kVK_Escape, Scancode::Escape },
+    { kVK_ForwardDelete, Scancode::Delete },
+    { kVK_Function, Scancode::Function },
+    { kVK_ANSI_Grave, Scancode::Backquote },
+    { kVK_Help, Scancode::Help },
+    { kVK_Home, Scancode::Home },
+    { kVK_Command, Scancode::Meta },
+    { kVK_ANSI_Minus, Scancode::Minus },
+    { kVK_Mute, Scancode::Mute },
+    { kVK_PageDown, Scancode::PageDown },
+    { kVK_PageUp, Scancode::PageUp },
+    { kVK_ANSI_Period, Scancode::Period },
+    { kVK_ANSI_Quote, Scancode::Quote },
+    { kVK_Return, Scancode::Enter },
+    { kVK_RightOption, Scancode::AltRight },
+    { kVK_RightControl, Scancode::ControlRight },
+    { kVK_RightShift, Scancode::ShiftRight },
+    { kVK_ANSI_Semicolon, Scancode::Semicolon },
+    { kVK_Shift, Scancode::Shift },
+    { kVK_ANSI_Slash, Scancode::Slash },
+    { kVK_Space, Scancode::Space },
+    { kVK_Tab, Scancode::Tab },
+    { kVK_VolumeDown, Scancode::VolumeDown },
+    { kVK_VolumeUp, Scancode::VolumeUp },
+    { kVK_ANSI_KeypadClear, Scancode::NumpadClear },
+    { kVK_ANSI_KeypadDecimal, Scancode::NumpadDecimal },
+    { kVK_ANSI_KeypadDivide, Scancode::NumpadDivide },
+    { kVK_ANSI_KeypadEnter, Scancode::NumpadEnter },
+    { kVK_ANSI_KeypadEquals, Scancode::NumpadEqual },
+    { kVK_ANSI_KeypadMinus, Scancode::NumpadMinus },
+    { kVK_ANSI_KeypadMultiply, Scancode::NumpadMultiply },
+    { kVK_ANSI_KeypadPlus, Scancode::NumpadAdd },
+    { kVK_ANSI_Keypad0, Scancode::Numpad0 },
+    { kVK_ANSI_Keypad1, Scancode::Numpad1 },
+    { kVK_ANSI_Keypad2, Scancode::Numpad2 },
+    { kVK_ANSI_Keypad3, Scancode::Numpad3 },
+    { kVK_ANSI_Keypad4, Scancode::Numpad4 },
+    { kVK_ANSI_Keypad5, Scancode::Numpad5 },
+    { kVK_ANSI_Keypad6, Scancode::Numpad6 },
+    { kVK_ANSI_Keypad7, Scancode::Numpad7 },
+    { kVK_ANSI_Keypad8, Scancode::Numpad8 },
+    { kVK_ANSI_Keypad9, Scancode::Numpad9 }
 });
 
-static Key _KeyConvert(std::int32_t code) {
+static KeyModifiers _ModifiersConvert(NSEventModifierFlags flags) {
+    PROFILE
+
+    return {
+        .control = static_cast<bool>((flags & NSEventModifierFlagControl)),
+        .shift = static_cast<bool>((flags & NSEventModifierFlagShift)),
+        .meta = static_cast<bool>((flags & NSEventModifierFlagCommand)),
+        .alt = static_cast<bool>((flags & NSEventModifierFlagOption))
+    };
+}
+
+static bool _IsControlCodepoint(std::uint32_t codepoint) {
+    PROFILE
+
+    /* control characters and the private-use range AppKit gives function keys */
+    return (codepoint < 0x20u)
+        || (codepoint == 0x7Fu)
+        || ((codepoint >= 0xF700u) && (codepoint <= 0xF8FFu));
+}
+
+static Scancode _KeyConvert(std::int32_t code) {
     PROFILE
 
     if (_keyMap.find(code) != _keyMap.end()) {
         return _keyMap.at(code);
     } else {
-        return Key::Unknown;
+        return Scancode::Unknown;
     }
 }
 
-static std::string _SanitizeKeyInput(NSString* characters) {
+static bool _IsCharacterScancode(Scancode scancode) {
+    PROFILE
+
+    switch (scancode) {
+        case Scancode::Digit0: case Scancode::Digit1: case Scancode::Digit2: case Scancode::Digit3: case Scancode::Digit4:
+        case Scancode::Digit5: case Scancode::Digit6: case Scancode::Digit7: case Scancode::Digit8: case Scancode::Digit9:
+        case Scancode::KeyA: case Scancode::KeyB: case Scancode::KeyC: case Scancode::KeyD: case Scancode::KeyE:
+        case Scancode::KeyF: case Scancode::KeyG: case Scancode::KeyH: case Scancode::KeyI: case Scancode::KeyJ:
+        case Scancode::KeyK: case Scancode::KeyL: case Scancode::KeyM: case Scancode::KeyN: case Scancode::KeyO:
+        case Scancode::KeyP: case Scancode::KeyQ: case Scancode::KeyR: case Scancode::KeyS: case Scancode::KeyT:
+        case Scancode::KeyU: case Scancode::KeyV: case Scancode::KeyW: case Scancode::KeyX: case Scancode::KeyY:
+        case Scancode::KeyZ:
+        case Scancode::Backquote: case Scancode::Minus: case Scancode::Equal:
+        case Scancode::BracketLeft: case Scancode::BracketRight: case Scancode::Backslash:
+        case Scancode::Semicolon: case Scancode::Quote:
+        case Scancode::Comma: case Scancode::Period: case Scancode::Slash:
+        case Scancode::Space:
+            return true;
+        default:
+            return false;
+    }
+}
+
+/* What the key means on the current layout: character keys take the
+   character the layout gives them without modifiers (lowercased, so Shift
+   does not change it); every other key, and a character key that yields no
+   usable character (a dead key, a control character), keeps its name. */
+static std::string _GetKeycode(NSEvent* event, Scancode scancode) {
+    PROFILE
+
+    if (_IsCharacterScancode(scancode) == false) {
+        return GetDefaultKeycode(scancode);
+    }
+
+    NSString* const characters = [event.charactersIgnoringModifiers lowercaseString];
+
+    if (characters.length == 0) {
+        return GetDefaultKeycode(scancode);
+    }
+
+    auto const cString = [characters cStringUsingEncoding: NSUTF8StringEncoding];
+
+    if (cString == NULL) {
+        return GetDefaultKeycode(scancode);
+    }
+
+    static thread_local auto _codepoints = std::vector<std::uint32_t>();
+    StringToCodepoints(cString, _codepoints);
+
+    for (auto const codepoint : _codepoints) {
+        if (_IsControlCodepoint(codepoint)) {
+            return GetDefaultKeycode(scancode);
+        }
+    }
+
+    return std::string(cString);
+}
+
+static std::string _SanitizeInput(NSString* characters) {
     PROFILE
 
     if (characters == nil) {
@@ -732,15 +863,9 @@ static std::string _SanitizeKeyInput(NSString* characters) {
     _kept.clear();
 
     for (auto codepoint : _codepoints) {
-        if (
-            (codepoint < 0x20) ||
-            (codepoint == 0x7F) ||
-            ((codepoint >= 0xF700) && (codepoint <= 0xF8FF))
-        ) {
-            continue;
+        if (_IsControlCodepoint(codepoint) == false) {
+            _kept.push_back(codepoint);
         }
-
-        _kept.push_back(codepoint);
     }
 
     auto string = std::string();
@@ -846,11 +971,22 @@ void Window::__init() {
     window.onMouseWheel = ^(Vec2 point, KeyModifiers mods) { _mouseWheel(point, mods); };
     window.onMouseDown = ^(Mouse mouse, Vec2 point, KeyModifiers mods, int clickCount) { _mouseDown(mouse, point, mods, clickCount); };
     window.onMouseUp = ^(Mouse mouse, Vec2 point, KeyModifiers mods) { _mouseUp(mouse, point, mods); };
-    window.onKeyDown = ^(Key key, KeyModifiers mods, char const* input) { _keyDown(key, mods, std::string(input)); };
-    window.onKeyUp = ^(Key key, KeyModifiers mods, char const* input) { _keyUp(key, mods); };
+    window.onKeyDown = ^(Scancode scancode, char const* keycode, KeyModifiers mods, bool repeat) { _keyDown(scancode, std::string(keycode), mods, repeat); };
+    window.onKeyUp = ^(Scancode scancode, char const* keycode, KeyModifiers mods) { _keyUp(scancode, std::string(keycode), mods); };
     window.onPixelRatio = ^(double pixelratio) { _dpiChange(); };
+    window.onFocus = ^() { _focus(); };
+    window.onBlur = ^() { _blur(); };
     view.onDisplay = ^() { _paint(); };
-    view.onKeyDown = ^(NSEvent* event, NSString* input) { [weakWindow dispatchKeyDown: event input: input]; };
+    view.onKeyDown = ^(NSEvent* event) { [weakWindow dispatchKeyDown: event]; };
+    view.onInput = ^(NSString* text) {
+        auto const input = _SanitizeInput(text); /* control characters never reach input */
+        if (input.empty() == false) {
+            _input(input);
+        }
+    };
+    view.onComposition = ^(NSString* text, NSInteger cursor, NSInteger selectionLength) {
+        _composition(std::string([text UTF8String] != NULL ? [text UTF8String] : ""), static_cast<std::int32_t>(cursor), static_cast<std::int32_t>(selectionLength));
+    };
 
     _impl->window = window;
     [_impl->window setContentView: view];
@@ -964,6 +1100,21 @@ void Window::__setTitle(std::string const& title) {
     PROFILE
 
     [_impl->window setTitle: [NSString stringWithUTF8String: title.c_str()]];
+}
+
+void Window::__setInputArea(std::optional<Vec4> const& caretRect) {
+    PROFILE
+
+    auto view = (__NSMetalView*)_impl->window.contentView;
+
+    if (caretRect.has_value()) {
+        view.inputArea = [NSValue valueWithRect: NSMakeRect(caretRect->x, caretRect->y, caretRect->width, caretRect->height)];
+        [view.inputContext invalidateCharacterCoordinates];
+    } else if (view.inputArea != nil) {
+        view.inputArea = nil;
+        [view.inputContext discardMarkedText]; /* drop a composition in progress */
+        [view unmarkText];
+    }
 }
 
 void Window::__setCursor(Cursor cursor) {

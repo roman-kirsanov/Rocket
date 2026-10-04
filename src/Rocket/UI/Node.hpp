@@ -169,6 +169,9 @@ struct NodeProps {
     /** Focusability: any value > 0 makes the node focusable (0 = not focusable). Does not currently define a traversal order. */
     std::optional<int> tabIndex;
 
+    /** Where the node's text caret is, in local points, for nodes that draw and edit text themselves; while the node is focused it takes text input (see Node::setInputArea). */
+    std::optional<Vec4> inputArea;
+
     /** Stacking order; higher paints above lower. */
     std::optional<int> zIndex;
 

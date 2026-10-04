@@ -26,6 +26,108 @@ namespace Rocket {
 static auto constexpr _selectionColor = Vec4{ 0.4f, 0.6f, 1.0f, 0.4f };
 static auto constexpr _caretBlinkPeriod = 530ll;
 
+enum class _TextCommand {
+    MoveLeft,
+    MoveRight,
+    MoveUp,
+    MoveDown,
+    MoveWordLeft,
+    MoveWordRight,
+    MoveLineStart,
+    MoveLineEnd,
+    MoveDocumentStart,
+    MoveDocumentEnd,
+    DeleteBackward,
+    DeleteForward,
+    DeleteWordBackward,
+    DeleteWordForward,
+    DeleteLineBackward,
+    DeleteLineForward,
+    InsertLineBreak,
+    InsertTab,
+    Undo,
+    Redo,
+    SelectAll,
+    Copy,
+    Cut,
+    Paste
+};
+
+struct _TextCommandMatch {
+    _TextCommand command;
+    bool extendSelection;
+};
+
+static std::optional<_TextCommandMatch> _ResolveTextCommand(std::string const& keycode, KeyModifiers const& modifiers) {
+    PROFILE
+
+    auto const shift = modifiers.shift;
+    auto const match = [&](_TextCommand command, bool extendSelection = false) {
+        return std::optional<_TextCommandMatch>(_TextCommandMatch{ command, extendSelection });
+    };
+
+    /* Enter and Tab are commands everywhere: typed text never carries them */
+    if (keycode == Keycode::Enter) return match(_TextCommand::InsertLineBreak);
+    if (keycode == Keycode::Tab) return match(_TextCommand::InsertTab);
+
+#ifdef __APPLE__
+    auto const command = modifiers.meta;
+    auto const option = modifiers.alt;
+    auto const controlOnly = modifiers.control && (modifiers.meta == false) && (modifiers.alt == false);
+
+    if (controlOnly) {
+        if (keycode == Keycode::A) return match(_TextCommand::MoveLineStart, shift);
+        if (keycode == Keycode::E) return match(_TextCommand::MoveLineEnd, shift);
+        if (keycode == Keycode::F) return match(_TextCommand::MoveRight, shift);
+        if (keycode == Keycode::B) return match(_TextCommand::MoveLeft, shift);
+        if (keycode == Keycode::N) return match(_TextCommand::MoveDown, shift);
+        if (keycode == Keycode::P) return match(_TextCommand::MoveUp, shift);
+        if (keycode == Keycode::D) return match(_TextCommand::DeleteForward);
+        if (keycode == Keycode::H) return match(_TextCommand::DeleteBackward);
+        if (keycode == Keycode::K) return match(_TextCommand::DeleteLineForward);
+    }
+
+    if (keycode == Keycode::ArrowLeft) return match(command ? _TextCommand::MoveLineStart : option ? _TextCommand::MoveWordLeft : _TextCommand::MoveLeft, shift);
+    if (keycode == Keycode::ArrowRight) return match(command ? _TextCommand::MoveLineEnd : option ? _TextCommand::MoveWordRight : _TextCommand::MoveRight, shift);
+    if (keycode == Keycode::ArrowUp) return match(command ? _TextCommand::MoveDocumentStart : _TextCommand::MoveUp, shift);
+    if (keycode == Keycode::ArrowDown) return match(command ? _TextCommand::MoveDocumentEnd : _TextCommand::MoveDown, shift);
+    if (keycode == Keycode::Home) return match(_TextCommand::MoveLineStart, shift);
+    if (keycode == Keycode::End) return match(_TextCommand::MoveLineEnd, shift);
+    if (keycode == Keycode::Backspace) return match(command ? _TextCommand::DeleteLineBackward : option ? _TextCommand::DeleteWordBackward : _TextCommand::DeleteBackward);
+    if (keycode == Keycode::Delete) return match(command ? _TextCommand::DeleteLineForward : option ? _TextCommand::DeleteWordForward : _TextCommand::DeleteForward);
+
+    if (command) {
+        if (keycode == Keycode::Z) return match(shift ? _TextCommand::Redo : _TextCommand::Undo);
+        if (keycode == Keycode::A) return match(_TextCommand::SelectAll);
+        if (keycode == Keycode::C) return match(_TextCommand::Copy);
+        if (keycode == Keycode::X) return match(_TextCommand::Cut);
+        if (keycode == Keycode::V) return match(_TextCommand::Paste);
+    }
+#else
+    auto const control = modifiers.control;
+
+    if (keycode == Keycode::ArrowLeft) return match(control ? _TextCommand::MoveWordLeft : _TextCommand::MoveLeft, shift);
+    if (keycode == Keycode::ArrowRight) return match(control ? _TextCommand::MoveWordRight : _TextCommand::MoveRight, shift);
+    if (keycode == Keycode::ArrowUp) return match(_TextCommand::MoveUp, shift);
+    if (keycode == Keycode::ArrowDown) return match(_TextCommand::MoveDown, shift);
+    if (keycode == Keycode::Home) return match(control ? _TextCommand::MoveDocumentStart : _TextCommand::MoveLineStart, shift);
+    if (keycode == Keycode::End) return match(control ? _TextCommand::MoveDocumentEnd : _TextCommand::MoveLineEnd, shift);
+    if (keycode == Keycode::Backspace) return match(control ? _TextCommand::DeleteWordBackward : _TextCommand::DeleteBackward);
+    if (keycode == Keycode::Delete) return match(control ? _TextCommand::DeleteWordForward : _TextCommand::DeleteForward);
+
+    if (control) {
+        if (keycode == Keycode::Z) return match(shift ? _TextCommand::Redo : _TextCommand::Undo);
+        if (keycode == Keycode::Y) return match(_TextCommand::Redo);
+        if (keycode == Keycode::A) return match(_TextCommand::SelectAll);
+        if (keycode == Keycode::C) return match(_TextCommand::Copy);
+        if (keycode == Keycode::X) return match(_TextCommand::Cut);
+        if (keycode == Keycode::V) return match(_TextCommand::Paste);
+    }
+#endif
+
+    return std::nullopt;
+}
+
 static float _SnapToPixelGrid(float value, float scale) {
     return (std::roundf(value * scale) / scale);
 }
@@ -46,6 +148,7 @@ Document::Document(Window& window)
     : Node()
     , _window(window)
     , _windowSub()
+    , _windowInputArea()
     , _windowCursor(Cursor::Default)
     , _painter()
     , _mouseState()
@@ -241,6 +344,8 @@ void Document::_handleEvent(WindowEvent const& event) {
         _handleKeyDownEvent(*keyDownEvent);
     } else if (auto keyUpEvent = event.as<KeyUpWindowEvent>()) {
         _handleKeyUpEvent(*keyUpEvent);
+    } else if (auto inputEvent = event.as<InputWindowEvent>()) {
+        _handleInputEvent(*inputEvent);
     } else if (
         event.is<ResizeWindowEvent>() ||
         event.is<DPIChangeWindowEvent>()
@@ -342,10 +447,10 @@ void Document::_handleKeyDownEvent(KeyDownWindowEvent const& event) {
 
     auto defaultPrevented = false;
 
-    _triggerKeyDown(event.getKey(), event.getModifiers(), event.getInput(), defaultPrevented);
+    _triggerKeyDown(event.getScancode(), event.getKeycode(), event.getModifiers(), event.isRepeat(), defaultPrevented);
 
     if (defaultPrevented == false) {
-        _processKey(event.getKey(), event.getModifiers(), event.getInput());
+        _processKey(event.getScancode(), event.getKeycode(), event.getModifiers());
     }
 
     _updateAll();
@@ -354,7 +459,21 @@ void Document::_handleKeyDownEvent(KeyDownWindowEvent const& event) {
 void Document::_handleKeyUpEvent(KeyUpWindowEvent const& event) {
     PROFILE
 
-    _triggerKeyUp(event.getKey(), event.getModifiers());
+    _triggerKeyUp(event.getScancode(), event.getKeycode(), event.getModifiers());
+    _updateAll();
+}
+
+void Document::_handleInputEvent(InputWindowEvent const& event) {
+    PROFILE
+
+    auto defaultPrevented = false;
+
+    _triggerBeforeInput(event.getText(), defaultPrevented);
+
+    if (defaultPrevented == false) {
+        _insertText(event.getText());
+    }
+
     _updateAll();
 }
 
@@ -853,7 +972,7 @@ void Document::_focusNext(bool reverse) {
     _needsRender = true;
 }
 
-void Document::_processKey(Key key, KeyModifiers const& modifiers, std::string const& input) {
+void Document::_processKey(Scancode scancode, std::string const& keycode, KeyModifiers const& modifiers) {
     PROFILE
 
     auto const focusedNode = _focusState.focusedNode;
@@ -863,12 +982,12 @@ void Document::_processKey(Key key, KeyModifiers const& modifiers, std::string c
         (focusedNode != nullptr) &&
         (focusedNode->_keyEvents == true)
     ) {
-        consumed = _inputText(key, modifiers, input);
+        consumed = _textCommand(GetShortcutKeycode(scancode, keycode), modifiers);
     }
 
     if (
         (consumed == false) &&
-        (key == Key::Tab) &&
+        (keycode == Keycode::Tab) &&
         (modifiers.meta == false) &&
         (modifiers.control == false) &&
         (modifiers.alt == false)
@@ -877,143 +996,161 @@ void Document::_processKey(Key key, KeyModifiers const& modifiers, std::string c
     }
 }
 
-bool Document::_inputText(Key key, KeyModifiers const& modifiers, std::string const& input) {
+bool Document::_textCommand(std::string const& keycode, KeyModifiers const& modifiers) {
     PROFILE
 
+    auto const match = _ResolveTextCommand(keycode, modifiers);
+    if (match.has_value() == false) return false;
+
     if (auto inputState = _ensureInputState()) {
+        auto& text = inputState->textObject;
+        auto const extend = match->extendSelection;
         auto const singleLine = (inputState->boxNode._contentMultiLine == false);
-        auto const controlOnly = modifiers.control && (modifiers.meta == false) && (modifiers.alt == false);
-        auto const contentBefore = inputState->textObject.getString();
+        auto const secure = (inputState->boxNode._contentSecure || inputState->textNode._contentSecure);
+        auto const contentBefore = text.getString();
 
-        inputState->textObject.setMultiLine(inputState->boxNode._contentMultiLine);
+        text.setMultiLine(inputState->boxNode._contentMultiLine);
 
-        if (controlOnly && (key == Key::KeyA)) {
-            inputState->textObject.moveLineStart(modifiers.shift);
-        } else if (controlOnly && (key == Key::KeyE)) {
-            inputState->textObject.moveLineEnd(modifiers.shift);
-        } else if (controlOnly && (key == Key::KeyF)) {
-            inputState->textObject.moveRight(modifiers.shift);
-        } else if (controlOnly && (key == Key::KeyB)) {
-            inputState->textObject.moveLeft(modifiers.shift);
-        } else if (controlOnly && (key == Key::KeyN)) {
-            inputState->textObject.moveDown(modifiers.shift);
-        } else if (controlOnly && (key == Key::KeyP)) {
-            inputState->textObject.moveUp(modifiers.shift);
-        } else if (controlOnly && (key == Key::KeyD)) {
-            inputState->textObject.deleteForward();
-        } else if (controlOnly && (key == Key::KeyH)) {
-            inputState->textObject.deleteBackward();
-        } else if (controlOnly && (key == Key::KeyK)) {
-            inputState->textObject.deleteLineForward();
-        } else if (key == Key::ArrowLeft) {
-            if (modifiers.meta) {
-                inputState->textObject.moveLineStart(modifiers.shift);
-            } else if (modifiers.alt) {
-                inputState->textObject.moveWordLeft(modifiers.shift);
-            } else {
-                inputState->textObject.moveLeft(modifiers.shift);
-            }
-        } else if (key == Key::ArrowRight) {
-            if (modifiers.meta) {
-                inputState->textObject.moveLineEnd(modifiers.shift);
-            } else if (modifiers.alt) {
-                inputState->textObject.moveWordRight(modifiers.shift);
-            } else {
-                inputState->textObject.moveRight(modifiers.shift);
-            }
-        } else if (key == Key::ArrowUp) {
-            if (modifiers.meta) {
-                inputState->textObject.moveDocumentStart(modifiers.shift);
-            } else {
-                inputState->textObject.moveUp(modifiers.shift);
-            }
-        } else if (key == Key::ArrowDown) {
-            if (modifiers.meta) {
-                inputState->textObject.moveDocumentEnd(modifiers.shift);
-            } else {
-                inputState->textObject.moveDown(modifiers.shift);
-            }
-        } else if (key == Key::Home) {
-            inputState->textObject.moveLineStart(modifiers.shift);
-        } else if (key == Key::End) {
-            inputState->textObject.moveLineEnd(modifiers.shift);
-        } else if (key == Key::Backspace) {
-            if (modifiers.meta) {
-                inputState->textObject.deleteLineBackward();
-            } else if (modifiers.alt) {
-                inputState->textObject.deleteWordBackward();
-            } else {
-                inputState->textObject.deleteBackward();
-            }
-        } else if (key == Key::Delete) {
-            if (modifiers.meta) {
-                inputState->textObject.deleteLineForward();
-            } else if (modifiers.alt) {
-                inputState->textObject.deleteWordForward();
-            } else {
-                inputState->textObject.deleteForward();
-            }
-        } else if ((key == Key::Enter) || (key == Key::NumpadEnter)) {
-            if (singleLine) {
-                return false; /* not inserted; the KeyDownNodeEvent already dispatched serves as the submit hook */
-            }
-            inputState->textObject.input("\n");
-        } else if (key == Key::Tab) {
-            if (singleLine) {
-                return false; /* left for focus traversal */
-            }
-            inputState->textObject.input("    "); /* the Text pipeline has no tab-stop handling, so insert spaces */
-        } else if ((key == Key::KeyZ) && modifiers.meta) {
-            if (modifiers.shift) {
-                inputState->textObject.redo();
-            } else {
-                inputState->textObject.undo();
-            }
-        } else if ((key == Key::KeyA) && modifiers.meta) {
-            inputState->textObject.selectAll();
-        } else if ((key == Key::KeyC) && modifiers.meta) {
-            if ((inputState->boxNode._contentSecure || inputState->textNode._contentSecure) == false) {
-                auto string = std::string();
-                inputState->textObject.copy(string);
-                if (string.empty() == false) {
-                    SetClipboardString(string);
+        switch (match->command) {
+            case _TextCommand::MoveLeft: text.moveLeft(extend); break;
+            case _TextCommand::MoveRight: text.moveRight(extend); break;
+            case _TextCommand::MoveUp: text.moveUp(extend); break;
+            case _TextCommand::MoveDown: text.moveDown(extend); break;
+            case _TextCommand::MoveWordLeft: text.moveWordLeft(extend); break;
+            case _TextCommand::MoveWordRight: text.moveWordRight(extend); break;
+            case _TextCommand::MoveLineStart: text.moveLineStart(extend); break;
+            case _TextCommand::MoveLineEnd: text.moveLineEnd(extend); break;
+            case _TextCommand::MoveDocumentStart: text.moveDocumentStart(extend); break;
+            case _TextCommand::MoveDocumentEnd: text.moveDocumentEnd(extend); break;
+            case _TextCommand::DeleteBackward: text.deleteBackward(); break;
+            case _TextCommand::DeleteForward: text.deleteForward(); break;
+            case _TextCommand::DeleteWordBackward: text.deleteWordBackward(); break;
+            case _TextCommand::DeleteWordForward: text.deleteWordForward(); break;
+            case _TextCommand::DeleteLineBackward: text.deleteLineBackward(); break;
+            case _TextCommand::DeleteLineForward: text.deleteLineForward(); break;
+            case _TextCommand::InsertLineBreak:
+                if (singleLine) return false; /* not inserted; the KeyDownNodeEvent already dispatched serves as the submit hook */
+                text.input("\n");
+                break;
+            case _TextCommand::InsertTab:
+                if (singleLine) return false; /* left for focus traversal */
+                text.input("    "); /* the Text pipeline has no tab-stop handling, so insert spaces */
+                break;
+            case _TextCommand::Undo: text.undo(); break;
+            case _TextCommand::Redo: text.redo(); break;
+            case _TextCommand::SelectAll: text.selectAll(); break;
+            case _TextCommand::Copy:
+            case _TextCommand::Cut:
+                if (secure == false) {
+                    auto string = std::string();
+                    if (match->command == _TextCommand::Copy) text.copy(string);
+                    else text.cut(string);
+                    if (string.empty() == false) SetClipboardString(string);
                 }
-            }
-        } else if ((key == Key::KeyX) && modifiers.meta) {
-            if ((inputState->boxNode._contentSecure || inputState->textNode._contentSecure) == false) {
-                auto string = std::string();
-                inputState->textObject.cut(string);
-                if (string.empty() == false) {
-                    SetClipboardString(string);
-                }
-            }
-        } else if ((key == Key::KeyV) && modifiers.meta) {
-            inputState->textObject.paste(GetClipboardString());
-        } else if (
-            (input.empty() == false) &&
-            (modifiers.meta == false) &&
-            (modifiers.control == false)
-        ) {
-            inputState->textObject.input(input);
-        } else {
-            return false;
+                break;
+            case _TextCommand::Paste: text.paste(GetClipboardString()); break;
         }
 
-        _needsRender = true;
-        _restartCaretBlink();
-
-        auto const& contentAfter = inputState->textObject.getString();
-        if (contentAfter != contentBefore) {
-            inputState->textNode.setContent(contentAfter);
-            _queueEvent(
-                std::make_unique<InputNodeEvent>(inputState->boxNode, contentAfter)
-            );
-        }
-
+        _applyText(*inputState, contentBefore);
         return true;
     }
 
     return false;
+}
+
+void Document::_insertText(std::string const& text) {
+    PROFILE
+
+    if (_getTextInputNode() == nullptr) {
+        return;
+    }
+
+    if (auto inputState = _ensureInputState()) {
+        auto const contentBefore = inputState->textObject.getString();
+
+        inputState->textObject.setMultiLine(inputState->boxNode._contentMultiLine);
+        inputState->textObject.input(text);
+
+        _applyText(*inputState, contentBefore);
+    }
+}
+
+void Document::_applyText(_InputState const& inputState, std::string const& contentBefore) {
+    PROFILE
+
+    _needsRender = true;
+    _restartCaretBlink();
+
+    auto const& contentAfter = inputState.textObject.getString();
+    if (contentAfter != contentBefore) {
+        inputState.textNode.setContent(contentAfter);
+        _queueEvent(
+            std::make_unique<InputNodeEvent>(inputState.boxNode, contentAfter)
+        );
+    }
+}
+
+Node* Document::_getTextInputNode() const {
+    PROFILE
+
+    /* the focused node takes text when it has key events and is an editable or draws its own text (an input area) */
+    if (
+        (_focusState.focusedNode == nullptr) ||
+        (_focusState.focusedNode->_keyEvents == false) ||
+        (
+            (_isNodeEditable(*_focusState.focusedNode) == false) &&
+            (_focusState.focusedNode->_inputArea.has_value() == false)
+        )
+    ) {
+        return nullptr;
+    }
+
+    return _focusState.focusedNode;
+}
+
+bool Document::_isSingleLineText(Node const& node) const {
+    PROFILE
+
+    return (node._textObject != nullptr)
+        && (node._textObject->getMultiLine() == false)
+        && (node._parent != nullptr);
+}
+
+void Document::_syncInputArea() {
+    PROFILE
+
+    auto area = std::optional<Vec4>();
+
+    if (auto const node = _getTextInputNode()) {
+        if (node->_inputArea.has_value()) {
+            area = Vec4{ node->convertPointToDocument(node->_inputArea->origin), node->_inputArea->size };
+        } else {
+            /* an editable: its caret in document coordinates, the inverse of _getTextLocalPosition */
+            auto const& textNode = *node->_firstChild;
+            auto const textOrigin = (textNode._computedBorderRectInDocument.origin + textNode._computedTextRect.origin);
+
+            if (textNode._textObject != nullptr) {
+                auto const& caretRect = textNode._textObject->getCaretRect();
+                area = Vec4{
+                    (textOrigin + ((caretRect.origin - Vec2{ textNode._textScrollX, 0.0f }) * (1.0f / _scale))),
+                    (caretRect.size * (1.0f / _scale))
+                };
+            } else {
+                area = Vec4{ textOrigin, Vec2{ 1.0f, textNode._computedTextRect.height } };
+            }
+        }
+    }
+
+    /* document coordinates to window points: the inverse of _convertPoint */
+    if (area.has_value()) {
+        auto const factor = (_scale / _window.getScale());
+        area = Vec4{ (area->origin * factor), (area->size * factor) };
+    }
+
+    if (area != _windowInputArea) {
+        _windowInputArea = area;
+        _window.setInputArea(area);
+    }
 }
 
 std::optional<Document::_InputState> Document::_ensureInputState() {
@@ -1284,6 +1421,75 @@ void Document::_updateNode(Node& node) {
         std::clamp(node._scrollPosition.x, 0.0f, node._scrollOverflow.x),
         std::clamp(node._scrollPosition.y, 0.0f, node._scrollOverflow.y)
     };
+
+    _updateText(node);
+}
+
+void Document::_updateText(Node& node) {
+    PROFILE
+
+    if (node._display != NodeDisplay::Text) return;
+    if (node._textObject == nullptr) return;
+
+    auto const text = node._textObject.get();
+    auto const singleLine = _isSingleLineText(node);
+
+    /* layout measured the text against its constraints; settle it at its final size */
+    text->setMaxWidth(std::nullopt);
+    text->setMaxHeight(std::nullopt);
+    text->setWidth(singleLine ? std::nullopt : std::optional<float>(std::floorf(node._computedTextRect.width * _scale)));
+    text->setHeight(std::floorf(node._computedTextRect.height * _scale));
+
+    /* the field being edited scrolls once per update, in _updateAll; the rest show their start */
+    if (text->getEditable() == false) {
+        _updateTextScroll(node);
+    }
+}
+
+void Document::_updateTextScroll(Node& node) {
+    PROFILE
+
+    auto const text = node._textObject.get();
+    if (text == nullptr) return;
+
+    auto const singleLine = _isSingleLineText(node);
+    auto scrollX = node._textScrollX;
+
+    /* A single-line surface never wraps. While it is being edited it scrolls
+       horizontally so the caret stays inside the slot its box gives it;
+       unfocused, it shows its start. */
+    if (singleLine && text->getEditable()) {
+        auto const visibleWidth = _getTextVisibleWidth(node);
+        auto const& caretRect = text->getCaretRect();
+
+        if ((caretRect.getMaxX() - scrollX) > visibleWidth) {
+            scrollX = (caretRect.getMaxX() - visibleWidth);
+        }
+        if ((caretRect.x - scrollX) < 0.0f) {
+            scrollX = caretRect.x;
+        }
+
+        scrollX = std::ceilf(std::clamp(scrollX, 0.0f, std::max(0.0f, (std::max(text->getSize().width, caretRect.getMaxX()) - visibleWidth))));
+    } else {
+        scrollX = 0.0f;
+    }
+
+    if (node._textScrollX != scrollX) {
+        node._textScrollX = scrollX;
+        _needsRender = true;
+    }
+}
+
+float Document::_getTextVisibleWidth(Node const& node) const {
+    PROFILE
+
+    /* the slot a box gives its single-line text, in pixels: the box's border
+       rect minus its border and, mirrored, the text's left inset */
+    auto const& parent = *node._parent;
+    auto const inset = (node._computedBorderRectInDocument.x - parent._computedBorderRectInDocument.x - parent._computedBorderEdge.left);
+    auto const visibleMaxX = (parent._computedBorderRectInDocument.getMaxX() - parent._computedBorderEdge.right - inset);
+
+    return std::max(1.0f, ((visibleMaxX - node._computedBorderRectInDocument.x) * _scale));
 }
 
 void Document::_updateCursor() {
@@ -1331,7 +1537,13 @@ void Document::_updateAll() {
         else _flushEvents();
     }
 
+    /* the caret moves without a relayout (arrows, selection): keep it in view */
+    if (auto const focusedNode = _focusState.focusedNode; focusedNode != nullptr && _isNodeEditable(*focusedNode)) {
+        _updateTextScroll(*focusedNode->_firstChild);
+    }
+
     _updateCursor();
+    _syncInputArea();
 
     _isUpdating = false;
 }
@@ -1512,12 +1724,7 @@ void Document::_renderNodeText(Node& node, _RenderInfo const& info) {
     auto const text = node._textObject.get();
 
     auto const editable = text->getEditable();
-    auto const singleLine = (text->getMultiLine() == false) && (node._parent != nullptr);
-
-    text->setMaxWidth(std::nullopt);
-    text->setMaxHeight(std::nullopt);
-    text->setWidth(singleLine ? std::nullopt : std::optional<float>(std::floorf(node._computedTextRect.width * _scale)));
-    text->setHeight(std::floorf(node._computedTextRect.height * _scale));
+    auto const singleLine = _isSingleLineText(node);
 
     auto const textOrigin = (info.borderShape.rect.origin + (node._computedTextRect.origin * _scale));
     auto textClipRect = info.clipRect;
@@ -1527,38 +1734,15 @@ void Document::_renderNodeText(Node& node, _RenderInfo const& info) {
     };
 
     if (singleLine) {
-        /* A single-line surface never wraps and is clipped to the slot
-           the box gives its text (the box's border rect minus its border
-           and, mirrored, the text's left inset). While it is being
-           edited it scrolls horizontally so the caret stays inside that
-           slot; unfocused, it shows its start. */
-        auto const inset = (node._computedBorderRectInDocument.x - node._parent->_computedBorderRectInDocument.x - node._parent->_computedBorderEdge.left);
-        auto const visibleMaxX = ((node._parent->_computedBorderRectInDocument.getMaxX() - node._parent->_computedBorderEdge.right - inset) * _scale) + info.offset.x;
-        auto const visibleWidth = std::max(1.0f, (visibleMaxX - info.borderShape.rect.x));
-        auto& scrollX = node._textScrollX;
+        /* a single-line surface is clipped to the slot its box gives it and
+           shifted by the scroll the update pass computed (_updateTextScroll) */
+        auto const visibleWidth = _getTextVisibleWidth(node);
 
-        if (editable) {
-            auto const& caretRect = text->getCaretRect();
-
-            if ((caretRect.getMaxX() - scrollX) > visibleWidth) {
-                scrollX = (caretRect.getMaxX() - visibleWidth);
-            }
-            if ((caretRect.x - scrollX) < 0.0f) {
-                scrollX = caretRect.x;
-            }
-
-            scrollX = std::ceilf(std::clamp(scrollX, 0.0f, std::max(0.0f, (std::max(textRect.width, caretRect.getMaxX()) - visibleWidth))));
-        } else {
-            scrollX = 0.0f;
-        }
-
-        textRect.x -= scrollX;
+        textRect.x -= node._textScrollX;
 
         auto const clipMinX = std::max(info.clipRect.x, info.borderShape.rect.x);
         auto const clipMaxX = std::min(info.clipRect.getMaxX(), (info.borderShape.rect.x + visibleWidth));
         textClipRect = { clipMinX, info.clipRect.y, std::max(0.0f, (clipMaxX - clipMinX)), info.clipRect.height };
-    } else {
-        node._textScrollX = 0.0f;
     }
 
     if (editable) {
@@ -1792,7 +1976,7 @@ void Document::_triggerMouseUp(Mouse mouse, KeyModifiers const& modifiers) {
     );
 }
 
-void Document::_triggerKeyDown(Key key, KeyModifiers const& modifiers, std::string const& input, bool& defaultPrevented) {
+void Document::_triggerKeyDown(Scancode scancode, std::string const& keycode, KeyModifiers const& modifiers, bool repeat, bool& defaultPrevented) {
     PROFILE
 
     _flushEvents();
@@ -1803,12 +1987,25 @@ void Document::_triggerKeyDown(Key key, KeyModifiers const& modifiers, std::stri
             : this
     );
 
-    auto const event = KeyDownNodeEvent(*targetNode, key, modifiers, input);
+    auto const event = KeyDownNodeEvent(*targetNode, scancode, keycode, modifiers, repeat);
     targetNode->dispatchEvent(event);
     defaultPrevented = event.isDefaultPrevented();
 }
 
-void Document::_triggerKeyUp(Key key, KeyModifiers const& modifiers) {
+void Document::_triggerBeforeInput(std::string const& text, bool& defaultPrevented) {
+    PROFILE
+
+    _flushEvents();
+
+    auto const targetNode = _getTextInputNode();
+    if (targetNode == nullptr) return;
+
+    auto const event = BeforeInputNodeEvent(*targetNode, text);
+    targetNode->dispatchEvent(event);
+    defaultPrevented = event.isDefaultPrevented();
+}
+
+void Document::_triggerKeyUp(Scancode scancode, std::string const& keycode, KeyModifiers const& modifiers) {
     PROFILE
 
     _flushEvents();
@@ -1820,7 +2017,7 @@ void Document::_triggerKeyUp(Key key, KeyModifiers const& modifiers) {
     );
 
     targetNode->dispatchEvent(
-        KeyUpNodeEvent(*targetNode, key, modifiers)
+        KeyUpNodeEvent(*targetNode, scancode, keycode, modifiers)
     );
 }
 

@@ -387,13 +387,13 @@ TEST(Document, Focus) {
     document.update();
 
     auto events = std::vector<std::string>();
-    auto keyInput = std::string();
-    auto key = Rocket::Key::Unknown;
+    auto keycode = std::string();
+    auto key = Rocket::Scancode::Unknown;
     auto sub = Sub<NodeEvent const&>(a.onEvent, [&](NodeEvent const& event) {
         events.push_back(eventName(event));
         if (auto e = event.as<KeyDownNodeEvent>()) {
-            key = e->getKey();
-            keyInput = e->getInput();
+            key = e->getScancode();
+            keycode = e->getKeycode();
         }
     });
 
@@ -407,11 +407,11 @@ TEST(Document, Focus) {
     ASSERT_TRUE(document.isFocusedWithin() == true);
 
     events.clear();
-    window.onEvent.publish(KeyDownWindowEvent(window, Rocket::Key::KeyA, KeyModifiers{}, "a"));
-    window.onEvent.publish(KeyUpWindowEvent(window, Rocket::Key::KeyA, KeyModifiers{}));
+    window.onEvent.publish(KeyDownWindowEvent(window, Rocket::Scancode::KeyA, GetDefaultKeycode(Rocket::Scancode::KeyA), KeyModifiers{}));
+    window.onEvent.publish(KeyUpWindowEvent(window, Rocket::Scancode::KeyA, GetDefaultKeycode(Rocket::Scancode::KeyA), KeyModifiers{}));
     ASSERT_TRUE(events == std::vector<std::string>({ "keydown", "keyup" }));
-    ASSERT_TRUE(key == Rocket::Key::KeyA);
-    ASSERT_TRUE(keyInput == "a");
+    ASSERT_TRUE(key == Rocket::Scancode::KeyA);
+    ASSERT_TRUE(keycode == Keycode::A);
 }
 
 /* Wheel: scrolling over a scrollable node shifts its children by the
@@ -885,15 +885,18 @@ inline void _ScriptDrag(Window& window, Vec2 const& from, Vec2 const& to, KeyMod
     window.onEvent.publish(MouseUpWindowEvent(window, Mouse::LeftButton, to, modifiers));
 }
 
-/** Presses and releases a key, with optional produced text input. */
-inline void _ScriptKey(Window& window, Rocket::Key const& key, KeyModifiers const& modifiers = {}, std::string const& input = "") {
-    window.onEvent.publish(KeyDownWindowEvent(window, key, modifiers, input));
-    window.onEvent.publish(KeyUpWindowEvent(window, key, modifiers));
+/** Presses and releases a key; like the OS, it commits its text as input unless it is a Command or Control shortcut. */
+inline void _ScriptKey(Window& window, Rocket::Scancode const& key, KeyModifiers const& modifiers = {}, std::string const& input = "") {
+    window.onEvent.publish(KeyDownWindowEvent(window, key, GetDefaultKeycode(key), modifiers));
+    if (input.empty() == false && modifiers.meta == false && modifiers.control == false) {
+        window.onEvent.publish(InputWindowEvent(window, input));
+    }
+    window.onEvent.publish(KeyUpWindowEvent(window, key, GetDefaultKeycode(key), modifiers));
 }
 
 /** Types a string as a single text-producing keypress. */
 inline void _ScriptType(Window& window, std::string const& input) {
-    _ScriptKey(window, Rocket::Key::Unknown, {}, input);
+    _ScriptKey(window, Rocket::Scancode::Unknown, {}, input);
 }
 
 /* ------------------------------ layout seams ------------------------------
@@ -1610,22 +1613,22 @@ TEST(Document, EditingSingleLineByDefaultEnterAndTabInsertNothing) {
     auto sub = Sub<NodeEvent const&>();
     sub.on(box.onEvent, [&enterKeyDowns](NodeEvent const& event) {
         if (auto e = event.as<KeyDownNodeEvent>()) {
-            if (e->getKey() == Rocket::Key::Enter) enterKeyDowns += 1;
+            if (e->getScancode() == Rocket::Scancode::Enter) enterKeyDowns += 1;
         }
     });
 
-    _ScriptKey(window, Rocket::Key::End);
-    _ScriptKey(window, Rocket::Key::Enter);
+    _ScriptKey(window, Rocket::Scancode::End);
+    _ScriptKey(window, Rocket::Scancode::Enter);
     ASSERT_TRUE(text.getContent() == "ab");
     ASSERT_TRUE(enterKeyDowns == 1);
 
-    _ScriptKey(window, Rocket::Key::NumpadEnter);
+    _ScriptKey(window, Rocket::Scancode::NumpadEnter);
     ASSERT_TRUE(text.getContent() == "ab");
 
-    _ScriptKey(window, Rocket::Key::Tab);
+    _ScriptKey(window, Rocket::Scancode::Tab);
     ASSERT_TRUE(text.getContent() == "ab");
 
-    _ScriptKey(window, Rocket::Key::KeyC, {}, "c");
+    _ScriptKey(window, Rocket::Scancode::KeyC, {}, "c");
     ASSERT_TRUE(text.getContent() == "abc");
 }
 
@@ -1641,11 +1644,11 @@ TEST(Document, EditingMultiLineEnterInsertsLineBreak) {
     _ScriptEditableSetup(document, box, text, "ab");
     box.setContentMultiLine(true);
 
-    _ScriptKey(window, Rocket::Key::End);
-    _ScriptKey(window, Rocket::Key::Enter);
+    _ScriptKey(window, Rocket::Scancode::End);
+    _ScriptKey(window, Rocket::Scancode::Enter);
     ASSERT_TRUE(text.getContent() == "ab\n");
 
-    _ScriptKey(window, Rocket::Key::Tab);
+    _ScriptKey(window, Rocket::Scancode::Tab);
     ASSERT_TRUE(text.getContent() == "ab\n    ");
 }
 
@@ -1664,12 +1667,12 @@ TEST(Document, EditingSingleLinePasteStripsLineBreaks) {
     _ScriptEditableSetup(document, box, text, "");
 
     SetClipboardString("a\nb\r\nc\rd");
-    _ScriptKey(window, Rocket::Key::KeyV, KeyModifiers{ .meta = true }, "v");
+    _ScriptKey(window, Rocket::Scancode::KeyV, KeyModifiers{ .meta = true }, "v");
     ASSERT_TRUE(text.getContent() == "a b c d");
 
     box.setContentMultiLine(true);
-    _ScriptKey(window, Rocket::Key::KeyA, KeyModifiers{ .meta = true }, "a");
-    _ScriptKey(window, Rocket::Key::KeyV, KeyModifiers{ .meta = true }, "v");
+    _ScriptKey(window, Rocket::Scancode::KeyA, KeyModifiers{ .meta = true }, "a");
+    _ScriptKey(window, Rocket::Scancode::KeyV, KeyModifiers{ .meta = true }, "v");
     ASSERT_TRUE(text.getContent() == "a\nb\nc\nd");
 
     SetClipboardString(original);
@@ -1686,7 +1689,7 @@ TEST(Document, EditingSingleLineTypedLineBreaksBecomeSpaces) {
     auto text = Node();
     _ScriptEditableSetup(document, box, text, "");
 
-    _ScriptKey(window, Rocket::Key::KeyX, {}, "x\ny");
+    _ScriptKey(window, Rocket::Scancode::KeyX, {}, "x\ny");
     ASSERT_TRUE(text.getContent() == "x y");
 }
 
@@ -1701,12 +1704,12 @@ TEST(Document, EditingSingleLineArrowsMoveToLineEdges) {
     auto text = Node();
     _ScriptEditableSetup(document, box, text, "bc");
 
-    _ScriptKey(window, Rocket::Key::ArrowUp);
-    _ScriptKey(window, Rocket::Key::KeyA, {}, "a");
+    _ScriptKey(window, Rocket::Scancode::ArrowUp);
+    _ScriptKey(window, Rocket::Scancode::KeyA, {}, "a");
     ASSERT_TRUE(text.getContent() == "abc");
 
-    _ScriptKey(window, Rocket::Key::ArrowDown);
-    _ScriptKey(window, Rocket::Key::KeyD, {}, "d");
+    _ScriptKey(window, Rocket::Scancode::ArrowDown);
+    _ScriptKey(window, Rocket::Scancode::KeyD, {}, "d");
     ASSERT_TRUE(text.getContent() == "abcd");
 }
 
@@ -2333,27 +2336,27 @@ TEST(Document, KeyEventPayloadsArriveAsSent) {
     document.update();
     document.focusNode(&box);
 
-    auto key = Rocket::Key::Unknown;
-    auto input = std::string();
+    auto key = Rocket::Scancode::Unknown;
+    auto keycode = std::string();
     auto meta = false;
-    auto upKey = Rocket::Key::Unknown;
+    auto upKey = Rocket::Scancode::Unknown;
 
     auto sub = Sub<NodeEvent const&>();
     sub.on(box.onEvent, [&](NodeEvent const& event) {
         if (auto e = event.as<KeyDownNodeEvent>()) {
-            key = e->getKey();
-            input = e->getInput();
+            key = e->getScancode();
+            keycode = e->getKeycode();
             meta = e->getModifiers().meta;
         } else if (auto e = event.as<KeyUpNodeEvent>()) {
-            upKey = e->getKey();
+            upKey = e->getScancode();
         }
     });
 
-    _ScriptKey(window, Rocket::Key::KeyQ, KeyModifiers{ .meta = true }, "q");
-    ASSERT_TRUE(key == Rocket::Key::KeyQ);
-    ASSERT_TRUE(input == "q");
+    _ScriptKey(window, Rocket::Scancode::KeyQ, KeyModifiers{ .meta = true }, "q");
+    ASSERT_TRUE(key == Rocket::Scancode::KeyQ);
+    ASSERT_TRUE(keycode == Keycode::Q);
     ASSERT_TRUE(meta == true);
-    ASSERT_TRUE(upKey == Rocket::Key::KeyQ);
+    ASSERT_TRUE(upKey == Rocket::Scancode::KeyQ);
 }
 
 /* A focused node with key events disabled emits no key events and does not
@@ -2379,13 +2382,13 @@ TEST(Document, KeyEventsDisabled) {
     auto boxSub = Sub<NodeEvent const&>(box.onEvent, [&](NodeEvent const& event) { boxEvents.push_back(eventName(event)); });
     auto documentSub = Sub<NodeEvent const&>(document.onEvent, [&](NodeEvent const& event) { documentEvents.push_back(eventName(event)); });
 
-    _ScriptKey(window, Rocket::Key::KeyA, KeyModifiers{}, "a");
+    _ScriptKey(window, Rocket::Scancode::KeyA, KeyModifiers{}, "a");
     ASSERT_TRUE(box.isFocused() == true);
     ASSERT_TRUE(boxEvents.empty());
     ASSERT_TRUE(documentEvents == std::vector<std::string>({ "keydown", "keyup" }));
 
     box.setKeyEvents(true);
-    _ScriptKey(window, Rocket::Key::KeyA, KeyModifiers{}, "a");
+    _ScriptKey(window, Rocket::Scancode::KeyA, KeyModifiers{}, "a");
     ASSERT_TRUE(boxEvents == std::vector<std::string>({ "keydown", "keyup" }));
 }
 
@@ -3690,4 +3693,129 @@ TEST(Document, ConvertPointBetweenDocumentAndNode) {
 
     ASSERT_TRUE(containerLocal == Vec2(10.0f, 15.0f));
     ASSERT_TRUE(targetLocal == Vec2(10.0f, 5.0f));
+}
+
+/* The document keeps the window's input area on the focused editable's
+   caret (in window points), and clears it when focus leaves, which turns the
+   OS text system off. */
+TEST(Document, InputAreaFollowsFocusedEditable) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    auto box = Node();
+    auto text = Node();
+    _ScriptEditableSetup(document, box, text, "hello");
+    document.update();
+    document.render();
+
+    auto const area = window.getInputArea();
+    ASSERT_TRUE(area.has_value());
+
+    auto const factor = (document.getScale() / window.getScale());
+    auto const rect = (box.getComputedBorderRect() * factor);
+    ASSERT_TRUE(area->x >= rect.x && area->getMaxX() <= rect.getMaxX());
+    ASSERT_TRUE(area->y >= rect.y && area->getMaxY() <= rect.getMaxY());
+    ASSERT_TRUE(area->height > 0.0f);
+
+    /* the caret moves right as text is typed */
+    _ScriptType(window, "!");
+    document.render();
+    ASSERT_TRUE(window.getInputArea().has_value());
+    ASSERT_TRUE(window.getInputArea()->x > area->x);
+
+    document.focusNode(nullptr);
+    document.update();
+    ASSERT_TRUE(window.getInputArea().has_value() == false);
+}
+
+/* A focused node with an input area takes text input although it is not
+   editable: the window's input area is its local caret rect in window
+   points, and typed text reaches it as BeforeInputNodeEvent. */
+TEST(Document, NodeInputAreaTakesTextInput) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto spacer = Node();
+    spacer.setHeight(30.0f);
+    document.appendChild(spacer);
+
+    auto canvas = Node();
+    canvas.setWidth(200.0f);
+    canvas.setHeight(100.0f);
+    canvas.setTabIndex(1);
+    canvas.setInputArea(Vec4{ 10.0f, 5.0f, 1.0f, 12.0f });
+    document.appendChild(canvas);
+
+    auto texts = std::vector<std::string>();
+    auto sub = Sub<NodeEvent const&>(canvas.onEvent, [&](NodeEvent const& event) {
+        if (auto e = event.as<BeforeInputNodeEvent>()) texts.push_back(e->getText());
+    });
+
+    document.update();
+    ASSERT_TRUE(window.getInputArea().has_value() == false); /* not focused yet */
+
+    document.focusNode(&canvas);
+    document.update();
+
+    auto const factor = (document.getScale() / window.getScale());
+    auto const origin = canvas.convertPointToDocument({ 10.0f, 5.0f });
+    ASSERT_TRUE(window.getInputArea().has_value());
+    ASSERT_TRUE(*window.getInputArea() == Vec4(origin.x * factor, origin.y * factor, 1.0f * factor, 12.0f * factor));
+
+    window.onEvent.publish(InputWindowEvent(window, "x"));
+    window.onEvent.publish(InputWindowEvent(window, "日本語"));
+    ASSERT_TRUE(texts == std::vector<std::string>({ "x", "日本語" }));
+
+    /* clearing the node's input area turns text input off */
+    canvas.setInputArea(std::nullopt);
+    document.update();
+    ASSERT_TRUE(window.getInputArea().has_value() == false);
+
+    window.onEvent.publish(InputWindowEvent(window, "y"));
+    ASSERT_TRUE(texts.size() == 2);
+}
+
+/* The scroll that keeps a long single-line field's caret in view is part of
+   the update pass, so the input area is right after update() alone: at the
+   end of overflowing text it stays inside the field, without a render. */
+TEST(Document, InputAreaFollowsScrolledCaretWithoutRender) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    auto box = Node();
+    auto text = Node();
+    _ScriptEditableSetup(document, box, text, std::string(120, 'w'));
+
+    _ScriptKey(window, Rocket::Scancode::End);
+    document.update();
+
+    auto const area = window.getInputArea();
+    ASSERT_TRUE(area.has_value());
+    ASSERT_TRUE(text.getComputedBorderRect().width > box.getComputedBorderRect().width); /* the text overflows */
+
+    auto const factor = (document.getScale() / window.getScale());
+    auto const rect = (box.getComputedBorderRect() * factor);
+    ASSERT_TRUE(area->x >= rect.x && area->getMaxX() <= (rect.getMaxX() + 1.0f));
+}
+
+/* The repeat flag of a key-down travels from the window event to the node event. */
+TEST(Document, KeyRepeatReachesNodeEvent) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto repeats = std::vector<bool>();
+    auto sub = Sub<NodeEvent const&>(document.onEvent, [&](NodeEvent const& event) {
+        if (auto e = event.as<KeyDownNodeEvent>()) repeats.push_back(e->isRepeat());
+    });
+
+    window.onEvent.publish(KeyDownWindowEvent(window, Rocket::Scancode::KeyA, std::string(Keycode::A), {}));
+    window.onEvent.publish(KeyDownWindowEvent(window, Rocket::Scancode::KeyA, std::string(Keycode::A), {}, true));
+
+    ASSERT_TRUE(repeats == std::vector<bool>({ false, true }));
 }

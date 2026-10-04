@@ -1,5 +1,8 @@
 #pragma once
 
+#include <vector>
+#include <utility>
+#include <optional>
 #include <Rocket/Math/Vec2.hpp>
 #include <Rocket/Math/Vec4.hpp>
 #include <Rocket/Base/Object.hpp>
@@ -39,6 +42,9 @@ public:
 
     /** Returns the mouse cursor shape shown over the window's content area; Cursor::Default initially. */
     Cursor getCursor() const;
+
+    /** Returns the caret rectangle last set with setInputArea; nullopt initially. */
+    std::optional<Vec4> const& getInputArea() const;
 
     /** Returns the position of the window frame's top-left corner, in points, in a top-left-origin coordinate system of the window's screen (the primary screen while hidden or off-screen). */
     Vec2 const& getPosition() const;
@@ -121,6 +127,21 @@ public:
     void setCursor(Cursor cursor);
 
     /**
+     * Tells the OS text system where the caret of the focused text field is,
+     * so an input method can place its candidate list next to it.
+     *
+     * The rectangle is in window content coordinates (points, top-left
+     * origin), like mouse positions. While it is set the OS text system is
+     * on and InputWindowEvent / CompositionWindowEvent arrive; nullopt turns
+     * it off (and drops any composition in progress), so keys produce key
+     * events only. A Document keeps this up to date for its focused editable
+     * or input-area node (see Node::setInputArea).
+     *
+     * @param caretRect The caret rectangle, or nullopt when no text field has focus.
+     */
+    void setInputArea(std::optional<Vec4> const& caretRect);
+
+    /**
      * Shows or hides the window; showing also makes it the key window.
      * Publishes ShowWindowEvent / HideWindowEvent on change.
      *
@@ -200,6 +221,8 @@ private:
 
     std::string _title;
     Cursor _cursor;
+    std::optional<Vec4> _inputArea;
+    std::vector<std::pair<Scancode, std::string>> _pressedKeys;
     _Window* _impl;
 
     void _show();
@@ -217,8 +240,10 @@ private:
     void _mouseWheel(Vec2 const&, KeyModifiers const&);
     void _mouseDown(Mouse const&, Vec2 const&, KeyModifiers const&, int clickCount = 1);
     void _mouseUp(Mouse const&, Vec2 const&, KeyModifiers const&);
-    void _keyDown(Key const&, KeyModifiers const&, std::string const&);
-    void _keyUp(Key const&, KeyModifiers const&);
+    void _keyDown(Scancode, std::string const&, KeyModifiers const&, bool);
+    void _keyUp(Scancode, std::string const&, KeyModifiers const&);
+    void _input(std::string const&);
+    void _composition(std::string const&, std::int32_t, std::int32_t);
     void _focus();
     void _blur();
     void _paint();
@@ -245,6 +270,7 @@ private:
     void __setSize(Vec2 const&);
     void __setTitle(std::string const&);
     void __setCursor(Cursor);
+    void __setInputArea(std::optional<Vec4> const&);
     void __setVisible(bool);
     void __setClosable(bool);
     void __setSizable(bool);

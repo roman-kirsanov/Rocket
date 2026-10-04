@@ -151,6 +151,7 @@ Node::Node()
     , _contentSecure(false)
     , _contentMultiLine(false)
     , _tabIndex(0)
+    , _inputArea()
     , _skip(false)
     , _flex(false)
     , _keyEvents(true)
@@ -671,6 +672,12 @@ std::optional<Cursor> const& Node::getCursor() const {
     PROFILE
 
     return _cursor;
+}
+
+std::optional<Vec4> const& Node::getInputArea() const {
+    PROFILE
+
+    return _inputArea;
 }
 
 std::optional<std::string> const& Node::getContent() const {
@@ -1515,6 +1522,12 @@ void Node::setTabIndex(int tabIndex) {
     if (_tabIndex != tabIndex) {
         _tabIndex = tabIndex;
     }
+}
+
+void Node::setInputArea(std::optional<Vec4> const& inputArea) {
+    PROFILE
+
+    _inputArea = inputArea;
 }
 
 void Node::setSkip(bool skip) {

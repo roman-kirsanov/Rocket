@@ -284,19 +284,26 @@ KeyModifiers const& MouseDragNodeEvent::getModifiers() const {
     return _modifiers;
 }
 
-KeyDownNodeEvent::KeyDownNodeEvent(Node& node, Key const& key, KeyModifiers const& modifiers, std::string const& input)
+KeyDownNodeEvent::KeyDownNodeEvent(Node& node, Scancode scancode, std::string const& keycode, KeyModifiers const& modifiers, bool repeat)
     : NodeEvent(node)
-    , _key(key)
+    , _scancode(scancode)
+    , _keycode(keycode)
     , _modifiers(modifiers)
-    , _input(input)
+    , _repeat(repeat)
 {
     PROFILE
 }
 
-Key KeyDownNodeEvent::getKey() const {
+Scancode KeyDownNodeEvent::getScancode() const {
     PROFILE
 
-    return _key;
+    return _scancode;
+}
+
+std::string const& KeyDownNodeEvent::getKeycode() const {
+    PROFILE
+
+    return _keycode;
 }
 
 KeyModifiers const& KeyDownNodeEvent::getModifiers() const {
@@ -305,30 +312,50 @@ KeyModifiers const& KeyDownNodeEvent::getModifiers() const {
     return _modifiers;
 }
 
-std::string const& KeyDownNodeEvent::getInput() const {
+bool KeyDownNodeEvent::isRepeat() const {
     PROFILE
 
-    return _input;
+    return _repeat;
 }
 
-KeyUpNodeEvent::KeyUpNodeEvent(Node& node, Key const& key, KeyModifiers const& modifiers)
+KeyUpNodeEvent::KeyUpNodeEvent(Node& node, Scancode scancode, std::string const& keycode, KeyModifiers const& modifiers)
     : NodeEvent(node)
-    , _key(key)
+    , _scancode(scancode)
+    , _keycode(keycode)
     , _modifiers(modifiers)
 {
     PROFILE
 }
 
-Key KeyUpNodeEvent::getKey() const {
+Scancode KeyUpNodeEvent::getScancode() const {
     PROFILE
 
-    return _key;
+    return _scancode;
+}
+
+std::string const& KeyUpNodeEvent::getKeycode() const {
+    PROFILE
+
+    return _keycode;
 }
 
 KeyModifiers const& KeyUpNodeEvent::getModifiers() const {
     PROFILE
 
     return _modifiers;
+}
+
+BeforeInputNodeEvent::BeforeInputNodeEvent(Node& node, std::string const& text)
+    : NodeEvent(node)
+    , _text(text)
+{
+    PROFILE
+}
+
+std::string const& BeforeInputNodeEvent::getText() const {
+    PROFILE
+
+    return _text;
 }
 
 InputNodeEvent::InputNodeEvent(Node& node, std::string const& content)

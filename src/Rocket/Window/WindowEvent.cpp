@@ -164,19 +164,26 @@ KeyModifiers const& MouseUpWindowEvent::getModifiers() const {
     return _modifiers;
 }
 
-KeyDownWindowEvent::KeyDownWindowEvent(Window& window, Key const& key, KeyModifiers const& modifiers, std::string const& input)
+KeyDownWindowEvent::KeyDownWindowEvent(Window& window, Scancode scancode, std::string const& keycode, KeyModifiers const& modifiers, bool repeat)
     : WindowEvent(window)
-    , _key(key)
+    , _scancode(scancode)
+    , _keycode(keycode)
     , _modifiers(modifiers)
-    , _input(input)
+    , _repeat(repeat)
 {
     PROFILE
 }
 
-Key const& KeyDownWindowEvent::getKey() const {
+Scancode KeyDownWindowEvent::getScancode() const {
     PROFILE
 
-    return _key;
+    return _scancode;
+}
+
+std::string const& KeyDownWindowEvent::getKeycode() const {
+    PROFILE
+
+    return _keycode;
 }
 
 KeyModifiers const& KeyDownWindowEvent::getModifiers() const {
@@ -185,30 +192,77 @@ KeyModifiers const& KeyDownWindowEvent::getModifiers() const {
     return _modifiers;
 }
 
-std::string const& KeyDownWindowEvent::getInput() const {
+bool KeyDownWindowEvent::isRepeat() const {
     PROFILE
 
-    return _input;
+    return _repeat;
 }
 
-KeyUpWindowEvent::KeyUpWindowEvent(Window& window, Key const& key, KeyModifiers const& modifiers)
+KeyUpWindowEvent::KeyUpWindowEvent(Window& window, Scancode scancode, std::string const& keycode, KeyModifiers const& modifiers)
     : WindowEvent(window)
-    , _key(key)
+    , _scancode(scancode)
+    , _keycode(keycode)
     , _modifiers(modifiers)
 {
     PROFILE
 }
 
-Key const& KeyUpWindowEvent::getKey() const {
+Scancode KeyUpWindowEvent::getScancode() const {
     PROFILE
 
-    return _key;
+    return _scancode;
+}
+
+std::string const& KeyUpWindowEvent::getKeycode() const {
+    PROFILE
+
+    return _keycode;
 }
 
 KeyModifiers const& KeyUpWindowEvent::getModifiers() const {
     PROFILE
 
     return _modifiers;
+}
+
+InputWindowEvent::InputWindowEvent(Window& window, std::string const& text)
+    : WindowEvent(window)
+    , _text(text)
+{
+    PROFILE
+}
+
+std::string const& InputWindowEvent::getText() const {
+    PROFILE
+
+    return _text;
+}
+
+CompositionWindowEvent::CompositionWindowEvent(Window& window, std::string const& text, std::int32_t cursor, std::int32_t selectionLength)
+    : WindowEvent(window)
+    , _text(text)
+    , _cursor(cursor)
+    , _selectionLength(selectionLength)
+{
+    PROFILE
+}
+
+std::string const& CompositionWindowEvent::getText() const {
+    PROFILE
+
+    return _text;
+}
+
+std::int32_t CompositionWindowEvent::getCursor() const {
+    PROFILE
+
+    return _cursor;
+}
+
+std::int32_t CompositionWindowEvent::getSelectionLength() const {
+    PROFILE
+
+    return _selectionLength;
 }
 
 } /* namespace Rocket */

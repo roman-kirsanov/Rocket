@@ -110,22 +110,26 @@ struct _Editor {
         return text.getContent().value_or("");
     }
 
-    void key(Rocket::Key key, KeyModifiers const& modifiers = {}, std::string const& input = "") {
-        window.onEvent.publish(KeyDownWindowEvent(window, key, modifiers, input));
-        window.onEvent.publish(KeyUpWindowEvent(window, key, modifiers));
+    /** Presses a key; like the OS, it commits its text as input unless it is a Command or Control shortcut. */
+    void key(Rocket::Scancode key, KeyModifiers const& modifiers = {}, std::string const& input = "") {
+        window.onEvent.publish(KeyDownWindowEvent(window, key, GetDefaultKeycode(key), modifiers));
+        if (input.empty() == false && modifiers.meta == false && modifiers.control == false) {
+            window.onEvent.publish(InputWindowEvent(window, input));
+        }
+        window.onEvent.publish(KeyUpWindowEvent(window, key, GetDefaultKeycode(key), modifiers));
         document.update();
     }
 
     /** Types ASCII text one key per character, as the platform does. */
     void type(std::string const& string) {
         for (auto ch : string) {
-            key(Rocket::Key::Unknown, {}, std::string(1, ch));
+            key(Rocket::Scancode::Unknown, {}, std::string(1, ch));
         }
     }
 
     /** Types one multi-byte character as a single keypress. */
     void typeOne(std::string const& character) {
-        key(Rocket::Key::Unknown, {}, character);
+        key(Rocket::Scancode::Unknown, {}, character);
     }
 
     void move(Vec2 const& position, KeyModifiers const& modifiers = {}) {
@@ -246,12 +250,12 @@ static void _WithClipboard(std::string const& string, std::function<void()> cons
 TEST(Editing, CmdArrowsMoveToLineEdges) {
     auto e = _Editor("one two three");
     e.focus();
-    e.key(Rocket::Key::ArrowRight);
-    e.key(Rocket::Key::ArrowRight);
-    e.key(Rocket::Key::ArrowRight, _Mods(false, true));
+    e.key(Rocket::Scancode::ArrowRight);
+    e.key(Rocket::Scancode::ArrowRight);
+    e.key(Rocket::Scancode::ArrowRight, _Mods(false, true));
     e.type("X");
     EXPECT_EQ(e.content(), "one two threeX");
-    e.key(Rocket::Key::ArrowLeft, _Mods(false, true));
+    e.key(Rocket::Scancode::ArrowLeft, _Mods(false, true));
     e.type("Y");
     EXPECT_EQ(e.content(), "Yone two threeX");
 }
@@ -260,13 +264,13 @@ TEST(Editing, CmdArrowsMoveToLineEdges) {
 TEST(Editing, OptionArrowsMoveByWords) {
     auto e = _Editor("one two three");
     e.focus();
-    e.key(Rocket::Key::ArrowRight, _Mods(false, false, true));
+    e.key(Rocket::Scancode::ArrowRight, _Mods(false, false, true));
     e.type("X");
     EXPECT_EQ(e.content(), "oneX two three");
-    e.key(Rocket::Key::ArrowRight, _Mods(false, false, true));
+    e.key(Rocket::Scancode::ArrowRight, _Mods(false, false, true));
     e.type("X");
     EXPECT_EQ(e.content(), "oneX twoX three");
-    e.key(Rocket::Key::ArrowLeft, _Mods(false, false, true));
+    e.key(Rocket::Scancode::ArrowLeft, _Mods(false, false, true));
     e.type("Y");
     EXPECT_EQ(e.content(), "oneX YtwoX three");
 }
@@ -275,10 +279,10 @@ TEST(Editing, OptionArrowsMoveByWords) {
 TEST(Editing, HomeEndMoveToLineEdges) {
     auto e = _Editor("abc");
     e.focus();
-    e.key(Rocket::Key::End);
+    e.key(Rocket::Scancode::End);
     e.type("X");
     EXPECT_EQ(e.content(), "abcX");
-    e.key(Rocket::Key::Home);
+    e.key(Rocket::Scancode::Home);
     e.type("Y");
     EXPECT_EQ(e.content(), "YabcX");
 }
@@ -287,10 +291,10 @@ TEST(Editing, HomeEndMoveToLineEdges) {
 TEST(Editing, CmdVerticalArrowsMoveToDocumentEdges) {
     auto e = _Editor("ab\ncd", true, { 200.0f, 80.0f });
     e.focus();
-    e.key(Rocket::Key::ArrowDown, _Mods(false, true));
+    e.key(Rocket::Scancode::ArrowDown, _Mods(false, true));
     e.type("X");
     EXPECT_EQ(e.content(), "ab\ncdX");
-    e.key(Rocket::Key::ArrowUp, _Mods(false, true));
+    e.key(Rocket::Scancode::ArrowUp, _Mods(false, true));
     e.type("Y");
     EXPECT_EQ(e.content(), "Yab\ncdX");
 }
@@ -299,15 +303,15 @@ TEST(Editing, CmdVerticalArrowsMoveToDocumentEdges) {
 TEST(Editing, ShiftMovesSelectAndTypingReplaces) {
     auto e = _Editor("one two three");
     e.focus();
-    e.key(Rocket::Key::End);
-    e.key(Rocket::Key::ArrowLeft, _Mods(true, false, true));
+    e.key(Rocket::Scancode::End);
+    e.key(Rocket::Scancode::ArrowLeft, _Mods(true, false, true));
     e.type("3");
     EXPECT_EQ(e.content(), "one two 3");
-    e.key(Rocket::Key::ArrowLeft, _Mods(true, true));
+    e.key(Rocket::Scancode::ArrowLeft, _Mods(true, true));
     e.type("z");
     EXPECT_EQ(e.content(), "z");
-    e.key(Rocket::Key::ArrowLeft, _Mods(true));
-    e.key(Rocket::Key::Backspace);
+    e.key(Rocket::Scancode::ArrowLeft, _Mods(true));
+    e.key(Rocket::Scancode::Backspace);
     EXPECT_EQ(e.content(), "");
 }
 
@@ -315,13 +319,13 @@ TEST(Editing, ShiftMovesSelectAndTypingReplaces) {
 TEST(Editing, BackspaceAndDeleteRemoveSelection) {
     auto e = _Editor("abcd");
     e.focus();
-    e.key(Rocket::Key::ArrowRight, _Mods(true));
-    e.key(Rocket::Key::ArrowRight, _Mods(true));
-    e.key(Rocket::Key::Backspace);
+    e.key(Rocket::Scancode::ArrowRight, _Mods(true));
+    e.key(Rocket::Scancode::ArrowRight, _Mods(true));
+    e.key(Rocket::Scancode::Backspace);
     EXPECT_EQ(e.content(), "cd");
-    e.key(Rocket::Key::End);
-    e.key(Rocket::Key::ArrowLeft, _Mods(true));
-    e.key(Rocket::Key::Delete);
+    e.key(Rocket::Scancode::End);
+    e.key(Rocket::Scancode::ArrowLeft, _Mods(true));
+    e.key(Rocket::Scancode::Delete);
     EXPECT_EQ(e.content(), "c");
 }
 
@@ -329,11 +333,11 @@ TEST(Editing, BackspaceAndDeleteRemoveSelection) {
 TEST(Editing, OptionBackspaceAndDeleteRemoveWords) {
     auto e = _Editor("one two three");
     e.focus();
-    e.key(Rocket::Key::End);
-    e.key(Rocket::Key::Backspace, _Mods(false, false, true));
+    e.key(Rocket::Scancode::End);
+    e.key(Rocket::Scancode::Backspace, _Mods(false, false, true));
     EXPECT_EQ(e.content(), "one two ");
-    e.key(Rocket::Key::Home);
-    e.key(Rocket::Key::Delete, _Mods(false, false, true));
+    e.key(Rocket::Scancode::Home);
+    e.key(Rocket::Scancode::Delete, _Mods(false, false, true));
     EXPECT_EQ(e.content(), " two ");
 }
 
@@ -341,7 +345,7 @@ TEST(Editing, OptionBackspaceAndDeleteRemoveWords) {
 TEST(Editing, CmdASelectsAllAndTypingReplaces) {
     auto e = _Editor("hello");
     e.focus();
-    e.key(Rocket::Key::KeyA, _Mods(false, true), "a");
+    e.key(Rocket::Scancode::KeyA, _Mods(false, true), "a");
     e.type("x");
     EXPECT_EQ(e.content(), "x");
 }
@@ -350,20 +354,20 @@ TEST(Editing, CmdASelectsAllAndTypingReplaces) {
 TEST(Editing, NonEditingKeysAreNoOps) {
     auto e = _Editor("hello");
     e.focus();
-    e.key(Rocket::Key::Escape);
-    e.key(Rocket::Key::PageUp);
-    e.key(Rocket::Key::PageDown);
-    e.key(Rocket::Key::F1);
-    e.key(Rocket::Key::Shift);
-    e.key(Rocket::Key::Meta);
-    e.key(Rocket::Key::Capslock);
-    e.key(Rocket::Key::ArrowLeft);
-    e.key(Rocket::Key::ArrowRight);
-    e.key(Rocket::Key::KeyS, _Mods(false, true), "s");   /* Cmd+S */
-    e.key(Rocket::Key::KeyB, _Mods(false, true), "b");   /* Cmd+B */
-    e.key(Rocket::Key::KeyG, _Mods(false, false, false, true), "g"); /* Ctrl+G */
-    e.key(Rocket::Key::Tab);
-    e.key(Rocket::Key::Enter);
+    e.key(Rocket::Scancode::Escape);
+    e.key(Rocket::Scancode::PageUp);
+    e.key(Rocket::Scancode::PageDown);
+    e.key(Rocket::Scancode::F1);
+    e.key(Rocket::Scancode::Shift);
+    e.key(Rocket::Scancode::Meta);
+    e.key(Rocket::Scancode::Capslock);
+    e.key(Rocket::Scancode::ArrowLeft);
+    e.key(Rocket::Scancode::ArrowRight);
+    e.key(Rocket::Scancode::KeyS, _Mods(false, true), "s");   /* Cmd+S */
+    e.key(Rocket::Scancode::KeyB, _Mods(false, true), "b");   /* Cmd+B */
+    e.key(Rocket::Scancode::KeyG, _Mods(false, false, false, true), "g"); /* Ctrl+G */
+    e.key(Rocket::Scancode::Tab);
+    e.key(Rocket::Scancode::Enter);
     EXPECT_EQ(e.content(), "hello");
     EXPECT_TRUE(e.inputs.empty());
 }
@@ -373,7 +377,7 @@ TEST(Editing, NonEditingKeysAreNoOps) {
 TEST(Editing, OptionCharacterIsInserted) {
     auto e = _Editor("");
     e.focus();
-    e.key(Rocket::Key::KeyA, _Mods(false, false, true), "\xC3\xA5");
+    e.key(Rocket::Scancode::KeyA, _Mods(false, false, true), "\xC3\xA5");
     EXPECT_EQ(e.content(), "\xC3\xA5");
 }
 
@@ -386,10 +390,10 @@ TEST(Editing, UnicodeTypingAndDeletion) {
     e.typeOne(family);
     e.typeOne("\xE6\xB1\x89");
     EXPECT_EQ(e.content(), "\xC3\xA9" + family + "\xE6\xB1\x89");
-    e.key(Rocket::Key::Backspace);
-    e.key(Rocket::Key::Backspace);
+    e.key(Rocket::Scancode::Backspace);
+    e.key(Rocket::Scancode::Backspace);
     EXPECT_EQ(e.content(), "\xC3\xA9");
-    e.key(Rocket::Key::Backspace);
+    e.key(Rocket::Scancode::Backspace);
     EXPECT_EQ(e.content(), "");
 }
 
@@ -400,21 +404,21 @@ TEST(Editing, UnicodeTypingAndDeletion) {
 TEST(Editing, InputEventFiresOncePerChangeWithFullContent) {
     auto e = _Editor("");
     e.focus();
-    e.key(Rocket::Key::Backspace);
-    e.key(Rocket::Key::Delete);
+    e.key(Rocket::Scancode::Backspace);
+    e.key(Rocket::Scancode::Delete);
     EXPECT_TRUE(e.inputs.empty());
 
     e.type("ab");
     EXPECT_EQ(e.inputs, (std::vector<std::string>{ "a", "ab" }));
 
-    e.key(Rocket::Key::ArrowLeft);
-    e.key(Rocket::Key::End);
-    e.key(Rocket::Key::KeyA, _Mods(false, true), "a");
-    e.key(Rocket::Key::ArrowRight);
-    e.key(Rocket::Key::Delete);
+    e.key(Rocket::Scancode::ArrowLeft);
+    e.key(Rocket::Scancode::End);
+    e.key(Rocket::Scancode::KeyA, _Mods(false, true), "a");
+    e.key(Rocket::Scancode::ArrowRight);
+    e.key(Rocket::Scancode::Delete);
     EXPECT_EQ(e.inputs.size(), 2u);
 
-    e.key(Rocket::Key::Backspace);
+    e.key(Rocket::Scancode::Backspace);
     EXPECT_EQ(e.inputs, (std::vector<std::string>{ "a", "ab", "a" }));
 }
 
@@ -448,18 +452,18 @@ TEST(Editing, CutCopyPasteRoundTripUnicode) {
         auto const content = std::string("a\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9" "b");
         auto e = _Editor(content);
         e.focus();
-        e.key(Rocket::Key::KeyA, _Mods(false, true), "a");
-        e.key(Rocket::Key::KeyC, _Mods(false, true), "c");
+        e.key(Rocket::Scancode::KeyA, _Mods(false, true), "a");
+        e.key(Rocket::Scancode::KeyC, _Mods(false, true), "c");
         EXPECT_EQ(GetClipboardString(), content);
         EXPECT_EQ(e.content(), content);
         EXPECT_TRUE(e.inputs.empty());
 
-        e.key(Rocket::Key::KeyX, _Mods(false, true), "x");
+        e.key(Rocket::Scancode::KeyX, _Mods(false, true), "x");
         EXPECT_EQ(e.content(), "");
         EXPECT_EQ(e.inputs, (std::vector<std::string>{ "" }));
 
-        e.key(Rocket::Key::KeyV, _Mods(false, true), "v");
-        e.key(Rocket::Key::KeyV, _Mods(false, true), "v");
+        e.key(Rocket::Scancode::KeyV, _Mods(false, true), "v");
+        e.key(Rocket::Scancode::KeyV, _Mods(false, true), "v");
         EXPECT_EQ(e.content(), content + content);
         EXPECT_EQ(e.inputs.size(), 3u);
     });
@@ -471,14 +475,14 @@ TEST(Editing, EmptyCopyAndPasteAreNoOps) {
     _WithClipboard("keep", []{
         auto e = _Editor("hello");
         e.focus();
-        e.key(Rocket::Key::KeyC, _Mods(false, true), "c");
+        e.key(Rocket::Scancode::KeyC, _Mods(false, true), "c");
         EXPECT_EQ(GetClipboardString(), "keep");
-        e.key(Rocket::Key::KeyX, _Mods(false, true), "x");
+        e.key(Rocket::Scancode::KeyX, _Mods(false, true), "x");
         EXPECT_EQ(GetClipboardString(), "keep");
         EXPECT_EQ(e.content(), "hello");
 
         SetClipboardString("");
-        e.key(Rocket::Key::KeyV, _Mods(false, true), "v");
+        e.key(Rocket::Scancode::KeyV, _Mods(false, true), "v");
         EXPECT_EQ(e.content(), "hello");
         EXPECT_TRUE(e.inputs.empty());
     });
@@ -489,8 +493,8 @@ TEST(Editing, PasteReplacesSelection) {
     _WithClipboard("NEW", []{
         auto e = _Editor("one two three");
         e.focus();
-        e.key(Rocket::Key::ArrowRight, _Mods(true, false, true));
-        e.key(Rocket::Key::KeyV, _Mods(false, true), "v");
+        e.key(Rocket::Scancode::ArrowRight, _Mods(true, false, true));
+        e.key(Rocket::Scancode::KeyV, _Mods(false, true), "v");
         EXPECT_EQ(e.content(), "NEW two three");
     });
 }
@@ -502,13 +506,13 @@ TEST(Editing, SecureFieldBlocksCopyAndCutAllowsPaste) {
         auto e = _Editor("hunter2");
         e.box.setContentSecure(true);
         e.focus();
-        e.key(Rocket::Key::KeyA, _Mods(false, true), "a");
-        e.key(Rocket::Key::KeyC, _Mods(false, true), "c");
+        e.key(Rocket::Scancode::KeyA, _Mods(false, true), "a");
+        e.key(Rocket::Scancode::KeyC, _Mods(false, true), "c");
         EXPECT_EQ(GetClipboardString(), "sentinel");
-        e.key(Rocket::Key::KeyX, _Mods(false, true), "x");
+        e.key(Rocket::Scancode::KeyX, _Mods(false, true), "x");
         EXPECT_EQ(GetClipboardString(), "sentinel");
         EXPECT_EQ(e.content(), "hunter2");
-        e.key(Rocket::Key::KeyV, _Mods(false, true), "v");
+        e.key(Rocket::Scancode::KeyV, _Mods(false, true), "v");
         EXPECT_EQ(e.content(), "sentinel");
     });
 }
@@ -529,8 +533,8 @@ TEST(Editing, SecureFlagOnEitherNode) {
         auto e = _Editor("hunter2");
         e.text.setContentSecure(true);
         e.focus();
-        e.key(Rocket::Key::KeyA, _Mods(false, true), "a");
-        e.key(Rocket::Key::KeyC, _Mods(false, true), "c");
+        e.key(Rocket::Scancode::KeyA, _Mods(false, true), "a");
+        e.key(Rocket::Scancode::KeyC, _Mods(false, true), "c");
         EXPECT_EQ(GetClipboardString(), "sentinel");
     });
 }
@@ -692,7 +696,7 @@ TEST(Editing, ClickMapsInsideScrolledContainer) {
     window.onEvent.publish(MouseDownWindowEvent(window, Mouse::LeftButton, point, {}));
     window.onEvent.publish(MouseUpWindowEvent(window, Mouse::LeftButton, point, {}));
     ASSERT_TRUE(box.isFocused());
-    window.onEvent.publish(KeyDownWindowEvent(window, Rocket::Key::Unknown, {}, "X"));
+    window.onEvent.publish(InputWindowEvent(window, "X"));
     EXPECT_EQ(text.getContent().value_or(""), "heXllo");
 }
 
@@ -717,7 +721,7 @@ TEST(Editing, CaretAndSelectionPaintLifecycle) {
     EXPECT_GT(e.caretRects()[0].x, caretAtStart.x);
     EXPECT_TRUE(e.selectionRects().empty());
 
-    e.key(Rocket::Key::KeyA, _Mods(false, true), "a");
+    e.key(Rocket::Scancode::KeyA, _Mods(false, true), "a");
     e.render();
     EXPECT_TRUE(e.caretRects().empty());
     EXPECT_EQ(e.selectionRects().size(), 1u);
@@ -735,7 +739,7 @@ TEST(Editing, CaretAndSelectionPaintLifecycle) {
 TEST(Editing, CaretPaintsInsideBox) {
     auto e = _Editor("hello");
     e.focus();
-    e.key(Rocket::Key::End);
+    e.key(Rocket::Scancode::End);
     e.render();
     ASSERT_EQ(e.caretRects().size(), 1u);
     auto const caret = e.caretRects()[0];
@@ -755,8 +759,8 @@ TEST(Editing, RemovingFocusedEditableThenKeysIsSafe) {
     e.focus();
     e.document.removeChild(e.box);
     e.type("X");
-    e.key(Rocket::Key::KeyA, _Mods(false, true), "a");
-    e.key(Rocket::Key::Backspace);
+    e.key(Rocket::Scancode::KeyA, _Mods(false, true), "a");
+    e.key(Rocket::Scancode::Backspace);
     EXPECT_EQ(e.content(), "hello");
     EXPECT_TRUE(e.inputs.empty());
     EXPECT_FALSE(e.box.isFocused());
@@ -793,7 +797,7 @@ TEST(Editing, ReplacingTextChildThenKeyBeforeUpdateEditsNewChild) {
     e.box.removeChild(e.text);
     e.box.appendChild(replacement);
 
-    e.window.onEvent.publish(KeyDownWindowEvent(e.window, Rocket::Key::Unknown, {}, "X"));
+    e.window.onEvent.publish(InputWindowEvent(e.window, "X"));
     e.document.update();
     EXPECT_TRUE(e.box.isFocused());
     EXPECT_EQ(replacement.getContent().value_or(""), "Xnew");
@@ -822,7 +826,7 @@ TEST(Editing, ProgrammaticContentChangeIsEditable) {
     e.focus();
     e.text.setContent("world");
     e.document.update();
-    e.key(Rocket::Key::End);
+    e.key(Rocket::Scancode::End);
     e.type("X");
     EXPECT_EQ(e.content(), "worldX");
 }
@@ -834,7 +838,7 @@ TEST(Editing, RefocusAfterBlurEditsAgain) {
     e.document.focusNode(nullptr);
     e.document.update();
     e.focus();
-    e.key(Rocket::Key::End);
+    e.key(Rocket::Scancode::End);
     e.type("X");
     EXPECT_EQ(e.content(), "helloX");
 }
@@ -844,12 +848,12 @@ TEST(Editing, RefocusAfterBlurEditsAgain) {
 TEST(Editing, MultiLineEnterArrowDownAndTab) {
     auto e = _Editor("ab\ncd", true, { 200.0f, 80.0f });
     e.focus();
-    e.key(Rocket::Key::ArrowDown);
+    e.key(Rocket::Scancode::ArrowDown);
     e.type("X");
     EXPECT_EQ(e.content(), "ab\nXcd");
-    e.key(Rocket::Key::End);
-    e.key(Rocket::Key::Enter);
-    e.key(Rocket::Key::Tab);
+    e.key(Rocket::Scancode::End);
+    e.key(Rocket::Scancode::Enter);
+    e.key(Rocket::Scancode::Tab);
     e.type("Y");
     EXPECT_EQ(e.content(), "ab\nXcd\n    Y");
 }
@@ -861,12 +865,12 @@ TEST(Editing, MultiLineEnterArrowDownAndTab) {
 TEST(Editing, CmdBackspaceAndCmdDeleteDeleteToLineEdges) {
     auto e = _Editor("one two");
     e.focus();
-    e.key(Rocket::Key::End);
-    e.key(Rocket::Key::Backspace, _Mods(false, true));
+    e.key(Rocket::Scancode::End);
+    e.key(Rocket::Scancode::Backspace, _Mods(false, true));
     EXPECT_EQ(e.content(), "");
     e.type("one two");
-    e.key(Rocket::Key::ArrowLeft, _Mods(false, false, true));
-    e.key(Rocket::Key::Delete, _Mods(false, true));
+    e.key(Rocket::Scancode::ArrowLeft, _Mods(false, false, true));
+    e.key(Rocket::Scancode::Delete, _Mods(false, true));
     EXPECT_EQ(e.content(), "one ");
 }
 
@@ -876,20 +880,20 @@ TEST(Editing, CmdBackspaceAndCmdDeleteDeleteToLineEdges) {
 TEST(Editing, ControlEmacsBindings) {
     auto e = _Editor("abc");
     e.focus();
-    e.key(Rocket::Key::KeyE, _Mods(false, false, false, true));
+    e.key(Rocket::Scancode::KeyE, _Mods(false, false, false, true));
     e.type("X");
     EXPECT_EQ(e.content(), "abcX");
-    e.key(Rocket::Key::KeyA, _Mods(false, false, false, true));
+    e.key(Rocket::Scancode::KeyA, _Mods(false, false, false, true));
     e.type("Y");
     EXPECT_EQ(e.content(), "YabcX");
-    e.key(Rocket::Key::KeyF, _Mods(false, false, false, true));
-    e.key(Rocket::Key::KeyD, _Mods(false, false, false, true));
+    e.key(Rocket::Scancode::KeyF, _Mods(false, false, false, true));
+    e.key(Rocket::Scancode::KeyD, _Mods(false, false, false, true));
     EXPECT_EQ(e.content(), "YacX");
-    e.key(Rocket::Key::KeyB, _Mods(false, false, false, true));
-    e.key(Rocket::Key::KeyF, _Mods(false, false, false, true));
-    e.key(Rocket::Key::KeyH, _Mods(false, false, false, true));
+    e.key(Rocket::Scancode::KeyB, _Mods(false, false, false, true));
+    e.key(Rocket::Scancode::KeyF, _Mods(false, false, false, true));
+    e.key(Rocket::Scancode::KeyH, _Mods(false, false, false, true));
     EXPECT_EQ(e.content(), "YcX");
-    e.key(Rocket::Key::KeyK, _Mods(false, false, false, true));
+    e.key(Rocket::Scancode::KeyK, _Mods(false, false, false, true));
     EXPECT_EQ(e.content(), "Y");
 }
 
@@ -899,13 +903,13 @@ TEST(Editing, CmdZUndoesAndCmdShiftZRedoes) {
     auto e = _Editor("");
     e.focus();
     e.type("abc def");
-    e.key(Rocket::Key::KeyZ, _Mods(false, true), "z");
+    e.key(Rocket::Scancode::KeyZ, _Mods(false, true), "z");
     EXPECT_EQ(e.content(), "abc");
-    e.key(Rocket::Key::KeyZ, _Mods(false, true), "z");
+    e.key(Rocket::Scancode::KeyZ, _Mods(false, true), "z");
     EXPECT_EQ(e.content(), "");
-    e.key(Rocket::Key::KeyZ, _Mods(true, true), "z");
+    e.key(Rocket::Scancode::KeyZ, _Mods(true, true), "z");
     EXPECT_EQ(e.content(), "abc");
-    e.key(Rocket::Key::KeyZ, _Mods(true, true), "z");
+    e.key(Rocket::Scancode::KeyZ, _Mods(true, true), "z");
     EXPECT_EQ(e.content(), "abc def");
     EXPECT_EQ(e.inputs.back(), "abc def");
     EXPECT_EQ(e.inputs.size(), 11u);
@@ -938,21 +942,23 @@ TEST(Editing, DoubleClickSelectsWordTripleClickSelectsLine) {
     EXPECT_EQ(f.content(), "X");
 }
 
-/* A KeyDownNodeEvent listener that calls preventDefault() keeps the key from
-   editing (how a max-length or numeric-only field is built) and from moving
-   focus on Tab. */
-TEST(Editing, PreventDefaultOnKeyDownBlocksEditAndTab) {
+/* preventDefault() on a BeforeInputNodeEvent keeps the text from being
+   inserted (how a max-length or numeric-only field is built); on a
+   KeyDownNodeEvent it keeps the key from moving focus on Tab. */
+TEST(Editing, PreventDefaultBlocksInputAndTab) {
     auto e = _Editor("");
     auto sub = Sub<NodeEvent const&>();
     sub.on(e.box.onEvent, [](NodeEvent const& event) {
-        if (auto keyDown = event.as<KeyDownNodeEvent>()) {
-            if ((keyDown->getInput() == "b") || (keyDown->getKey() == Rocket::Key::Tab)) event.preventDefault();
+        if (auto beforeInput = event.as<BeforeInputNodeEvent>()) {
+            if (beforeInput->getText() == "b") event.preventDefault();
+        } else if (auto keyDown = event.as<KeyDownNodeEvent>()) {
+            if (keyDown->getKeycode() == Keycode::Tab) event.preventDefault();
         }
     });
     e.focus();
     e.type("abc");
     EXPECT_EQ(e.content(), "ac");
-    e.key(Rocket::Key::Tab);
+    e.key(Rocket::Scancode::Tab);
     EXPECT_TRUE(e.box.isFocused());
 }
 
@@ -977,21 +983,21 @@ TEST(Editing, TabTraversalCyclesFocusablesAndSelectsAll) {
     other.appendChild(otherText);
     e.document.update();
 
-    e.key(Rocket::Key::Tab);
+    e.key(Rocket::Scancode::Tab);
     ASSERT_TRUE(e.box.isFocused());
-    e.key(Rocket::Key::Tab);
+    e.key(Rocket::Scancode::Tab);
     ASSERT_TRUE(button.isFocused());
-    e.key(Rocket::Key::Tab);
+    e.key(Rocket::Scancode::Tab);
     ASSERT_TRUE(other.isFocused());
     e.type("X");
     EXPECT_EQ(otherText.getContent().value_or(""), "X");
-    e.key(Rocket::Key::Tab);
+    e.key(Rocket::Scancode::Tab);
     ASSERT_TRUE(e.box.isFocused());
-    e.key(Rocket::Key::Tab, _Mods(true));
+    e.key(Rocket::Scancode::Tab, _Mods(true));
     ASSERT_TRUE(other.isFocused());
-    e.key(Rocket::Key::Tab, _Mods(true));
+    e.key(Rocket::Scancode::Tab, _Mods(true));
     ASSERT_TRUE(button.isFocused());
-    e.key(Rocket::Key::Tab, _Mods(true));
+    e.key(Rocket::Scancode::Tab, _Mods(true));
     ASSERT_TRUE(e.box.isFocused());
     EXPECT_EQ(e.content(), "first");
 }
@@ -1006,7 +1012,7 @@ TEST(Editing, CaretBlinksWhileIdle) {
     std::this_thread::sleep_for(std::chrono::milliseconds(600));
     e.render();
     EXPECT_TRUE(e.caretRects().empty());
-    e.key(Rocket::Key::End);
+    e.key(Rocket::Scancode::End);
     e.render();
     EXPECT_EQ(e.caretRects().size(), 1u);
 }
@@ -1017,7 +1023,7 @@ TEST(Editing, LongSingleLineValueDoesNotWrap) {
     auto e = _Editor("short", false, { 100.0f, 30.0f });
     auto const oneLineHeight = e.text.getComputedBorderRect().height;
     e.focus();
-    e.key(Rocket::Key::End);
+    e.key(Rocket::Scancode::End);
     e.type(" and now a value that is much wider than the field");
     e.document.update();
     EXPECT_EQ(e.text.getComputedBorderRect().height, oneLineHeight);
@@ -1047,7 +1053,7 @@ TEST(Editing, CaretStaysVisibleWhenSingleLineOverflows) {
     EXPECT_NE(e.content().find('X'), std::string::npos);
     EXPECT_NE(e.content()[0], 'X');
 
-    e.key(Rocket::Key::Home);
+    e.key(Rocket::Scancode::Home);
     e.render();
     ASSERT_EQ(e.caretRects().size(), 1u);
     EXPECT_GE(e.caretRects()[0].x, box.x);
@@ -1068,7 +1074,7 @@ TEST(Editing, LongSingleLineValueIsClippedWhenUnfocused) {
     EXPECT_GT(e.text.getComputedBorderRect().width, e.box.getComputedBorderRect().width);
 
     e.focus();
-    e.key(Rocket::Key::End);
+    e.key(Rocket::Scancode::End);
     e.render();
     ASSERT_EQ(e.caretRects().size(), 1u);
     EXPECT_LE(e.caretRects()[0].getMaxX(), box.getMaxX());
@@ -1087,7 +1093,7 @@ TEST(Editing, LongSingleLineValueIsClippedWhenUnfocused) {
 TEST(Editing, ControlledRejectionKeepsCaretAtEnd) {
     auto e = _Editor("abc");
     e.focus();
-    e.key(Rocket::Key::End);
+    e.key(Rocket::Scancode::End);
     e.type("d");
     ASSERT_EQ(e.content(), "abcd");
     e.text.setContent("abc"); /* the owner rejects the fourth character */
@@ -1105,4 +1111,75 @@ TEST(Editing, DisablingEditableWhileFocusedHidesCaret) {
     e.box.setContentEditable(false);
     e.render();
     EXPECT_TRUE(e.caretRects().empty());
+}
+
+/* Shortcuts follow the keycode (the key's label on the user's layout), not
+   the physical key: on AZERTY the key labelled Z sits where US has W. */
+TEST(Editing, ShortcutsFollowTheKeycode) {
+    auto e = _Editor("");
+    e.focus();
+    e.type("abc");
+    ASSERT_EQ(e.content(), "abc");
+
+    /* the key in the US Z position, labelled W on AZERTY: not undo */
+    e.window.onEvent.publish(KeyDownWindowEvent(e.window, Rocket::Scancode::KeyZ, std::string(Keycode::W), _Mods(false, true)));
+    EXPECT_EQ(e.content(), "abc");
+
+    /* the key in the US W position, labelled Z on AZERTY: undo */
+    e.window.onEvent.publish(KeyDownWindowEvent(e.window, Rocket::Scancode::KeyW, std::string(Keycode::Z), _Mods(false, true)));
+    EXPECT_EQ(e.content(), "");
+}
+
+/* Text that arrives without a key (the emoji picker, dictation) is inserted
+   like typed text. */
+TEST(Editing, InputWithoutKeyIsInserted) {
+    auto e = _Editor("ab");
+    e.focus();
+    e.key(Rocket::Scancode::End);
+    e.window.onEvent.publish(InputWindowEvent(e.window, "😀"));
+    e.document.update();
+    EXPECT_EQ(e.content(), "ab😀");
+}
+
+/* Text the OS commits is inserted whatever modifiers the key had: AltGr on
+   European layouts reports Control+Alt, yet "@" is text. */
+TEST(Editing, AltGrTextIsInserted) {
+    auto e = _Editor("");
+    e.focus();
+    e.window.onEvent.publish(KeyDownWindowEvent(e.window, Rocket::Scancode::KeyQ, std::string(Keycode::Q), _Mods(false, false, true, true)));
+    e.window.onEvent.publish(InputWindowEvent(e.window, "@"));
+    e.window.onEvent.publish(KeyUpWindowEvent(e.window, Rocket::Scancode::KeyQ, std::string(Keycode::Q), _Mods(false, false, true, true)));
+    e.document.update();
+    EXPECT_EQ(e.content(), "@");
+}
+
+/* A focused editable with key events disabled takes no text input: no
+   BeforeInputNodeEvent, nothing inserted. */
+TEST(Editing, KeyEventsDisabledTakesNoInput) {
+    auto e = _Editor("ab");
+    e.focus();
+    e.box.setKeyEvents(false);
+
+    auto beforeInputs = 0;
+    auto sub = Sub<NodeEvent const&>(e.box.onEvent, [&](NodeEvent const& event) {
+        if (event.is<BeforeInputNodeEvent>()) beforeInputs += 1;
+    });
+
+    e.window.onEvent.publish(InputWindowEvent(e.window, "X"));
+    e.document.update();
+    EXPECT_EQ(e.content(), "ab");
+    EXPECT_EQ(beforeInputs, 0);
+}
+
+/* On a Russian layout the Z key types "я": Cmd+Z still undoes, matched by the
+   key's position like the OS does. */
+TEST(Editing, ShortcutsWorkOnNonLatinLayouts) {
+    auto e = _Editor("");
+    e.focus();
+    e.type("abc");
+    ASSERT_EQ(e.content(), "abc");
+
+    e.window.onEvent.publish(KeyDownWindowEvent(e.window, Rocket::Scancode::KeyZ, "я", _Mods(false, true)));
+    e.document.update();
+    EXPECT_EQ(e.content(), "");
 }

@@ -18,12 +18,14 @@
 @property (copy, nonatomic) void(^onMouseWheel)(Rocket::Vec2, Rocket::KeyModifiers);
 @property (copy, nonatomic) void(^onMouseDown)(Rocket::Mouse, Rocket::Vec2, Rocket::KeyModifiers, int);
 @property (copy, nonatomic) void(^onMouseUp)(Rocket::Mouse, Rocket::Vec2, Rocket::KeyModifiers);
-@property (copy, nonatomic) void(^onKeyDown)(Rocket::Key, Rocket::KeyModifiers, char const*);
-@property (copy, nonatomic) void(^onKeyUp)(Rocket::Key, Rocket::KeyModifiers, char const*);
+@property (copy, nonatomic) void(^onKeyDown)(Rocket::Scancode, char const*, Rocket::KeyModifiers, bool);
+@property (copy, nonatomic) void(^onKeyUp)(Rocket::Scancode, char const*, Rocket::KeyModifiers);
 @property (copy, nonatomic) void(^onPixelRatio)(double);
+@property (copy, nonatomic) void(^onFocus)(void);
+@property (copy, nonatomic) void(^onBlur)(void);
 
-/** Dispatches a key press with the text the input context composed for it (see __NSMetalView). */
-- (void)dispatchKeyDown:(NSEvent*)event input:(NSString*)input;
+/** Dispatches a key press as a key event (its text, if any, is published separately, see __NSMetalView). */
+- (void)dispatchKeyDown:(NSEvent*)event;
 
 @end
 

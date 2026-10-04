@@ -85,6 +85,7 @@ void Node(NodeProps const& props, std::function<void()> const& children) {
         Effect<std::optional<Shadow>> shouldUpdateShadow;
         Effect<std::optional<Cursor>> shouldUpdateCursor;
         Effect<std::optional<int>> shouldUpdateTabIndex;
+        Effect<std::optional<Vec4>> shouldUpdateInputArea;
         Effect<std::optional<bool>> shouldUpdateSkip;
         Effect<std::optional<bool>> shouldUpdateFlex;
         Effect<std::optional<bool>> shouldUpdateKeyEvents;
@@ -208,6 +209,7 @@ void Node(NodeProps const& props, std::function<void()> const& children) {
     if (state.shouldUpdateShadow(props.shadow)) state.node.setShadow(props.shadow);
     if (state.shouldUpdateCursor(props.cursor)) state.node.setCursor(props.cursor);
     if (state.shouldUpdateTabIndex(props.tabIndex)) state.node.setTabIndex(props.tabIndex.value_or(0));
+    if (state.shouldUpdateInputArea(props.inputArea)) state.node.setInputArea(props.inputArea);
     if (state.shouldUpdateSkip(props.skip)) state.node.setSkip(props.skip.value_or(false));
     if (state.shouldUpdateFlex(props.flex)) state.node.setFlex(props.flex.value_or(false));
     if (state.shouldUpdateKeyEvents(props.keyEvents)) state.node.setKeyEvents(props.keyEvents.value_or(true));

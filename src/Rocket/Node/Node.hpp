@@ -393,6 +393,9 @@ public:
     /** Returns the mouse cursor shape if set, otherwise std::nullopt. */
     std::optional<Cursor> const& getCursor() const;
 
+    /** Returns where this node's text caret is, in local coordinates, while it accepts text input (see setInputArea); nullopt by default. */
+    std::optional<Vec4> const& getInputArea() const;
+
     /** Returns the text content string if set, otherwise std::nullopt. */
     std::optional<std::string> const& getContent() const;
 
@@ -707,6 +710,18 @@ public:
      *  does not currently define a traversal order. */
     void setTabIndex(int);
 
+    /**
+     * Sets where this node's text caret is, in local coordinates (see
+     * convertPointFromDocument), for nodes that draw and edit text
+     * themselves. While such a node is focused and has key events, the
+     * document turns the OS text system on, passes the caret to the window
+     * so input methods place their candidate list next to it, and
+     * dispatches typed text to the node as BeforeInputNodeEvent. Editable
+     * nodes need none of this: the document tracks their caret itself.
+     * nullopt (the default) means the node takes no text input.
+     */
+    void setInputArea(std::optional<Vec4> const&);
+
     /** When true, this node is excluded from layout and text measurement. */
     void setSkip(bool);
 
@@ -888,6 +903,7 @@ private:
     bool _contentSecure;
     bool _contentMultiLine;
     int _tabIndex;
+    std::optional<Vec4> _inputArea;
     bool _skip;
     bool _flex;
     bool _keyEvents;

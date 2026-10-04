@@ -1,5 +1,6 @@
 #include <vector>
 #include <cassert>
+#include <algorithm>
 #include <Rocket/Base/Profile.hpp>
 #include <Rocket/Window/Window.hpp>
 
@@ -35,6 +36,8 @@ Window::Window()
     : onEvent()
     , _title()
     , _cursor(Cursor::Default)
+    , _inputArea()
+    , _pressedKeys()
     , _impl(nullptr)
 {
     PROFILE
@@ -54,6 +57,12 @@ Cursor Window::getCursor() const {
     PROFILE
 
     return _cursor;
+}
+
+std::optional<Vec4> const& Window::getInputArea() const {
+    PROFILE
+
+    return _inputArea;
 }
 
 Vec2 const& Window::getPosition() const {
@@ -176,6 +185,13 @@ void Window::setCursor(Cursor cursor) {
 
     _cursor = cursor;
     __setCursor(cursor);
+}
+
+void Window::setInputArea(std::optional<Vec4> const& caretRect) {
+    PROFILE
+
+    _inputArea = caretRect;
+    __setInputArea(caretRect);
 }
 
 void Window::setVisible(bool visible) {
@@ -397,19 +413,43 @@ void Window::_mouseUp(Mouse const& mouse, Vec2 const& position, KeyModifiers con
     onEvent.publish(event);
 }
 
-void Window::_keyDown(Key const& key, KeyModifiers const& modifiers, std::string const& input) {
+void Window::_keyDown(Scancode scancode, std::string const& keycode, KeyModifiers const& modifiers, bool repeat) {
     PROFILE
 
-    auto event = KeyDownWindowEvent(*this, key, modifiers, input);
+    if (std::ranges::find(_pressedKeys, scancode, &std::pair<Scancode, std::string>::first) == _pressedKeys.end()) {
+        _pressedKeys.push_back({ scancode, keycode });
+    }
+
+    auto event = KeyDownWindowEvent(*this, scancode, keycode, modifiers, repeat);
 
     _onEvent(event);
     onEvent.publish(event);
 }
 
-void Window::_keyUp(Key const& key, KeyModifiers const& modifiers) {
+void Window::_keyUp(Scancode scancode, std::string const& keycode, KeyModifiers const& modifiers) {
     PROFILE
 
-    auto event = KeyUpWindowEvent(*this, key, modifiers);
+    std::erase_if(_pressedKeys, [scancode](auto const& pressed) { return pressed.first == scancode; });
+
+    auto event = KeyUpWindowEvent(*this, scancode, keycode, modifiers);
+
+    _onEvent(event);
+    onEvent.publish(event);
+}
+
+void Window::_input(std::string const& text) {
+    PROFILE
+
+    auto event = InputWindowEvent(*this, text);
+
+    _onEvent(event);
+    onEvent.publish(event);
+}
+
+void Window::_composition(std::string const& text, std::int32_t cursor, std::int32_t selectionLength) {
+    PROFILE
+
+    auto event = CompositionWindowEvent(*this, text, cursor, selectionLength);
 
     _onEvent(event);
     onEvent.publish(event);
@@ -426,6 +466,12 @@ void Window::_focus() {
 
 void Window::_blur() {
     PROFILE
+
+    /* keys still held when focus leaves are never released here: release them now */
+    auto const pressedKeys = _pressedKeys;
+    for (auto const& [ scancode, keycode ] : pressedKeys) {
+        _keyUp(scancode, keycode, {});
+    }
 
     auto event = BlurWindowEvent(*this);
 

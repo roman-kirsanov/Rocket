@@ -174,23 +174,26 @@ struct Fuzzer {
                 .alt = chance(15)
             };
             auto const keyRoll = intIn(0, 9);
-            auto key = Rocket::Key::Unknown;
+            auto key = Rocket::Scancode::Unknown;
             auto input = std::string();
             switch (keyRoll) {
-                case 0: key = Rocket::Key::ArrowLeft; break;
-                case 1: key = Rocket::Key::ArrowRight; break;
-                case 2: key = Rocket::Key::ArrowUp; break;
-                case 3: key = Rocket::Key::ArrowDown; break;
-                case 4: key = Rocket::Key::Home; break;
-                case 5: key = Rocket::Key::End; break;
-                case 6: key = Rocket::Key::Backspace; break;
-                case 7: key = Rocket::Key::Delete; break;
-                case 8: key = Rocket::Key::Enter; break;
+                case 0: key = Rocket::Scancode::ArrowLeft; break;
+                case 1: key = Rocket::Scancode::ArrowRight; break;
+                case 2: key = Rocket::Scancode::ArrowUp; break;
+                case 3: key = Rocket::Scancode::ArrowDown; break;
+                case 4: key = Rocket::Scancode::Home; break;
+                case 5: key = Rocket::Scancode::End; break;
+                case 6: key = Rocket::Scancode::Backspace; break;
+                case 7: key = Rocket::Scancode::Delete; break;
+                case 8: key = Rocket::Scancode::Enter; break;
                 default: input = _typables[(std::size_t)intIn(0, 7)]; break;
             }
-            if (chance(5)) { key = Rocket::Key::KeyA; input = ""; } /* meta-A select-all sometimes */
-            window.onEvent.publish(KeyDownWindowEvent(window, key, mods, input));
-            window.onEvent.publish(KeyUpWindowEvent(window, key, mods));
+            if (chance(5)) { key = Rocket::Scancode::KeyA; input = ""; } /* meta-A select-all sometimes */
+            window.onEvent.publish(KeyDownWindowEvent(window, key, GetDefaultKeycode(key), mods));
+            if (input.empty() == false && mods.meta == false && mods.control == false) {
+                window.onEvent.publish(InputWindowEvent(window, input));
+            }
+            window.onEvent.publish(KeyUpWindowEvent(window, key, GetDefaultKeycode(key), mods));
         } else if (roll <= 88) {
             randomMutation();
         } else if (roll <= 92) {

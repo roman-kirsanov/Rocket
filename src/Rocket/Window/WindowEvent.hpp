@@ -8,6 +8,7 @@
 #pragma once
 
 #include <string>
+#include <cstdint>
 #include <Rocket/Math/Vec2.hpp>
 #include <Rocket/Base/Object.hpp>
 #include <Rocket/Window/Input.hpp>
@@ -272,27 +273,34 @@ private:
 class KeyDownWindowEvent : public WindowEvent {
 public:
     /**
-     * An event for the given key, the held modifiers, and the UTF-8 text the keypress produced.
+     * An event for the given key and the held modifiers. Typed text does not
+     * come with it: it arrives as an InputWindowEvent.
      *
      * @param window    The window the event originated from.
-     * @param key       The physical key that was pressed.
+     * @param scancode  The physical key that was pressed.
+     * @param keycode   What the key means on the current layout (see Keycode).
      * @param modifiers The modifier keys held at the time.
-     * @param input     The UTF-8 text the keypress produced once the input context composed it (dead keys and input methods included); empty for non-text keys and for Command shortcuts.
+     * @param repeat    Whether the key is auto-repeating because it is held down.
      */
-    KeyDownWindowEvent(Window& window, Key const& key, KeyModifiers const& modifiers, std::string const& input);
+    KeyDownWindowEvent(Window& window, Scancode scancode, std::string const& keycode, KeyModifiers const& modifiers, bool repeat = false);
 
     /** Returns the physical key that was pressed. */
-    Key const& getKey() const;
+    Scancode getScancode() const;
+
+    /** Returns what the key means on the current layout (see Keycode); use it for shortcuts. */
+    std::string const& getKeycode() const;
 
     /** Returns the modifier keys held during the event. */
     KeyModifiers const& getModifiers() const;
 
-    /** Returns the UTF-8 text the keypress produced once the input context composed it; empty for non-text keys and for Command shortcuts. */
-    std::string const& getInput() const;
+    /** Returns whether the key is auto-repeating because it is held down. */
+    bool isRepeat() const;
+
 private:
-    Key _key;
+    Scancode _scancode;
+    std::string _keycode;
     KeyModifiers _modifiers;
-    std::string _input;
+    bool _repeat;
 };
 
 /** A key was released while the window had focus. */
@@ -302,19 +310,80 @@ public:
      * An event for the given key and the modifiers held at the time.
      *
      * @param window    The window the event originated from.
-     * @param key       The physical key that was released.
+     * @param scancode  The physical key that was released.
+     * @param keycode   What the key means on the current layout (see Keycode).
      * @param modifiers The modifier keys held at the time.
      */
-    KeyUpWindowEvent(Window& window, Key const& key, KeyModifiers const& modifiers);
+    KeyUpWindowEvent(Window& window, Scancode scancode, std::string const& keycode, KeyModifiers const& modifiers);
 
     /** Returns the physical key that was released. */
-    Key const& getKey() const;
+    Scancode getScancode() const;
+
+    /** Returns what the key means on the current layout (see Keycode). */
+    std::string const& getKeycode() const;
 
     /** Returns the modifier keys held during the event. */
     KeyModifiers const& getModifiers() const;
 private:
-    Key _key;
+    Scancode _scancode;
+    std::string _keycode;
     KeyModifiers _modifiers;
+};
+
+/**
+ * Text the OS text system committed while the window had focus: typed
+ * characters, the result of a dead key or input method, the emoji picker,
+ * dictation. Arrives after the key event that produced it, if any (the
+ * emoji picker and dictation produce none). Enter, Tab, Backspace and
+ * shortcuts commit no text: they arrive as key events only.
+ */
+class InputWindowEvent : public WindowEvent {
+public:
+    /**
+     * An event for committed text.
+     *
+     * @param window The window the event originated from.
+     * @param text   The committed UTF-8 text.
+     */
+    InputWindowEvent(Window& window, std::string const& text);
+
+    /** Returns the committed UTF-8 text. */
+    std::string const& getText() const;
+private:
+    std::string _text;
+};
+
+/**
+ * An input method's composition changed: the in-progress text it shows
+ * before committing (e.g. "にほんご" before it becomes "日本語"), with the
+ * caret and the selected segment inside it, in characters. Empty text means
+ * the composition ended; when it ended by committing, an InputWindowEvent
+ * with the result follows.
+ */
+class CompositionWindowEvent : public WindowEvent {
+public:
+    /**
+     * An event for the current composition.
+     *
+     * @param window          The window the event originated from.
+     * @param text            The in-progress UTF-8 text; empty when the composition ended.
+     * @param cursor          The caret position inside the text, in characters.
+     * @param selectionLength The length of the selected segment starting at the caret, in characters.
+     */
+    CompositionWindowEvent(Window& window, std::string const& text, std::int32_t cursor, std::int32_t selectionLength);
+
+    /** Returns the in-progress UTF-8 text; empty when the composition ended. */
+    std::string const& getText() const;
+
+    /** Returns the caret position inside the text, in characters. */
+    std::int32_t getCursor() const;
+
+    /** Returns the length of the selected segment starting at the caret, in characters. */
+    std::int32_t getSelectionLength() const;
+private:
+    std::string _text;
+    std::int32_t _cursor;
+    std::int32_t _selectionLength;
 };
 
 /**

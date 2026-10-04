@@ -513,3 +513,34 @@ TEST(UINode, RefSurvivesOrdinalRematch) {
     ASSERT_TRUE(second->getNextSibling() == nullptr);
     ASSERT_TRUE(second->getWidth() == NodeValue(20.0f));
 }
+
+/* The inputArea prop reaches the retained node and follows prop changes,
+   including going back to unset. */
+TEST(UINode, InputAreaPropSyncsToNode) {
+    Window window;
+    window.setSize({ 640.0f, 480.0f });
+
+    class Document document(window);
+
+    class Node* node = nullptr;
+    auto area = std::optional<Vec4>(Vec4{ 10.0f, 5.0f, 1.0f, 12.0f });
+
+    auto reconciler = Reconciler();
+    reconciler.setUpdateFn([&] {
+        Context(document, [&] {
+            Node({ .ref = &node, .tabIndex = 1, .inputArea = area });
+        });
+    });
+
+    reconciler.update();
+    ASSERT_TRUE(node != nullptr);
+    ASSERT_TRUE(node->getInputArea() == area);
+
+    area = Vec4{ 20.0f, 5.0f, 1.0f, 12.0f };
+    reconciler.update();
+    ASSERT_TRUE(node->getInputArea() == area);
+
+    area = std::nullopt;
+    reconciler.update();
+    ASSERT_TRUE(node->getInputArea().has_value() == false);
+}

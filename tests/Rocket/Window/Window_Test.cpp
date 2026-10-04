@@ -5,7 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <tuple>
 #include <string>
+#include <vector>
 #include <algorithm>
 #include <Rocket/Window/Window.hpp>
 #include <gtest/gtest.h>
@@ -119,4 +121,40 @@ TEST(Window, ShowAndHidePublishOneEventEach) {
     ASSERT_TRUE(window.getVisible() == false);
     ASSERT_TRUE(showCount == 1);
     ASSERT_TRUE(hideCount == 1);
+}
+
+/* The input area starts unset and round-trips through setInputArea, including
+   clearing it again. */
+TEST(Window, InputAreaDefaultsAndRoundTrips) {
+    auto window = Window();
+    ASSERT_TRUE(window.getInputArea().has_value() == false);
+
+    window.setInputArea(Vec4{ 10.0f, 20.0f, 2.0f, 16.0f });
+    ASSERT_TRUE(window.getInputArea().has_value());
+    ASSERT_TRUE(*window.getInputArea() == Vec4(10.0f, 20.0f, 2.0f, 16.0f));
+
+    window.setInputArea(std::nullopt);
+    ASSERT_TRUE(window.getInputArea().has_value() == false);
+}
+
+/* Input and composition events carry their text and, for composition, the
+   caret and selected segment; both reach onEvent subscribers. */
+TEST(Window, InputAndCompositionEventsCarryTheirPayloads) {
+    auto window = Window();
+
+    auto texts = std::vector<std::string>();
+    auto compositions = std::vector<std::tuple<std::string, std::int32_t, std::int32_t>>();
+    auto sub = Sub<WindowEvent const&>(window.onEvent, [&](WindowEvent const& event) {
+        if (auto e = event.as<InputWindowEvent>()) texts.push_back(e->getText());
+        if (auto e = event.as<CompositionWindowEvent>()) compositions.push_back({ e->getText(), e->getCursor(), e->getSelectionLength() });
+    });
+
+    window.onEvent.publish(CompositionWindowEvent(window, "にほんご", 2, 2));
+    window.onEvent.publish(CompositionWindowEvent(window, "", 0, 0));
+    window.onEvent.publish(InputWindowEvent(window, "日本語"));
+
+    ASSERT_TRUE(compositions.size() == 2);
+    ASSERT_TRUE(compositions.at(0) == std::make_tuple(std::string("にほんご"), 2, 2));
+    ASSERT_TRUE(std::get<0>(compositions.at(1)).empty());
+    ASSERT_TRUE(texts == std::vector<std::string>({ "日本語" }));
 }

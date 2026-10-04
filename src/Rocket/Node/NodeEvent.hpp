@@ -342,24 +342,29 @@ public:
      * A key-press event for the given key.
      *
      * @param node      The node that is the target of the event.
-     * @param key       The physical key that was pressed.
+     * @param scancode  The physical key that was pressed.
+     * @param keycode   What the key means on the current layout (see Keycode).
      * @param modifiers The modifier keys held at the time of the key press.
-     * @param input     The UTF-8 text produced by the keypress, empty for non-text keys.
+     * @param repeat    Whether the key is auto-repeating because it is held down.
      */
-    KeyDownNodeEvent(Node& node, Key const& key, KeyModifiers const& modifiers, std::string const& input);
+    KeyDownNodeEvent(Node& node, Scancode scancode, std::string const& keycode, KeyModifiers const& modifiers, bool repeat = false);
 
     /** Returns the physical key that was pressed. */
-    Key getKey() const;
+    Scancode getScancode() const;
+
+    /** Returns what the key means on the current layout (see Keycode); use it for shortcuts. */
+    std::string const& getKeycode() const;
 
     /** Returns the modifier keys held at the time of the key press. */
     KeyModifiers const& getModifiers() const;
 
-    /** Returns the UTF-8 text produced by the keypress, empty for non-text keys. */
-    std::string const& getInput() const;
+    /** Returns whether the key is auto-repeating because it is held down. */
+    bool isRepeat() const;
 private:
-    Key _key;
+    Scancode _scancode;
+    std::string _keycode;
     KeyModifiers _modifiers;
-    std::string _input;
+    bool _repeat;
 };
 
 /** Fired when a keyboard key is released; dispatched on the focused node, or on the Document when nothing is focused or the focused node has key events disabled. */
@@ -369,19 +374,48 @@ public:
      * A key-release event for the given key.
      *
      * @param node      The node that is the target of the event.
-     * @param key       The physical key that was released.
+     * @param scancode  The physical key that was released.
+     * @param keycode   What the key means on the current layout (see Keycode).
      * @param modifiers The modifier keys held at the time of the key release.
      */
-    KeyUpNodeEvent(Node& node, Key const& key, KeyModifiers const& modifiers);
+    KeyUpNodeEvent(Node& node, Scancode scancode, std::string const& keycode, KeyModifiers const& modifiers);
 
     /** Returns the physical key that was released. */
-    Key getKey() const;
+    Scancode getScancode() const;
+
+    /** Returns what the key means on the current layout (see Keycode). */
+    std::string const& getKeycode() const;
 
     /** Returns the modifier keys held at the time of the key release. */
     KeyModifiers const& getModifiers() const;
 private:
-    Key _key;
+    Scancode _scancode;
+    std::string _keycode;
     KeyModifiers _modifiers;
+};
+
+/**
+ * Text is about to be inserted into the focused node: typed characters, the
+ * result of a dead key or input method, the emoji picker, dictation.
+ * Dispatched on the focused editable, or on a focused node with an input
+ * area (see Node::setInputArea), which handles the text itself.
+ * preventDefault() keeps an editable from inserting it, so a listener can
+ * filter or limit what is typed.
+ */
+class BeforeInputNodeEvent : public NodeEvent {
+public:
+    /**
+     * An event for text about to be inserted.
+     *
+     * @param node The node that is the target of the event.
+     * @param text The UTF-8 text about to be inserted.
+     */
+    BeforeInputNodeEvent(Node& node, std::string const& text);
+
+    /** Returns the UTF-8 text about to be inserted. */
+    std::string const& getText() const;
+private:
+    std::string _text;
 };
 
 /** The node's text content was changed by user editing (see Node::setContentEditable); content is the full new text. */
