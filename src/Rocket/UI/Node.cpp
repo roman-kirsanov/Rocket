@@ -229,6 +229,7 @@ void Node(NodeProps const& props, std::function<void()> const& children) {
     }
 
     SetContext<_NodeContext>(state.context);
+    SetContext<class Node>(state.node);
 
     if (props.prefix) {
         props.prefix();
