@@ -77,7 +77,7 @@ enum class NodeJustify {
     SpaceEvenly
 };
 
-/** Clipping/scrolling behaviour when content overflows the node's bounds. */
+/** Clipping/scrolling behaviour when content overflows the node's bounds. A node with no overflow set behaves as Hidden. */
 enum class NodeOverflow {
     /** Overflow is clipped. */
     Hidden,
@@ -484,10 +484,10 @@ public:
      */
     void setJustify(std::optional<NodeJustify> const&);
 
-    /** Sets the horizontal overflow mode. Passing std::nullopt clears the value. */
+    /** Sets the horizontal overflow mode. Passing std::nullopt resets to the default (Hidden). */
     void setOverflowX(std::optional<NodeOverflow> const&);
 
-    /** Sets the vertical overflow mode. Passing std::nullopt clears the value. */
+    /** Sets the vertical overflow mode. Passing std::nullopt resets to the default (Hidden). */
     void setOverflowY(std::optional<NodeOverflow> const&);
 
     /**

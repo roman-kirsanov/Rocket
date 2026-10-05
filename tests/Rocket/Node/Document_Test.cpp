@@ -481,6 +481,42 @@ TEST(Document, WheelOverDocument) {
     ASSERT_TRUE(tall.getComputedBorderRect().y == -30.0f);
 }
 
+/* A node with no overflow set clips its children like Hidden: a child that
+   sticks out is not hit outside the parent, and stops being hit-clipped once
+   the parent is Visible. */
+TEST(Document, UnsetOverflowClipsLikeHidden) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    document.setDirection(NodeDirection::Horizontal);
+    document.setAlignment(NodeAlignment::Start);
+
+    auto parent = Node();
+    parent.setWidth(100.0f);
+    parent.setHeight(50.0f);
+    document.appendChild(parent);
+
+    auto child = Node(); /* twice as tall as the parent */
+    child.setWidth(100.0f);
+    child.setHeight(100.0f);
+    parent.appendChild(child);
+
+    document.update();
+
+    window.onEvent.publish(MouseMoveWindowEvent(window, { 50.0f, 25.0f }, KeyModifiers{}));
+    ASSERT_TRUE(child.isHover() == true);
+
+    window.onEvent.publish(MouseMoveWindowEvent(window, { 50.0f, 75.0f }, KeyModifiers{}));
+    ASSERT_TRUE(child.isHover() == false);
+
+    parent.setOverflowY(NodeOverflow::Visible);
+    document.update();
+
+    window.onEvent.publish(MouseMoveWindowEvent(window, { 50.0f, 76.0f }, KeyModifiers{}));
+    ASSERT_TRUE(child.isHover() == true);
+}
+
 /* Cursor: update() resolves the cursor from the hovered node chain and
    applies it to the window; leaving the node restores Cursor::Default. */
 TEST(Document, Cursor) {
@@ -1934,6 +1970,10 @@ TEST(Document, RenderShadowCompositeScissoredToScrollViewport) {
     row.setDirection(NodeDirection::Horizontal);
     row.setWidth(400.0f); /* wider than the viewport: scrollable */
     row.setHeight(50.0f);
+    /* an unset overflow clips, so the row would add its own clip to the
+       chip; Visible leaves the viewport as the only ancestor clip */
+    row.setOverflowX(NodeOverflow::Visible);
+    row.setOverflowY(NodeOverflow::Visible);
     container.appendChild(row);
 
     auto chip = Node(); /* shadowed; starts fully inside the viewport */

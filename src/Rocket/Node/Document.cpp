@@ -1328,19 +1328,14 @@ void Document::_updateNode(Node& node) {
         std::max(0.0f, (node._computedBorderRectInDocument.height - borderEdge.top - borderEdge.bottom))
     };
 
-    if (
-        (node._overflowX == NodeOverflow::Hidden) ||
-        (node._overflowX == NodeOverflow::Scroll)
-    ) {
+    /* An unset overflow clips, the same as Hidden: only Visible lets content out. */
+    if (node._overflowX != NodeOverflow::Visible) {
         auto newClipRect = node._computedClipRectInDocument.getIntersection(innerBorderRect);
         node._computedClipRectInDocument.x = newClipRect.x;
         node._computedClipRectInDocument.width = newClipRect.width;
     }
 
-    if (
-        (node._overflowY == NodeOverflow::Hidden) ||
-        (node._overflowY == NodeOverflow::Scroll)
-    ) {
+    if (node._overflowY != NodeOverflow::Visible) {
         auto newClipRect = node._computedClipRectInDocument.getIntersection(innerBorderRect);
         node._computedClipRectInDocument.y = newClipRect.y;
         node._computedClipRectInDocument.height = newClipRect.height;
@@ -1365,17 +1360,11 @@ void Document::_updateNode(Node& node) {
         auto childRight  = child->_computedMarginRect.getMaxX();
         auto childBottom = child->_computedMarginRect.getMaxY();
 
-        if (
-            (child->_overflowX != NodeOverflow::Hidden) &&
-            (child->_overflowX != NodeOverflow::Scroll)
-        ) {
+        if (child->_overflowX == NodeOverflow::Visible) {
             childLeft  = std::min(childLeft,  (child->_computedBorderRect.x + child->_computedContentRect.x));
             childRight = std::max(childRight, (child->_computedBorderRect.x + child->_computedContentRect.getMaxX()));
         }
-        if (
-            (child->_overflowY != NodeOverflow::Hidden) &&
-            (child->_overflowY != NodeOverflow::Scroll)
-        ) {
+        if (child->_overflowY == NodeOverflow::Visible) {
             childTop    = std::min(childTop,    (child->_computedBorderRect.y + child->_computedContentRect.y));
             childBottom = std::max(childBottom, (child->_computedBorderRect.y + child->_computedContentRect.getMaxY()));
         }
