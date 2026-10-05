@@ -924,6 +924,28 @@ static NSCursor* _CursorConvert(Cursor cursor) {
     return [NSCursor arrowCursor];
 }
 
+/* AppKit hands key status to the next window only under [NSApp run]. With
+   our own event loop (see App_MacOS.mm) closing the key window leaves the
+   app with no key window, so pass it on by hand. */
+static void _CloseWindow(NSWindow* window) {
+    PROFILE
+
+    auto const wasKey = [window isKeyWindow];
+
+    [window close];
+
+    if (wasKey == false) return;
+
+    /* orderedWindows is front to back, so the first match is the window
+       right behind the one that closed. */
+    for (NSWindow* next in [NSApp orderedWindows]) {
+        if (next != window && [next isVisible] && [next canBecomeKeyWindow]) {
+            [next makeKeyAndOrderFront: nil];
+            break;
+        }
+    }
+}
+
 void Window::__done() {
     PROFILE
 
@@ -934,7 +956,9 @@ void Window::__done() {
     [_impl->window setDelegate: nil];
     [_impl->window setContentView: nil]; /* detaching fires viewDidMoveToWindow(nil), which invalidates the display link */
     [_impl->window setReleasedWhenClosed: NO];
-    [_impl->window close];
+
+    _CloseWindow(_impl->window);
+
     _impl->window = nil;
 
     delete _impl;
@@ -1203,7 +1227,7 @@ void Window::__setVisible(bool visible) {
         }
     } else {
         if (_impl->window.visible) {
-            [_impl->window close]; /* windowWillClose: dispatches _hide() */
+            _CloseWindow(_impl->window); /* windowWillClose: dispatches _hide() */
         }
     }
 }
