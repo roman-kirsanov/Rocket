@@ -2118,9 +2118,7 @@ Node* Document::_findNodeAtPosition(Vec2 const& position) {
         }
     };
 
-    for (auto child = _firstChild; child != nullptr; child = child->_nextSibling) {
-        find(child, find);
-    }
+    find(this, find);
 
     return found;
 }

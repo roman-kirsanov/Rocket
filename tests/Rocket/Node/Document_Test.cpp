@@ -455,6 +455,32 @@ TEST(Document, Wheel) {
     ASSERT_TRUE(tall.getComputedBorderRect().y == 0.0f);
 }
 
+/* Wheel over the document's own area (no child under the pointer) scrolls
+   the document: the document is the hover target there. */
+TEST(Document, WheelOverDocument) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    document.setDirection(NodeDirection::Horizontal);
+    document.setOverflowY(NodeOverflow::Scroll);
+
+    auto tall = Node();
+    tall.setWidth(100.0f);
+    tall.setHeight(1000.0f);
+    document.appendChild(tall);
+
+    document.update();
+
+    window.onEvent.publish(MouseMoveWindowEvent(window, { 500.0f, 10.0f }, KeyModifiers{}));
+    ASSERT_TRUE(tall.isHover() == false);
+    ASSERT_TRUE(document.isHover() == true);
+
+    window.onEvent.publish(MouseWheelWindowEvent(window, { 0.0f, -30.0f }, KeyModifiers{}));
+    document.update();
+    ASSERT_TRUE(tall.getComputedBorderRect().y == -30.0f);
+}
+
 /* Cursor: update() resolves the cursor from the hovered node chain and
    applies it to the window; leaving the node restores Cursor::Default. */
 TEST(Document, Cursor) {
@@ -2554,7 +2580,7 @@ TEST(Document, UpdateFromHoverListenerIsSafe) {
     ASSERT_TRUE(bEvents == std::vector<std::string>({ "enter", "move", "exit" }));
     ASSERT_TRUE(a.isHover() == false);
     ASSERT_TRUE(b.isHover() == false);
-    ASSERT_TRUE(document.isHover() == false);
+    ASSERT_TRUE(document.isHover() == true);
 }
 
 /* An enter listener that hides its node and updates moves the pointer off it:
@@ -2623,7 +2649,7 @@ TEST(Document, ExitListenerDestroyingAncestorIsSafe) {
 
     ASSERT_TRUE(parent == nullptr);
     ASSERT_TRUE(child.isHover() == false);
-    ASSERT_TRUE(document.isHover() == false);
+    ASSERT_TRUE(document.isHover() == true);
 }
 
 /* A begin-drag listener that removes the dragged node ends the drag: no
