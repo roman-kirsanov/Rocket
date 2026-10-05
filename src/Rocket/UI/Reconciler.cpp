@@ -75,6 +75,15 @@ Reconciler::Reconciler()
     , _isUpdating(false)
     , _keepUpdate(false) {}
 
+Reconciler::Reconciler(ReconcilerUpdateMode updateMode, std::function<void()> const& updateFn)
+    : onAfterUpdate()
+    , _updateMode(updateMode)
+    , _updateFn(updateFn)
+    , _currentComponent(nullptr)
+    , _rootComponent(new _Component())
+    , _isUpdating(false)
+    , _keepUpdate(false) {}
+
 ReconcilerUpdateMode Reconciler::getUpdateMode() const {
     PROFILE
 

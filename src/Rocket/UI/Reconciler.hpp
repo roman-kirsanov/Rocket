@@ -83,6 +83,17 @@ public:
     Reconciler& operator=(Reconciler &&) = delete;
     Reconciler& operator=(Reconciler const&) = delete;
 
+    /**
+     * Creates a reconciler with the given update mode and update function.
+     *
+     * Equivalent to default construction followed by setUpdateMode() and
+     * setUpdateFn(). Nothing is rendered until the first update().
+     *
+     * @param updateMode The update mode (see ReconcilerUpdateMode).
+     * @param updateFn   The function that renders the component tree.
+     */
+    Reconciler(ReconcilerUpdateMode updateMode, std::function<void()> const& updateFn);
+
     /** Returns the current update mode (see ReconcilerUpdateMode). */
     ReconcilerUpdateMode getUpdateMode() const;
 
