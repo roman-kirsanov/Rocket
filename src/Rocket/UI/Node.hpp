@@ -67,6 +67,9 @@ struct NodeProps {
     /** Main-axis distribution of children. */
     std::optional<NodeJustify> justify;
 
+    /** Whether children that do not fit the main axis flow onto further lines (default NoWrap). */
+    std::optional<NodeWrap> wrap;
+
     /** Explicit width. */
     std::optional<NodeValue> width;
 

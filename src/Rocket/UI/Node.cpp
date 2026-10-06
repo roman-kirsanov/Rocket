@@ -33,6 +33,7 @@ void Node(NodeProps const& props, std::function<void()> const& children) {
         Effect<std::optional<NodeAlignment>> shouldUpdateAlignment;
         Effect<std::optional<NodeAlignment>> shouldUpdateSelfAlignment;
         Effect<std::optional<NodeJustify>> shouldUpdateJustify;
+        Effect<std::optional<NodeWrap>> shouldUpdateWrap;
         Effect<std::optional<NodeValue>> shouldUpdateWidth;
         Effect<std::optional<NodeValue>> shouldUpdateHeight;
         Effect<std::optional<NodeValue>> shouldUpdateMinWidth;
@@ -157,6 +158,7 @@ void Node(NodeProps const& props, std::function<void()> const& children) {
     if (state.shouldUpdateAlignment(props.alignment)) state.node.setAlignment(props.alignment);
     if (state.shouldUpdateSelfAlignment(props.selfAlignment)) state.node.setSelfAlignment(props.selfAlignment);
     if (state.shouldUpdateJustify(props.justify)) state.node.setJustify(props.justify);
+    if (state.shouldUpdateWrap(props.wrap)) state.node.setWrap(props.wrap);
     if (state.shouldUpdateWidth(props.width)) state.node.setWidth(props.width);
     if (state.shouldUpdateHeight(props.height)) state.node.setHeight(props.height);
     if (state.shouldUpdateMinWidth(props.minWidth)) state.node.setMinWidth(props.minWidth);

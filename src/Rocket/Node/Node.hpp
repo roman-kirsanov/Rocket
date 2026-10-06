@@ -77,6 +77,16 @@ enum class NodeJustify {
     SpaceEvenly
 };
 
+/** Whether children that do not fit the main axis stay on one line or flow onto further lines. */
+enum class NodeWrap {
+    /** All children stay on a single line. */
+    NoWrap,
+    /** Children that do not fit flow onto further lines, stacked along the cross axis. */
+    Wrap,
+    /** As Wrap, with the lines stacked in the opposite cross-axis direction. */
+    WrapReverse
+};
+
 /** Clipping/scrolling behaviour when content overflows the node's bounds. A node with no overflow set behaves as Hidden. */
 enum class NodeOverflow {
     /** Overflow is clipped. */
@@ -229,6 +239,9 @@ public:
 
     /** Returns the main-axis justification of children if set, otherwise std::nullopt. */
     std::optional<NodeJustify> const& getJustify() const;
+
+    /** Returns the wrapping mode of children if set, otherwise std::nullopt. */
+    std::optional<NodeWrap> const& getWrap() const;
 
     /** Returns the horizontal overflow mode if set, otherwise std::nullopt. */
     std::optional<NodeOverflow> const& getOverflowX() const;
@@ -483,6 +496,15 @@ public:
      * Passing std::nullopt resets to the default (Start).
      */
     void setJustify(std::optional<NodeJustify> const&);
+
+    /**
+     * Sets whether children wrap onto further lines when they do not fit
+     * the main axis. Lines are packed at the start of the cross axis, and
+     * the cross-axis gap separates them.
+     *
+     * Passing std::nullopt resets to the default (NoWrap).
+     */
+    void setWrap(std::optional<NodeWrap> const&);
 
     /** Sets the horizontal overflow mode. Passing std::nullopt resets to the default (Hidden). */
     void setOverflowX(std::optional<NodeOverflow> const&);
@@ -847,6 +869,7 @@ private:
     std::optional<NodeDirection> _direction;
     std::optional<NodeAlignment> _alignment;
     std::optional<NodeJustify> _justify;
+    std::optional<NodeWrap> _wrap;
     std::optional<NodeAlignment> _selfAlignment;
     std::optional<NodeValue> _width;
     std::optional<NodeValue> _height;

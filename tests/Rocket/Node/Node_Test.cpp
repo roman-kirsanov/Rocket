@@ -254,6 +254,73 @@ TEST(Node, InsertChildLayoutOrder) {
     ASSERT_FLOAT_EQ(c.getComputedBorderRect().x, 30.0f);
 }
 
+/* Children stay on one line by default and with an explicit NoWrap; Wrap
+   flows them onto further lines separated by the cross-axis gap, WrapReverse
+   stacks those lines from the far edge, and unsetting restores one line. */
+TEST(Node, WrapLayout) {
+    Window window;
+    window.setSize({ 640.0f, 480.0f });
+
+    Document document(window);
+
+    Node row;
+    row.setDirection(NodeDirection::Horizontal);
+    row.setWidth(100.0f);
+    row.setHeight(50.0f);
+    row.setGapY(2.0f);
+    document.appendChild(row);
+
+    Node a;
+    Node b;
+    Node c;
+    Node d;
+    Node e;
+    for (auto node : { &a, &b, &c, &d, &e }) {
+        node->setWidth(40.0f);
+        node->setHeight(10.0f);
+        row.appendChild(*node);
+    }
+
+    auto const expectSingleLine = [&]{
+        document.update();
+        ASSERT_FLOAT_EQ(a.getComputedBorderRect().x, 0.0f);
+        ASSERT_FLOAT_EQ(c.getComputedBorderRect().x, 80.0f);
+        ASSERT_FLOAT_EQ(e.getComputedBorderRect().x, 160.0f);
+        ASSERT_FLOAT_EQ(c.getComputedBorderRect().y, 0.0f);
+        ASSERT_FLOAT_EQ(e.getComputedBorderRect().y, 0.0f);
+    };
+
+    expectSingleLine();
+
+    row.setWrap(NodeWrap::NoWrap);
+    ASSERT_EQ(row.getWrap(), NodeWrap::NoWrap);
+    expectSingleLine();
+
+    row.setWrap(NodeWrap::Wrap);
+    ASSERT_EQ(row.getWrap(), NodeWrap::Wrap);
+    document.update();
+    ASSERT_FLOAT_EQ(a.getComputedBorderRect().x, 0.0f);
+    ASSERT_FLOAT_EQ(a.getComputedBorderRect().y, 0.0f);
+    ASSERT_FLOAT_EQ(b.getComputedBorderRect().x, 40.0f);
+    ASSERT_FLOAT_EQ(b.getComputedBorderRect().y, 0.0f);
+    ASSERT_FLOAT_EQ(c.getComputedBorderRect().x, 0.0f);
+    ASSERT_FLOAT_EQ(c.getComputedBorderRect().y, 12.0f);
+    ASSERT_FLOAT_EQ(d.getComputedBorderRect().x, 40.0f);
+    ASSERT_FLOAT_EQ(d.getComputedBorderRect().y, 12.0f);
+    ASSERT_FLOAT_EQ(e.getComputedBorderRect().x, 0.0f);
+    ASSERT_FLOAT_EQ(e.getComputedBorderRect().y, 24.0f);
+
+    row.setWrap(NodeWrap::WrapReverse);
+    document.update();
+    ASSERT_FLOAT_EQ(a.getComputedBorderRect().y, 40.0f);
+    ASSERT_FLOAT_EQ(c.getComputedBorderRect().y, 28.0f);
+    ASSERT_FLOAT_EQ(e.getComputedBorderRect().y, 16.0f);
+
+    row.setWrap(std::nullopt);
+    ASSERT_TRUE(!row.getWrap().has_value());
+    expectSingleLine();
+}
+
 /* insertChild attaches the inserted subtree to the parent's document, a
    move within the parent keeps it attached, and the no-op path (already at
    the index) does not disturb focus. */
@@ -454,6 +521,7 @@ TEST(Node, StyleDefaults) {
     ASSERT_TRUE(!node.getDirection().has_value());
     ASSERT_TRUE(!node.getAlignment().has_value());
     ASSERT_TRUE(!node.getJustify().has_value());
+    ASSERT_TRUE(!node.getWrap().has_value());
     ASSERT_TRUE(!node.getPosition().has_value());
     ASSERT_TRUE(!node.getWidth().has_value());
     ASSERT_TRUE(!node.getHeight().has_value());

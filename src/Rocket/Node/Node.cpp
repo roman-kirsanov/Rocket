@@ -48,6 +48,12 @@ static auto _justifyMap = std::map<NodeJustify, ::YGJustify>{
     { NodeJustify::SpaceEvenly,  ::YGJustifySpaceEvenly }
 };
 
+static auto _wrapMap = std::map<NodeWrap, ::YGWrap>{
+    { NodeWrap::NoWrap,      ::YGWrapNoWrap },
+    { NodeWrap::Wrap,        ::YGWrapWrap },
+    { NodeWrap::WrapReverse, ::YGWrapWrapReverse }
+};
+
 bool NodeTransform::operator==(NodeTransform const& other) const {
     PROFILE
 
@@ -95,6 +101,7 @@ Node::Node()
     , _direction(std::nullopt)
     , _alignment(std::nullopt)
     , _justify(std::nullopt)
+    , _wrap(std::nullopt)
     , _selfAlignment(std::nullopt)
     , _width(std::nullopt)
     , _height(std::nullopt)
@@ -348,6 +355,12 @@ std::optional<NodeJustify> const& Node::getJustify() const {
     PROFILE
 
     return _justify;
+}
+
+std::optional<NodeWrap> const& Node::getWrap() const {
+    PROFILE
+
+    return _wrap;
 }
 
 std::optional<NodeOverflow> const& Node::getOverflowX() const {
@@ -842,6 +855,17 @@ void Node::setJustify(std::optional<NodeJustify> const& justify) {
         _invalidateLayout();
 
         ::YGNodeStyleSetJustifyContent((::YGNode*)_layoutNode, justify.has_value() ? _justifyMap[justify.value()] : ::YGJustifyFlexStart);
+    }
+}
+
+void Node::setWrap(std::optional<NodeWrap> const& wrap) {
+    PROFILE
+
+    if (_wrap != wrap) {
+        _wrap = wrap;
+        _invalidateLayout();
+
+        ::YGNodeStyleSetFlexWrap((::YGNode*)_layoutNode, wrap.has_value() ? _wrapMap[wrap.value()] : ::YGWrapNoWrap);
     }
 }
 
