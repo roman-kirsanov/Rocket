@@ -1389,10 +1389,19 @@ void Document::_updateNode(Node& node) {
         _SnapToPixelGrid(std::max(0.0f, (scrollMaxY - (node._computedBorderRect.height - node._computedBorderEdge.bottom - padding.bottom))), _scale)
     };
 
-    node._scrollPosition = {
+    auto const scrollPosition = Vec2{
         std::clamp(node._scrollPosition.x, 0.0f, node._scrollOverflow.x),
         std::clamp(node._scrollPosition.y, 0.0f, node._scrollOverflow.y)
     };
+
+    if (
+        scrollPosition.x < node._scrollPosition.x ||
+        scrollPosition.y < node._scrollPosition.y
+    ) {
+        _needsUpdate = true;
+    }
+
+    node._scrollPosition = scrollPosition;
 
     if (
         (node._display == NodeDisplay::Text) &&
