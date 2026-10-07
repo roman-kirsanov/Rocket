@@ -53,7 +53,22 @@ struct WindowPaintTarget {
 /** An image-backed or window-backed render target. */
 using PaintTarget = Enum<ImagePaintTarget, WindowPaintTarget>;
 
-/** Per-draw overrides for transform, scissor rectangle, opacity, and filtering. */
+/**
+ * How a draw combines with what is already on the target. Fragments are
+ * premultiplied, so every mode is a plain pair of blend factors.
+ */
+enum class Blend {
+    /** Premultiplied source-over (the default): the source covers the target. */
+    Over,
+    /** Adds the source to the target: lights, flashes, glows. Clips at white. */
+    Add,
+    /** Scales the target by the source: lightmaps, shadows, tints. A transparent source leaves the target alone. */
+    Multiply,
+    /** 1 - (1 - target) * (1 - source): a softer add that never clips. */
+    Screen
+};
+
+/** Per-draw overrides for transform, scissor rectangle, opacity, filtering, and blending. */
 struct PaintOptions {
     /** Transform applied to the shape; identity when unset. */
     std::optional<Mat3> transform;
@@ -63,6 +78,8 @@ struct PaintOptions {
     std::optional<float> opacity;
     /** Post-processing filter applied to the draw; nullopt disables filtering. */
     std::optional<Filter> filter;
+    /** Blend mode the draw (or its filtered result) is composited with; Over when unset. */
+    std::optional<Blend> blend;
 };
 
 /**

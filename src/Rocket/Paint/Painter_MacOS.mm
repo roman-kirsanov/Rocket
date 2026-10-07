@@ -31,17 +31,11 @@ namespace Rocket {
 struct _RenderPass {
     std::uint32_t width = 0;
     std::uint32_t height = 0;
+    MTLPixelFormat format = MTLPixelFormatInvalid; // pipelines are looked up per draw by format and blend mode
     id<MTLTexture> texture = nil;
     id<CAMetalDrawable> drawable = nil; // window targets only; presented on submit
     id<MTLCommandBuffer> commandBuffer = nil;
     id<MTLRenderCommandEncoder> encoder = nil;
-    id<MTLRenderPipelineState> quadColorPipeline = nil;
-    id<MTLRenderPipelineState> quadImagePipeline = nil;
-    id<MTLRenderPipelineState> quadLinearGradientPipeline = nil;
-    id<MTLRenderPipelineState> quadRadialGradientPipeline = nil;
-    id<MTLRenderPipelineState> shadowPass1Pipeline = nil;
-    id<MTLRenderPipelineState> shadowPass2Pipeline = nil;
-    id<MTLRenderPipelineState> blurPipeline = nil;
 };
 
 struct _FilterTextures {
@@ -111,7 +105,47 @@ static id<MTLSamplerState> _CreateSampler(MTLSamplerMinMagFilter minFilter, MTLS
     return [_GetDevice() newSamplerStateWithDescriptor: descriptor];
 }
 
-static id<MTLRenderPipelineState> _CreatePipeline(NSString* fragmentName, MTLPixelFormat format) {
+// Fragments output premultiplied color, so every blend mode is a plain factor pair.
+static void _SetBlend(MTLRenderPipelineColorAttachmentDescriptor* attachment, Blend blend) {
+    PROFILE
+
+    attachment.blendingEnabled = YES;
+    attachment.rgbBlendOperation = MTLBlendOperationAdd;
+    attachment.alphaBlendOperation = MTLBlendOperationAdd;
+
+    switch (blend) {
+        case Blend::Over:
+            // dst = src + dst * (1 - srcA)
+            attachment.sourceRGBBlendFactor = MTLBlendFactorOne;
+            attachment.destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+            attachment.sourceAlphaBlendFactor = MTLBlendFactorOne;
+            attachment.destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+            break;
+        case Blend::Add:
+            // dst = src + dst; the target's alpha is kept
+            attachment.sourceRGBBlendFactor = MTLBlendFactorOne;
+            attachment.destinationRGBBlendFactor = MTLBlendFactorOne;
+            attachment.sourceAlphaBlendFactor = MTLBlendFactorZero;
+            attachment.destinationAlphaBlendFactor = MTLBlendFactorOne;
+            break;
+        case Blend::Multiply:
+            // dst = src * dst + dst * (1 - srcA): where the source is transparent the target stays
+            attachment.sourceRGBBlendFactor = MTLBlendFactorDestinationColor;
+            attachment.destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+            attachment.sourceAlphaBlendFactor = MTLBlendFactorZero;
+            attachment.destinationAlphaBlendFactor = MTLBlendFactorOne;
+            break;
+        case Blend::Screen:
+            // dst = src + dst * (1 - src)
+            attachment.sourceRGBBlendFactor = MTLBlendFactorOne;
+            attachment.destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceColor;
+            attachment.sourceAlphaBlendFactor = MTLBlendFactorZero;
+            attachment.destinationAlphaBlendFactor = MTLBlendFactorOne;
+            break;
+    }
+}
+
+static id<MTLRenderPipelineState> _CreatePipeline(NSString* fragmentName, MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static id<MTLFunction> const _vertexFunction = [_GetLibrary() newFunctionWithName: @"quadVertex"];
@@ -122,14 +156,7 @@ static id<MTLRenderPipelineState> _CreatePipeline(NSString* fragmentName, MTLPix
 
     auto attachment = descriptor.colorAttachments[0];
     attachment.pixelFormat = format;
-    // Premultiplied-alpha "over": fragments output premultiplied color.
-    attachment.blendingEnabled = YES;
-    attachment.sourceRGBBlendFactor = MTLBlendFactorOne;
-    attachment.destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-    attachment.rgbBlendOperation = MTLBlendOperationAdd;
-    attachment.sourceAlphaBlendFactor = MTLBlendFactorOne;
-    attachment.destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-    attachment.alphaBlendOperation = MTLBlendOperationAdd;
+    _SetBlend(attachment, blend);
 
     NSError* error = nil;
     auto pipeline = [_GetDevice() newRenderPipelineStateWithDescriptor: descriptor error: &error];
@@ -141,71 +168,72 @@ static id<MTLRenderPipelineState> _CreatePipeline(NSString* fragmentName, MTLPix
     return pipeline;
 }
 
-static id<MTLRenderPipelineState> _GetPipeline(NSString* fragmentName, MTLPixelFormat format, std::map<std::uint64_t, id<MTLRenderPipelineState>>& cache) {
+static id<MTLRenderPipelineState> _GetPipeline(NSString* fragmentName, MTLPixelFormat format, Blend blend, std::map<std::uint64_t, id<MTLRenderPipelineState>>& cache) {
     PROFILE
 
-    auto it = cache.find((std::uint64_t)format);
+    auto const key = (((std::uint64_t)format) << 8) | (std::uint64_t)blend;
+    auto it = cache.find(key);
     if (it == cache.end()) {
-        it = cache.emplace((std::uint64_t)format, _CreatePipeline(fragmentName, format)).first;
+        it = cache.emplace(key, _CreatePipeline(fragmentName, format, blend)).first;
     }
 
     return it->second;
 }
 
-static id<MTLRenderPipelineState> _GetQuadColorPipeline(MTLPixelFormat format) {
+static id<MTLRenderPipelineState> _GetQuadColorPipeline(MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
 
-    return _GetPipeline(@"colorFragment", format, _pipelines);
+    return _GetPipeline(@"colorFragment", format, blend, _pipelines);
 }
 
-static id<MTLRenderPipelineState> _GetQuadImagePipeline(MTLPixelFormat format) {
+static id<MTLRenderPipelineState> _GetQuadImagePipeline(MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
 
-    return _GetPipeline(@"imageFragment", format, _pipelines);
+    return _GetPipeline(@"imageFragment", format, blend, _pipelines);
 }
 
-static id<MTLRenderPipelineState> _GetQuadLinearGradientPipeline(MTLPixelFormat format) {
+static id<MTLRenderPipelineState> _GetQuadLinearGradientPipeline(MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
 
-    return _GetPipeline(@"linearGradientFragment", format, _pipelines);
+    return _GetPipeline(@"linearGradientFragment", format, blend, _pipelines);
 }
 
-static id<MTLRenderPipelineState> _GetQuadRadialGradientPipeline(MTLPixelFormat format) {
+static id<MTLRenderPipelineState> _GetQuadRadialGradientPipeline(MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
 
-    return _GetPipeline(@"radialGradientFragment", format, _pipelines);
+    return _GetPipeline(@"radialGradientFragment", format, blend, _pipelines);
 }
 
-static id<MTLRenderPipelineState> _GetBlurPipeline(MTLPixelFormat format) {
+static id<MTLRenderPipelineState> _GetBlurPipeline(MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
 
-    return _GetPipeline(@"blurFragment", format, _pipelines);
+    return _GetPipeline(@"blurFragment", format, blend, _pipelines);
 }
 
-static id<MTLRenderPipelineState> _GetShadowPass1Pipeline(MTLPixelFormat format) {
+static id<MTLRenderPipelineState> _GetShadowPass1Pipeline(MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
 
-    return _GetPipeline(@"shadowPass1Fragment", format, _pipelines);
+    return _GetPipeline(@"shadowPass1Fragment", format, blend, _pipelines);
 }
 
-static id<MTLRenderPipelineState> _GetShadowPass2Pipeline(MTLPixelFormat format) {
+static id<MTLRenderPipelineState> _GetShadowPass2Pipeline(MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
 
-    return _GetPipeline(@"shadowPass2Fragment", format, _pipelines);
+    return _GetPipeline(@"shadowPass2Fragment", format, blend, _pipelines);
 }
 
 static id<MTLSamplerState> _GetLinLinSampler() {
@@ -264,17 +292,11 @@ static void _BeginRenderPass(_RenderPass& renderPass, id<MTLCommandBuffer> comma
 
     renderPass.width = width;
     renderPass.height = height;
+    renderPass.format = format;
     renderPass.texture = texture;
     renderPass.drawable = drawable;
     renderPass.commandBuffer = command;
     renderPass.encoder = [command renderCommandEncoderWithDescriptor: descriptor];
-    renderPass.quadColorPipeline = _GetQuadColorPipeline(format);
-    renderPass.quadImagePipeline = _GetQuadImagePipeline(format);
-    renderPass.quadLinearGradientPipeline = _GetQuadLinearGradientPipeline(format);
-    renderPass.quadRadialGradientPipeline = _GetQuadRadialGradientPipeline(format);
-    renderPass.shadowPass1Pipeline = _GetShadowPass1Pipeline(format);
-    renderPass.shadowPass2Pipeline = _GetShadowPass2Pipeline(format);
-    renderPass.blurPipeline = _GetBlurPipeline(format);
 }
 
 static void _EndRenderPass(_RenderPass& renderPass, bool submit = false) {
@@ -300,13 +322,7 @@ static void _EndRenderPass(_RenderPass& renderPass, bool submit = false) {
     renderPass.drawable = nil;
     renderPass.encoder = nil;
     renderPass.commandBuffer = nil;
-    renderPass.quadColorPipeline = nil;
-    renderPass.quadImagePipeline = nil;
-    renderPass.quadLinearGradientPipeline = nil;
-    renderPass.quadRadialGradientPipeline = nil;
-    renderPass.shadowPass1Pipeline = nil;
-    renderPass.shadowPass2Pipeline = nil;
-    renderPass.blurPipeline = nil;
+    renderPass.format = MTLPixelFormatInvalid;
 }
 
 static void _SuspendRenderPass(_RenderPass& renderPass) {
@@ -851,8 +867,9 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
     auto const blurFilter = options.filter.has_value() ? options.filter->as<BlurFilter>() : nullptr;
     auto const shadowFilter = options.filter.has_value() ? options.filter->as<ShadowFilter>() : nullptr;
     auto& renderPass = *_impl->renderPassStack.top();
+    auto const blend = options.blend.value_or(Blend::Over);
 
-    auto const drawShape = [&](_RenderPass& pass, std::optional<Vec4> const& scissor) {
+    auto const drawShape = [&](_RenderPass& pass, std::optional<Vec4> const& scissor, Blend mode) {
         assert(pass.encoder != nil);
 
         auto const resolution = Vec2{
@@ -866,16 +883,16 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _PushShapeUniforms(pass, shape, true);
 
         if (colorBrush != nullptr) {
-            [pass.encoder setRenderPipelineState: pass.quadColorPipeline];
+            [pass.encoder setRenderPipelineState: _GetQuadColorPipeline(pass.format, mode)];
             _PushColorBrushUniforms(pass, *colorBrush);
         } else if (imageBrush != nullptr) {
-            [pass.encoder setRenderPipelineState: pass.quadImagePipeline];
+            [pass.encoder setRenderPipelineState: _GetQuadImagePipeline(pass.format, mode)];
             _PushImageBrushUniforms(pass, *imageBrush, bounds);
         } else if (gradientBrush != nullptr) {
             if (gradientBrush->radial.value_or(false)) {
-                [pass.encoder setRenderPipelineState: pass.quadRadialGradientPipeline];
+                [pass.encoder setRenderPipelineState: _GetQuadRadialGradientPipeline(pass.format, mode)];
             } else {
-                [pass.encoder setRenderPipelineState: pass.quadLinearGradientPipeline];
+                [pass.encoder setRenderPipelineState: _GetQuadLinearGradientPipeline(pass.format, mode)];
             }
             _PushGradiantBrushUniforms(pass, *gradientBrush);
         }
@@ -883,7 +900,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         [pass.encoder drawPrimitives: MTLPrimitiveTypeTriangleStrip vertexStart: 0 vertexCount: 4];
     };
 
-    auto const drawBlur = [&](_RenderPass& pass, id<MTLTexture> source, Vec2 const& direction, std::optional<Vec4> const& scissor) {
+    auto const drawBlur = [&](_RenderPass& pass, id<MTLTexture> source, Vec2 const& direction, std::optional<Vec4> const& scissor, Blend mode) {
         assert(pass.encoder != nil);
         assert(source != nil);
 
@@ -898,7 +915,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _PushShapeUniforms(pass, Shape{ QuadShape{ Vec4{ {}, resolution } } }, false);
         _PushBlurUniforms(pass, direction, blurFilter->radius);
 
-        [pass.encoder setRenderPipelineState: pass.blurPipeline];
+        [pass.encoder setRenderPipelineState: _GetBlurPipeline(pass.format, mode)];
         [pass.encoder setFragmentTexture: source atIndex: 0];
         [pass.encoder setFragmentSamplerState: _GetLinLinSampler() atIndex: 0];
         [pass.encoder drawPrimitives: MTLPrimitiveTypeTriangleStrip vertexStart: 0 vertexCount: 4];
@@ -919,13 +936,13 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _PushShapeUniforms(pass, Shape{ QuadShape{ Vec4{ {}, resolution } } }, false);
         _PushShadowPass1Uniforms(pass, shadowFilter->radius, shadowFilter->inset);
 
-        [pass.encoder setRenderPipelineState: pass.shadowPass1Pipeline];
+        [pass.encoder setRenderPipelineState: _GetShadowPass1Pipeline(pass.format, Blend::Over)];
         [pass.encoder setFragmentTexture: source atIndex: 0];
         [pass.encoder setFragmentSamplerState: _GetLinLinSampler() atIndex: 0];
         [pass.encoder drawPrimitives: MTLPrimitiveTypeTriangleStrip vertexStart: 0 vertexCount: 4];
     };
 
-    auto const drawShadowPass2 = [&](_RenderPass& pass, id<MTLTexture> source, id<MTLTexture> mask, std::optional<Vec4> const& scissor) {
+    auto const drawShadowPass2 = [&](_RenderPass& pass, id<MTLTexture> source, id<MTLTexture> mask, std::optional<Vec4> const& scissor, Blend mode) {
         assert(pass.encoder != nil);
         assert(source != nil);
         assert(mask != nil);
@@ -948,7 +965,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _PushShapeUniforms(pass, Shape{ QuadShape{ Vec4{ {}, resolution } } }, false);
         _PushShadowPass2Uniforms(pass, *shadowFilter);
 
-        [pass.encoder setRenderPipelineState: pass.shadowPass2Pipeline];
+        [pass.encoder setRenderPipelineState: _GetShadowPass2Pipeline(pass.format, mode)];
         [pass.encoder setFragmentTexture: source atIndex: 0];
         [pass.encoder setFragmentTexture: mask atIndex: 1];
         [pass.encoder setFragmentSamplerState: _GetLinLinSampler() atIndex: 0];
@@ -967,16 +984,16 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
 
         auto shapePass = _RenderPass{};
         _BeginRenderPass(shapePass, renderPass.commandBuffer, shapeTexture, nil, renderPass.width, renderPass.height, filterFormat, clearColor);
-        drawShape(shapePass, std::nullopt);
+        drawShape(shapePass, std::nullopt, Blend::Over);
         _EndRenderPass(shapePass);
 
         auto blurPass = _RenderPass{};
         _BeginRenderPass(blurPass, renderPass.commandBuffer, blurTexture, nil, renderPass.width, renderPass.height, filterFormat, clearColor);
-        drawBlur(blurPass, shapeTexture, Vec2{ 1.0f, 0.0f }, std::nullopt);
+        drawBlur(blurPass, shapeTexture, Vec2{ 1.0f, 0.0f }, std::nullopt, Blend::Over);
         _EndRenderPass(blurPass);
 
         _ResumeRenderPass(renderPass);
-        drawBlur(renderPass, blurTexture, Vec2{ 0.0f, 1.0f }, options.scissor);
+        drawBlur(renderPass, blurTexture, Vec2{ 0.0f, 1.0f }, options.scissor, blend);
     } else if (shadowFilter != nullptr) {
         _SuspendRenderPass(renderPass);
 
@@ -986,7 +1003,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
 
         auto shapePass = _RenderPass{};
         _BeginRenderPass(shapePass, renderPass.commandBuffer, shapeTexture, nil, renderPass.width, renderPass.height, filterFormat, clearColor);
-        drawShape(shapePass, std::nullopt);
+        drawShape(shapePass, std::nullopt, Blend::Over);
         _EndRenderPass(shapePass);
 
         auto shadowPass = _RenderPass{};
@@ -995,9 +1012,9 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _EndRenderPass(shadowPass);
 
         _ResumeRenderPass(renderPass);
-        drawShadowPass2(renderPass, shadowTexture, shapeTexture, options.scissor);
+        drawShadowPass2(renderPass, shadowTexture, shapeTexture, options.scissor, blend);
     } else {
-        drawShape(renderPass, options.scissor);
+        drawShape(renderPass, options.scissor, blend);
     }
 }
 

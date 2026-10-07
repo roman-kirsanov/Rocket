@@ -206,6 +206,52 @@ TEST(Painter, GradientRadialOffcenter) {
     }));
 }
 
+/* --- blend modes --- */
+
+TEST(Painter, BlendAddOverlap) {
+    /* two additive radial lights on a dark field: the overlap sums toward white */
+    EXPECT_TRUE(runCase("blend-add-overlap", 128, 128, [&](Painter& painter, Image&) {
+        painter.paint(QuadShape{ .rect = { 0.0f, 0.0f, 128.0f, 128.0f } }, ColorBrush{ .color = { 0.1f, 0.1f, 0.15f, 1.0f } });
+        for (auto const& center : { Vec2{ 48.0f, 64.0f }, Vec2{ 80.0f, 64.0f } }) {
+            painter.paint(QuadShape{ .rect = { center.x - 40.0f, center.y - 40.0f, 80.0f, 80.0f } }, GradientBrush{
+                .radial        = true,
+                .startPosition = Vec2{ 0.5f, 0.5f },
+                .stopPosition  = Vec2{ 1.0f, 0.5f },
+                .startColor    = Vec4{ 0.9f, 0.7f, 0.3f, 1.0f },
+                .stopColor     = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f }
+            }, { .blend = Blend::Add });
+        }
+    }));
+}
+
+TEST(Painter, BlendMultiplyLightmap) {
+    /* a checker scene multiplied by a lightmap: dark outside the light, the image's own colours inside */
+    EXPECT_TRUE(runCase("blend-multiply-lightmap", 128, 128, [&](Painter& painter, Image&) {
+        painter.paint(QuadShape{ .rect = { 0.0f, 0.0f, 128.0f, 128.0f } }, ImageBrush{ .image = &checker, .repeatX = true, .repeatY = true });
+        painter.paint(QuadShape{ .rect = { 0.0f, 0.0f, 128.0f, 128.0f } }, GradientBrush{
+            .radial        = true,
+            .startPosition = Vec2{ 0.5f, 0.5f },
+            .stopPosition  = Vec2{ 1.0f, 0.5f },
+            .startColor    = Vec4{ 1.0f, 0.95f, 0.8f, 1.0f },
+            .stopColor     = Vec4{ 0.1f, 0.1f, 0.2f, 1.0f }
+        }, { .blend = Blend::Multiply });
+    }));
+}
+
+TEST(Painter, BlendScreenGlow) {
+    /* a screened glow over the checker never clips to white where the image is already bright */
+    EXPECT_TRUE(runCase("blend-screen-glow", 128, 128, [&](Painter& painter, Image&) {
+        painter.paint(QuadShape{ .rect = { 0.0f, 0.0f, 128.0f, 128.0f } }, ImageBrush{ .image = &checker, .repeatX = true, .repeatY = true });
+        painter.paint(QuadShape{ .rect = { 24.0f, 24.0f, 80.0f, 80.0f } }, GradientBrush{
+            .radial        = true,
+            .startPosition = Vec2{ 0.5f, 0.5f },
+            .stopPosition  = Vec2{ 1.0f, 0.5f },
+            .startColor    = Vec4{ 0.4f, 0.8f, 1.0f, 1.0f },
+            .stopColor     = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f }
+        }, { .blend = Blend::Screen });
+    }));
+}
+
 /* --- image --- */
 
 TEST(Painter, ImagePositionStart) {
