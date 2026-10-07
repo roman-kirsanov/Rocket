@@ -105,24 +105,15 @@ static inline float _gaussianWeight(int i, float sigma) {
     return exp(-(x * x) / (2.0f * sigma * sigma));
 }
 
-static inline float _applySpreadXY(texture2d<float> texture, sampler sampler, float2 uv, float2 texel, float2 spread) {
-    float2 d = spread * texel;
-
-    if (all(spread == float2(0.0f))) {
-        return texture.sample(sampler, uv).r;
-    }
-
-    float a0 = texture.sample(sampler, uv).r;
-    float a1 = texture.sample(sampler, uv + float2(+d.x, 0.0f)).r;
-    float a2 = texture.sample(sampler, uv + float2(-d.x, 0.0f)).r;
-    float a3 = texture.sample(sampler, uv + float2(0.0f, +d.y)).r;
-    float a4 = texture.sample(sampler, uv + float2(0.0f, -d.y)).r;
-    float a5 = texture.sample(sampler, uv + float2(+d.x, +d.y)).r;
-    float a6 = texture.sample(sampler, uv + float2(+d.x, -d.y)).r;
-    float a7 = texture.sample(sampler, uv + float2(-d.x, +d.y)).r;
-    float a8 = texture.sample(sampler, uv + float2(-d.x, -d.y)).r;
-
-    return max(a0, max(max(max(a1, a2), max(a3, a4)), max(max(a5, a6), max(a7, a8))));
+// Shadow field (x) and carried silhouette mask (y) at uv. The shape texture holds
+// both in .a; every pass after it stores the field in .r and carries the mask in
+// .g, so the composite can clip an inset shadow to the silhouette without keeping
+// the shape texture alive across the ping-pong. Only the field is complemented.
+static inline float2 _shadowField(texture2d<float> texture, sampler sampler, float2 uv, int fromSilhouette, int invert) {
+    float4 t = texture.sample(sampler, uv);
+    float2 f = (fromSilhouette != 0) ? t.aa : t.rg;
+    f.x = (invert != 0) ? (1.0f - f.x) : f.x;
+    return f;
 }
 
 vertex VertexResult quadVertex(uint vid [[vertex_id]], StateUniforms constant& uState [[buffer(0)]], ShapeUniforms constant& uShape [[buffer(1)]]) {
@@ -136,12 +127,12 @@ vertex VertexResult quadVertex(uint vid [[vertex_id]], StateUniforms constant& u
     return ret;
 }
 
-fragment float4 colorFragment(VertexResult in [[stage_in]], StateUniforms constant& uState [[buffer(0)]], ColorUniforms constant& uBrush [[buffer(1)]], ShapeUniforms constant& uShape [[buffer(2)]]) {
+fragment float4 colorBrushFragment(VertexResult in [[stage_in]], StateUniforms constant& uState [[buffer(0)]], ColorBrushUniforms constant& uBrush [[buffer(1)]], ShapeUniforms constant& uShape [[buffer(2)]]) {
     float a = (uBrush.color.a * uState.opacity * _coverage(in.localPos, uShape));
     return float4((uBrush.color.rgb * a), a);
 }
 
-fragment float4 imageFragment(VertexResult in [[stage_in]], StateUniforms constant& uState [[buffer(0)]], ImageUniforms constant& uBrush [[buffer(1)]], ShapeUniforms constant& uShape [[buffer(2)]], texture2d<float> texture0 [[texture(0)]], sampler sampler0 [[sampler(0)]]) {
+fragment float4 imageBrushFragment(VertexResult in [[stage_in]], StateUniforms constant& uState [[buffer(0)]], ImageBrushUniforms constant& uBrush [[buffer(1)]], ShapeUniforms constant& uShape [[buffer(2)]], texture2d<float> texture0 [[texture(0)]], sampler sampler0 [[sampler(0)]]) {
     float2 srcSize = (uBrush.source.zw - uBrush.source.xy);
     float2 dstSize = (uBrush.destin.zw - uBrush.destin.xy);
     float2 dstPos  = (in.localPos - uBrush.destin.xy);
@@ -247,7 +238,7 @@ fragment float4 imageFragment(VertexResult in [[stage_in]], StateUniforms consta
     return (texel * uState.opacity * _coverage(in.localPos, uShape));
 }
 
-fragment float4 linearGradientFragment(VertexResult in [[stage_in]], StateUniforms constant& uState [[buffer(0)]], GradientUniforms constant& uBrush [[buffer(1)]], ShapeUniforms constant& uShape [[buffer(2)]]) {
+fragment float4 linearGradientBrushFragment(VertexResult in [[stage_in]], StateUniforms constant& uState [[buffer(0)]], GradientBrushUniforms constant& uBrush [[buffer(1)]], ShapeUniforms constant& uShape [[buffer(2)]]) {
     float4 result = {};
     float2 dPoint = (uBrush.stopPoint - uBrush.startPoint);
     float t = (
@@ -286,7 +277,7 @@ fragment float4 linearGradientFragment(VertexResult in [[stage_in]], StateUnifor
     return float4((result.rgb * a), a);
 }
 
-fragment float4 radialGradientFragment(VertexResult in [[stage_in]], StateUniforms constant& uState [[buffer(0)]], GradientUniforms constant& uBrush [[buffer(1)]], ShapeUniforms constant& uShape [[buffer(2)]]) {
+fragment float4 radialGradientBrushFragment(VertexResult in [[stage_in]], StateUniforms constant& uState [[buffer(0)]], GradientBrushUniforms constant& uBrush [[buffer(1)]], ShapeUniforms constant& uShape [[buffer(2)]]) {
     float4 result      = {};
     float lineDistance = distance(uBrush.startPoint, uBrush.stopPoint);
     float svexDistance = distance(uBrush.startPoint, in.localUV);
@@ -312,40 +303,66 @@ fragment float4 radialGradientFragment(VertexResult in [[stage_in]], StateUnifor
     return float4((result.rgb * a), a);
 }
 
-fragment float4 blurFragment(VertexResult in [[stage_in]], StateUniforms constant& uState [[buffer(0)]], FilterBlurUniforms constant& uBlur [[buffer(1)]], texture2d<float> texture0 [[texture(0)]], sampler sampler0 [[sampler(0)]]) {
+fragment float4 blurFilterFragment(VertexResult in [[stage_in]], StateUniforms constant& uState [[buffer(0)]], BlurFilterUniforms constant& uFilter [[buffer(1)]], texture2d<float> texture0 [[texture(0)]], sampler sampler0 [[sampler(0)]]) {
     float4 sum      = float4(0.0);
     float weightSum = 0.0f;
 
-    for (int i = -uBlur.taps; i <= uBlur.taps; i++) {
-        float weight = exp(-(float(i) * float(i)) / (2.0f * uBlur.sigma * uBlur.sigma));
-        sum += (texture0.sample(sampler0, (in.screenUV + (uBlur.direction * uBlur.texelSize * float(i)))) * weight);
+    for (int i = -uFilter.taps; i <= uFilter.taps; i++) {
+        float weight = exp(-(float(i) * float(i)) / (2.0f * uFilter.sigma * uFilter.sigma));
+        sum += (texture0.sample(sampler0, (in.screenUV + (uFilter.direction * uFilter.texelSize * float(i)))) * weight);
         weightSum += weight;
     }
 
     return (sum / weightSum);
 }
 
-fragment float4 shadowPass1Fragment(VertexResult in [[stage_in]], BlurUniforms constant& uBlur [[buffer(1)]], texture2d<float> texture0 [[texture(0)]], sampler sampler0 [[sampler(0)]]) {
-    float sigma = max(float(uBlur.radius) / 3.0f, 0.0001f);
-    float sum   = 0.0f;
-    float wsum  = 0.0f;
+// Separable dilation (positive spread) or erosion (negative spread) of the field
+// along one axis. Taps are dense, one per texel out to the extent, so no feature
+// thinner than the spread can slip between them; a final tap at the exact
+// (possibly fractional) extent through the linear sampler keeps the edge soft.
+fragment float4 shadowFilterDilateFragment(VertexResult in [[stage_in]], ShadowFilterFieldUniforms constant& uFilter [[buffer(1)]], texture2d<float> texture0 [[texture(0)]], sampler sampler0 [[sampler(0)]]) {
+    float2 step   = (uFilter.direction * uFilter.texel);
+    float  extent = abs(uFilter.spread);
+    int    n      = int(floor(extent));
+    float2 center = _shadowField(texture0, sampler0, in.screenUV, uFilter.fromSilhouette, uFilter.invert);
+    float  value  = center.x;
 
-    for (int i = -int(uBlur.radius); i <= int(uBlur.radius); i++) {
-        float w  = _gaussianWeight(i, sigma);
-        float2 uv = (in.screenUV + float2(float(i) * uBlur.texel.x, 0.0f));
-        float a  = texture0.sample(sampler0, uv).a;
-        if (uBlur.inset != 0) {
-            a = (1.0f - a); // inset casts the shadow from the shape's complement
-        }
-        sum  += (a * w);
+    for (int i = 1; i <= n; i++) {
+        float a = _shadowField(texture0, sampler0, (in.screenUV + (step * float(i))), uFilter.fromSilhouette, uFilter.invert).x;
+        float b = _shadowField(texture0, sampler0, (in.screenUV - (step * float(i))), uFilter.fromSilhouette, uFilter.invert).x;
+        value = (uFilter.spread > 0.0f) ? max(value, max(a, b)) : min(value, min(a, b));
+    }
+
+    if (extent > float(n)) {
+        float a = _shadowField(texture0, sampler0, (in.screenUV + (step * extent)), uFilter.fromSilhouette, uFilter.invert).x;
+        float b = _shadowField(texture0, sampler0, (in.screenUV - (step * extent)), uFilter.fromSilhouette, uFilter.invert).x;
+        value = (uFilter.spread > 0.0f) ? max(value, max(a, b)) : min(value, min(a, b));
+    }
+
+    return float4(value, center.y, 0.0f, 1.0f);
+}
+
+// Separable gaussian blur of the field along one axis.
+fragment float4 shadowFilterBlurFragment(VertexResult in [[stage_in]], ShadowFilterFieldUniforms constant& uFilter [[buffer(1)]], texture2d<float> texture0 [[texture(0)]], sampler sampler0 [[sampler(0)]]) {
+    float  sigma = max(float(uFilter.radius) / 3.0f, 0.0001f);
+    float2 step  = (uFilter.direction * uFilter.texel);
+    float  sum   = 0.0f;
+    float  wsum  = 0.0f;
+
+    for (int i = -uFilter.radius; i <= uFilter.radius; i++) {
+        float w = _gaussianWeight(i, sigma);
+        sum  += (_shadowField(texture0, sampler0, (in.screenUV + (step * float(i))), uFilter.fromSilhouette, uFilter.invert).x * w);
         wsum += w;
     }
 
-    return float4(((wsum > 0.0f) ? (sum / wsum) : 0.0f), 0.0f, 0.0f, 1.0f);
+    float mask = _shadowField(texture0, sampler0, in.screenUV, uFilter.fromSilhouette, 0).y;
+
+    return float4(((wsum > 0.0f) ? (sum / wsum) : 0.0f), mask, 0.0f, 1.0f);
 }
 
-fragment float4 shadowPass2Fragment(VertexResult in [[stage_in]], ShadowUniforms constant& uShadow [[buffer(1)]], texture2d<float> texture0 [[texture(0)]], texture2d<float> texture1 [[texture(1)]], sampler sampler0 [[sampler(0)]]) {
-    float sigma = max(float(uShadow.radius) / 3.0f, 0.0001f);
+// Vertical gaussian blur of the field, tinted and composited onto the target.
+fragment float4 shadowFilterCompositeFragment(VertexResult in [[stage_in]], ShadowFilterUniforms constant& uFilter [[buffer(1)]], texture2d<float> texture0 [[texture(0)]], sampler sampler0 [[sampler(0)]]) {
+    float sigma = max(float(uFilter.radius) / 3.0f, 0.0001f);
     float sum   = 0.0f;
     float wsum  = 0.0f;
 
@@ -353,29 +370,24 @@ fragment float4 shadowPass2Fragment(VertexResult in [[stage_in]], ShadowUniforms
     // so the field is sampled straight. An inset shadow keeps the quad in place and
     // shifts the sampled field here instead, so the silhouette mask stays aligned.
     float2 fieldUV = in.screenUV;
-    if (uShadow.inset != 0) {
-        fieldUV -= (uShadow.offset * uShadow.texel);
+    if (uFilter.inset != 0) {
+        fieldUV -= (uFilter.offset * uFilter.texel);
     }
 
-    // Spread means dilate-then-blur: each y-blur tap samples the spread-dilated
-    // pass-1 field (already x-blurred), so the dilated silhouette receives the
-    // full y-blur too. With zero spread _applySpreadXY is a plain sample and the
-    // result is the pure separable gaussian — identical ramps on both axes.
-    for (int i = -int(uShadow.radius); i <= int(uShadow.radius); i++) {
+    for (int i = -int(uFilter.radius); i <= int(uFilter.radius); i++) {
         float w   = _gaussianWeight(i, sigma);
-        float2 uv = (fieldUV + float2(0.0f, float(i) * uShadow.texel.y));
-        float a   = _applySpreadXY(texture0, sampler0, uv, uShadow.texel, uShadow.spread);
-        sum  += (a * w);
+        float2 uv = (fieldUV + float2(0.0f, float(i) * uFilter.texel.y));
+        sum  += (_shadowField(texture0, sampler0, uv, uFilter.fromSilhouette, uFilter.invert).x * w);
         wsum += w;
     }
 
     float aFinal = (wsum > 0.0f) ? (sum / wsum) : 0.0f;
 
-    if (uShadow.inset != 0) {
-        aFinal *= texture1.sample(sampler0, in.screenUV).a; // clip the inset shadow to the silhouette
+    if (uFilter.inset != 0) {
+        aFinal *= _shadowField(texture0, sampler0, in.screenUV, uFilter.fromSilhouette, 0).y; // clip the inset shadow to the silhouette
     }
 
-    float outA = aFinal * uShadow.color.a * uShadow.opacity;
+    float outA = aFinal * uFilter.color.a * uFilter.opacity;
 
-    return float4((uShadow.color.rgb * outA), outA);
+    return float4((uFilter.color.rgb * outA), outA);
 }

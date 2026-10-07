@@ -180,60 +180,68 @@ static id<MTLRenderPipelineState> _GetPipeline(NSString* fragmentName, MTLPixelF
     return it->second;
 }
 
-static id<MTLRenderPipelineState> _GetQuadColorPipeline(MTLPixelFormat format, Blend blend) {
+static id<MTLRenderPipelineState> _GetColorBrushPipeline(MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
 
-    return _GetPipeline(@"colorFragment", format, blend, _pipelines);
+    return _GetPipeline(@"colorBrushFragment", format, blend, _pipelines);
 }
 
-static id<MTLRenderPipelineState> _GetQuadImagePipeline(MTLPixelFormat format, Blend blend) {
+static id<MTLRenderPipelineState> _GetImageBrushPipeline(MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
 
-    return _GetPipeline(@"imageFragment", format, blend, _pipelines);
+    return _GetPipeline(@"imageBrushFragment", format, blend, _pipelines);
 }
 
-static id<MTLRenderPipelineState> _GetQuadLinearGradientPipeline(MTLPixelFormat format, Blend blend) {
+static id<MTLRenderPipelineState> _GetLinearGradientBrushPipeline(MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
 
-    return _GetPipeline(@"linearGradientFragment", format, blend, _pipelines);
+    return _GetPipeline(@"linearGradientBrushFragment", format, blend, _pipelines);
 }
 
-static id<MTLRenderPipelineState> _GetQuadRadialGradientPipeline(MTLPixelFormat format, Blend blend) {
+static id<MTLRenderPipelineState> _GetRadialGradientBrushPipeline(MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
 
-    return _GetPipeline(@"radialGradientFragment", format, blend, _pipelines);
+    return _GetPipeline(@"radialGradientBrushFragment", format, blend, _pipelines);
 }
 
-static id<MTLRenderPipelineState> _GetBlurPipeline(MTLPixelFormat format, Blend blend) {
+static id<MTLRenderPipelineState> _GetBlurFilterPipeline(MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
 
-    return _GetPipeline(@"blurFragment", format, blend, _pipelines);
+    return _GetPipeline(@"blurFilterFragment", format, blend, _pipelines);
 }
 
-static id<MTLRenderPipelineState> _GetShadowPass1Pipeline(MTLPixelFormat format, Blend blend) {
+static id<MTLRenderPipelineState> _GetShadowFilterDilatePipeline(MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
 
-    return _GetPipeline(@"shadowPass1Fragment", format, blend, _pipelines);
+    return _GetPipeline(@"shadowFilterDilateFragment", format, blend, _pipelines);
 }
 
-static id<MTLRenderPipelineState> _GetShadowPass2Pipeline(MTLPixelFormat format, Blend blend) {
+static id<MTLRenderPipelineState> _GetShadowFilterBlurPipeline(MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
 
-    return _GetPipeline(@"shadowPass2Fragment", format, blend, _pipelines);
+    return _GetPipeline(@"shadowFilterBlurFragment", format, blend, _pipelines);
+}
+
+static id<MTLRenderPipelineState> _GetShadowFilterCompositePipeline(MTLPixelFormat format, Blend blend) {
+    PROFILE
+
+    static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
+
+    return _GetPipeline(@"shadowFilterCompositeFragment", format, blend, _pipelines);
 }
 
 static id<MTLSamplerState> _GetLinLinSampler() {
@@ -528,11 +536,11 @@ static void _PushColorBrushUniforms(_RenderPass const& renderPass, ColorBrush co
 
     assert(renderPass.encoder != nil);
 
-    auto const colorUniforms = ColorUniforms{
+    auto const colorUniforms = ColorBrushUniforms{
         .color = simd_make_float4(colorBrush.color.red, colorBrush.color.green, colorBrush.color.blue, colorBrush.color.alpha)
     };
 
-    [renderPass.encoder setFragmentBytes: &colorUniforms length: sizeof(ColorUniforms) atIndex: _BRUSH_FRAGMENT_UNIFORMS_INDEX];
+    [renderPass.encoder setFragmentBytes: &colorUniforms length: sizeof(ColorBrushUniforms) atIndex: _BRUSH_FRAGMENT_UNIFORMS_INDEX];
 }
 
 static void _PushImageBrushUniforms(_RenderPass const& renderPass, ImageBrush const& imageBrush, Vec4 const& bounds) {
@@ -589,7 +597,7 @@ static void _PushImageBrushUniforms(_RenderPass const& renderPass, ImageBrush co
         imageDst.height = bounds.height;
     }
 
-    auto const imageUniforms = ImageUniforms{
+    auto const imageUniforms = ImageBrushUniforms{
         .color  = { imageColor.red, imageColor.green, imageColor.blue, imageColor.alpha },
         .size   = { imageSize.width, imageSize.height },
         .flip   = { (flipX ? 1.0f : 0.0f), (flipY ? 1.0f : 0.0f) },
@@ -611,10 +619,10 @@ static void _PushImageBrushUniforms(_RenderPass const& renderPass, ImageBrush co
 
     [renderPass.encoder setFragmentTexture: (__bridge id<MTLTexture>)imageBrush.image->getTexture() atIndex: 0];
     [renderPass.encoder setFragmentSamplerState: sampler atIndex: 0];
-    [renderPass.encoder setFragmentBytes: &imageUniforms length: sizeof(ImageUniforms) atIndex: _BRUSH_FRAGMENT_UNIFORMS_INDEX];
+    [renderPass.encoder setFragmentBytes: &imageUniforms length: sizeof(ImageBrushUniforms) atIndex: _BRUSH_FRAGMENT_UNIFORMS_INDEX];
 }
 
-static void _PushGradiantBrushUniforms(_RenderPass const& renderPass, GradientBrush const& gradientBrush) {
+static void _PushGradientBrushUniforms(_RenderPass const& renderPass, GradientBrush const& gradientBrush) {
     PROFILE
 
     assert(renderPass.encoder != nil);
@@ -630,7 +638,7 @@ static void _PushGradiantBrushUniforms(_RenderPass const& renderPass, GradientBr
         stopColor  = std::get<1>(gradientBrush.stops[stopCount - 1]);
     }
 
-    auto gradientUniforms = GradientUniforms{
+    auto gradientUniforms = GradientBrushUniforms{
         .startPoint = { startPosition.x, startPosition.y },
         .startColor = { startColor.red, startColor.green, startColor.blue, startColor.alpha },
         .stopPoint  = { stopPosition.x, stopPosition.y },
@@ -643,51 +651,54 @@ static void _PushGradiantBrushUniforms(_RenderPass const& renderPass, GradientBr
         gradientUniforms.stopPosition[i] = position;
     }
 
-    [renderPass.encoder setFragmentBytes: &gradientUniforms length: sizeof(GradientUniforms) atIndex: _BRUSH_FRAGMENT_UNIFORMS_INDEX];
+    [renderPass.encoder setFragmentBytes: &gradientUniforms length: sizeof(GradientBrushUniforms) atIndex: _BRUSH_FRAGMENT_UNIFORMS_INDEX];
 }
 
-static void _PushBlurUniforms(_RenderPass const& renderPass, Vec2 const& direction, float radius) {
+static void _PushBlurFilterUniforms(_RenderPass const& renderPass, Vec2 const& direction, float radius) {
     PROFILE
 
-    auto const blurUniforms = FilterBlurUniforms{
+    auto const blurUniforms = BlurFilterUniforms{
         .texelSize = { (1.0f / static_cast<float>(renderPass.width)), (1.0f / static_cast<float>(renderPass.height)) },
         .direction = { direction.x, direction.y },
         .sigma     = (radius / 2.0f),
         .taps      = std::min(static_cast<int>(std::ceil(radius)), _BLUR_TAP_MAX)
     };
 
-    [renderPass.encoder setFragmentBytes: &blurUniforms length: sizeof(FilterBlurUniforms) atIndex: _BRUSH_FRAGMENT_UNIFORMS_INDEX];
+    [renderPass.encoder setFragmentBytes: &blurUniforms length: sizeof(BlurFilterUniforms) atIndex: _BRUSH_FRAGMENT_UNIFORMS_INDEX];
 }
 
-static void _PushShadowPass1Uniforms(_RenderPass const& renderPass, float radius, bool inset) {
+static void _PushShadowFilterFieldUniforms(_RenderPass const& renderPass, Vec2 const& direction, float spread, int radius, bool fromSilhouette, bool inset) {
     PROFILE
 
-    auto const shadowUniforms = BlurUniforms{
-        .texel  = { (1.0f / static_cast<float>(renderPass.width)), (1.0f / static_cast<float>(renderPass.height)) },
-        .radius = std::clamp(static_cast<int>(std::ceil(radius)), 0, _BLUR_TAP_MAX),
-        .inset  = (inset ? 1 : 0)
+    auto const fieldUniforms = ShadowFilterFieldUniforms{
+        .texel          = { (1.0f / static_cast<float>(renderPass.width)), (1.0f / static_cast<float>(renderPass.height)) },
+        .direction      = { direction.x, direction.y },
+        .spread         = std::clamp(spread, -static_cast<float>(_BLUR_TAP_MAX), static_cast<float>(_BLUR_TAP_MAX)),
+        .radius         = radius,
+        .fromSilhouette = (fromSilhouette ? 1 : 0),
+        .invert         = ((fromSilhouette && inset) ? 1 : 0)
     };
 
-    [renderPass.encoder setFragmentBytes: &shadowUniforms length: sizeof(BlurUniforms) atIndex: _BRUSH_FRAGMENT_UNIFORMS_INDEX];
+    [renderPass.encoder setFragmentBytes: &fieldUniforms length: sizeof(ShadowFilterFieldUniforms) atIndex: _BRUSH_FRAGMENT_UNIFORMS_INDEX];
 }
 
-static void _PushShadowPass2Uniforms(_RenderPass const& renderPass, ShadowFilter const& filter) {
+static void _PushShadowFilterUniforms(_RenderPass const& renderPass, ShadowFilter const& filter, int radius, bool fromSilhouette) {
     PROFILE
 
-    auto const spread = filter.spread.value_or(Vec2{});
     auto const offset = filter.offset.value_or(Vec2{});
 
-    auto const shadowUniforms = ShadowUniforms{
-        .color   = { filter.color.red, filter.color.green, filter.color.blue, filter.color.alpha },
-        .opacity = 1.0f,
-        .spread  = { spread.x, spread.y },
-        .texel   = { (1.0f / static_cast<float>(renderPass.width)), (1.0f / static_cast<float>(renderPass.height)) },
-        .offset  = { offset.x, offset.y },
-        .radius  = std::clamp(static_cast<int>(std::ceil(filter.radius)), 0, _BLUR_TAP_MAX),
-        .inset   = (filter.inset ? 1 : 0)
+    auto const shadowUniforms = ShadowFilterUniforms{
+        .color          = { filter.color.red, filter.color.green, filter.color.blue, filter.color.alpha },
+        .opacity        = 1.0f,
+        .texel          = { (1.0f / static_cast<float>(renderPass.width)), (1.0f / static_cast<float>(renderPass.height)) },
+        .offset         = { offset.x, offset.y },
+        .radius         = radius,
+        .inset          = (filter.inset ? 1 : 0),
+        .fromSilhouette = (fromSilhouette ? 1 : 0),
+        .invert         = ((fromSilhouette && filter.inset) ? 1 : 0)
     };
 
-    [renderPass.encoder setFragmentBytes: &shadowUniforms length: sizeof(ShadowUniforms) atIndex: _BRUSH_FRAGMENT_UNIFORMS_INDEX];
+    [renderPass.encoder setFragmentBytes: &shadowUniforms length: sizeof(ShadowFilterUniforms) atIndex: _BRUSH_FRAGMENT_UNIFORMS_INDEX];
 }
 
 void* __GetDefaultGPUDevice() {
@@ -883,18 +894,18 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _PushShapeUniforms(pass, shape, true);
 
         if (colorBrush != nullptr) {
-            [pass.encoder setRenderPipelineState: _GetQuadColorPipeline(pass.format, mode)];
+            [pass.encoder setRenderPipelineState: _GetColorBrushPipeline(pass.format, mode)];
             _PushColorBrushUniforms(pass, *colorBrush);
         } else if (imageBrush != nullptr) {
-            [pass.encoder setRenderPipelineState: _GetQuadImagePipeline(pass.format, mode)];
+            [pass.encoder setRenderPipelineState: _GetImageBrushPipeline(pass.format, mode)];
             _PushImageBrushUniforms(pass, *imageBrush, bounds);
         } else if (gradientBrush != nullptr) {
             if (gradientBrush->radial.value_or(false)) {
-                [pass.encoder setRenderPipelineState: _GetQuadRadialGradientPipeline(pass.format, mode)];
+                [pass.encoder setRenderPipelineState: _GetRadialGradientBrushPipeline(pass.format, mode)];
             } else {
-                [pass.encoder setRenderPipelineState: _GetQuadLinearGradientPipeline(pass.format, mode)];
+                [pass.encoder setRenderPipelineState: _GetLinearGradientBrushPipeline(pass.format, mode)];
             }
-            _PushGradiantBrushUniforms(pass, *gradientBrush);
+            _PushGradientBrushUniforms(pass, *gradientBrush);
         }
 
         [pass.encoder drawPrimitives: MTLPrimitiveTypeTriangleStrip vertexStart: 0 vertexCount: 4];
@@ -913,15 +924,15 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _SetViewport(pass, { {}, resolution });
         _PushStateUniforms(pass, resolution, Mat3{}, 1.0f);
         _PushShapeUniforms(pass, Shape{ QuadShape{ Vec4{ {}, resolution } } }, false);
-        _PushBlurUniforms(pass, direction, blurFilter->radius);
+        _PushBlurFilterUniforms(pass, direction, blurFilter->radius);
 
-        [pass.encoder setRenderPipelineState: _GetBlurPipeline(pass.format, mode)];
+        [pass.encoder setRenderPipelineState: _GetBlurFilterPipeline(pass.format, mode)];
         [pass.encoder setFragmentTexture: source atIndex: 0];
         [pass.encoder setFragmentSamplerState: _GetLinLinSampler() atIndex: 0];
         [pass.encoder drawPrimitives: MTLPrimitiveTypeTriangleStrip vertexStart: 0 vertexCount: 4];
     };
 
-    auto const drawShadowPass1 = [&](_RenderPass& pass, id<MTLTexture> source, std::optional<Vec4> const& scissor) {
+    auto const drawShadowField = [&](_RenderPass& pass, id<MTLTexture> source, id<MTLRenderPipelineState> pipeline, Vec2 const& direction, float spread, int radius, bool fromSilhouette) {
         assert(pass.encoder != nil);
         assert(source != nil);
 
@@ -930,22 +941,21 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
             static_cast<float>(pass.height)
         };
 
-        _SetScissor(pass, scissor);
+        _SetScissor(pass, std::nullopt);
         _SetViewport(pass, { {}, resolution });
         _PushStateUniforms(pass, resolution, Mat3{}, 1.0f);
         _PushShapeUniforms(pass, Shape{ QuadShape{ Vec4{ {}, resolution } } }, false);
-        _PushShadowPass1Uniforms(pass, shadowFilter->radius, shadowFilter->inset);
+        _PushShadowFilterFieldUniforms(pass, direction, spread, radius, fromSilhouette, shadowFilter->inset);
 
-        [pass.encoder setRenderPipelineState: _GetShadowPass1Pipeline(pass.format, Blend::Over)];
+        [pass.encoder setRenderPipelineState: pipeline];
         [pass.encoder setFragmentTexture: source atIndex: 0];
         [pass.encoder setFragmentSamplerState: _GetLinLinSampler() atIndex: 0];
         [pass.encoder drawPrimitives: MTLPrimitiveTypeTriangleStrip vertexStart: 0 vertexCount: 4];
     };
 
-    auto const drawShadowPass2 = [&](_RenderPass& pass, id<MTLTexture> source, id<MTLTexture> mask, std::optional<Vec4> const& scissor, Blend mode) {
+    auto const drawShadowComposite = [&](_RenderPass& pass, id<MTLTexture> source, int radius, bool fromSilhouette, std::optional<Vec4> const& scissor, Blend mode) {
         assert(pass.encoder != nil);
         assert(source != nil);
-        assert(mask != nil);
 
         auto const resolution = Vec2{
             static_cast<float>(pass.width),
@@ -963,11 +973,10 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _SetViewport(pass, { {}, resolution });
         _PushStateUniforms(pass, resolution, transform, 1.0f);
         _PushShapeUniforms(pass, Shape{ QuadShape{ Vec4{ {}, resolution } } }, false);
-        _PushShadowPass2Uniforms(pass, *shadowFilter);
+        _PushShadowFilterUniforms(pass, *shadowFilter, radius, fromSilhouette);
 
-        [pass.encoder setRenderPipelineState: _GetShadowPass2Pipeline(pass.format, mode)];
+        [pass.encoder setRenderPipelineState: _GetShadowFilterCompositePipeline(pass.format, mode)];
         [pass.encoder setFragmentTexture: source atIndex: 0];
-        [pass.encoder setFragmentTexture: mask atIndex: 1];
         [pass.encoder setFragmentSamplerState: _GetLinLinSampler() atIndex: 0];
         [pass.encoder drawPrimitives: MTLPrimitiveTypeTriangleStrip vertexStart: 0 vertexCount: 4];
     };
@@ -997,22 +1006,43 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
     } else if (shadowFilter != nullptr) {
         _SuspendRenderPass(renderPass);
 
-        auto const& [ shapeTexture, shadowTexture ] = _impl->getFilterTextures(renderPass.width, renderPass.height).textures;
+        // Dilate (per axis), then blur horizontally, ping-ponging between the two
+        // scratch textures; the composite blurs vertically onto the target. Passes
+        // with nothing to do are skipped, so the composite may read the shape
+        // texture directly.
+        auto [ source, target ] = _impl->getFilterTextures(renderPass.width, renderPass.height).textures;
         auto const filterFormat = (MTLPixelFormat)__GetDefaultTextureFormat();
         auto const clearColor = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f };
+        auto const spread = shadowFilter->spread.value_or(Vec2{});
+        auto const radius = std::clamp(static_cast<int>(std::ceil(shadowFilter->radius)), 0, _BLUR_TAP_MAX);
+        auto fromSilhouette = true;
 
         auto shapePass = _RenderPass{};
-        _BeginRenderPass(shapePass, renderPass.commandBuffer, shapeTexture, nil, renderPass.width, renderPass.height, filterFormat, clearColor);
+        _BeginRenderPass(shapePass, renderPass.commandBuffer, source, nil, renderPass.width, renderPass.height, filterFormat, clearColor);
         drawShape(shapePass, std::nullopt, Blend::Over);
         _EndRenderPass(shapePass);
 
-        auto shadowPass = _RenderPass{};
-        _BeginRenderPass(shadowPass, renderPass.commandBuffer, shadowTexture, nil, renderPass.width, renderPass.height, filterFormat, clearColor);
-        drawShadowPass1(shadowPass, shapeTexture, std::nullopt);
-        _EndRenderPass(shadowPass);
+        auto const fieldPass = [&](id<MTLRenderPipelineState> pipeline, Vec2 const& direction, float extent) {
+            auto pass = _RenderPass{};
+            _BeginRenderPass(pass, renderPass.commandBuffer, target, nil, renderPass.width, renderPass.height, filterFormat, clearColor);
+            drawShadowField(pass, source, pipeline, direction, extent, radius, fromSilhouette);
+            _EndRenderPass(pass);
+            std::swap(source, target);
+            fromSilhouette = false;
+        };
+
+        if (spread.x != 0.0f) {
+            fieldPass(_GetShadowFilterDilatePipeline(filterFormat, Blend::Over), Vec2{ 1.0f, 0.0f }, spread.x);
+        }
+        if (spread.y != 0.0f) {
+            fieldPass(_GetShadowFilterDilatePipeline(filterFormat, Blend::Over), Vec2{ 0.0f, 1.0f }, spread.y);
+        }
+        if (radius > 0) {
+            fieldPass(_GetShadowFilterBlurPipeline(filterFormat, Blend::Over), Vec2{ 1.0f, 0.0f }, 0.0f);
+        }
 
         _ResumeRenderPass(renderPass);
-        drawShadowPass2(renderPass, shadowTexture, shapeTexture, options.scissor, blend);
+        drawShadowComposite(renderPass, source, radius, fromSilhouette, options.scissor, blend);
     } else {
         drawShape(renderPass, options.scissor, blend);
     }

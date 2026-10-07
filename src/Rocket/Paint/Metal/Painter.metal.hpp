@@ -35,13 +35,13 @@ struct ShapeUniforms {
     INT1   type;    // 0=quad, 1=ellipse, 2=quad outline, 3=ellipse outline
 };
 
-/** Uniforms for the solid-color fragment shader. */
-struct ColorUniforms {
+/** Uniforms for the ColorBrush fragment shader. */
+struct ColorBrushUniforms {
     FLOAT4 color;
 };
 
-/** Uniforms for the image-brush fragment shader. */
-struct ImageUniforms {
+/** Uniforms for the ImageBrush fragment shader. */
+struct ImageBrushUniforms {
     FLOAT4 color;
     FLOAT2 size;
     FLOAT2 flip;
@@ -51,8 +51,8 @@ struct ImageUniforms {
     FLOAT4 destin;
 };
 
-/** Uniforms for the linear/radial gradient fragment shaders. */
-struct GradientUniforms {
+/** Uniforms for the GradientBrush fragment shaders (linear and radial). */
+struct GradientBrushUniforms {
     FLOAT2 startPoint;
     FLOAT4 startColor;
     FLOAT2 stopPoint;
@@ -62,28 +62,36 @@ struct GradientUniforms {
     FLOAT1 stopPosition[10];
 };
 
-/** Uniforms for the shadow filter's silhouette blur pass. */
-struct BlurUniforms {
-    FLOAT2 texel;
-    INT1   radius;
-    INT1   inset; // 0 = drop shadow, 1 = inset
-};
-
-/** Uniforms for the two-pass gaussian blur fragment shader. */
-struct FilterBlurUniforms {
+/** Uniforms for the BlurFilter two-pass gaussian blur fragment shader. */
+struct BlurFilterUniforms {
     FLOAT2 texelSize;
     FLOAT2 direction;
     FLOAT1 sigma;
     INT1   taps;
 };
 
-/** Uniforms for the shadow filter's composite pass. */
-struct ShadowUniforms {
+/** Uniforms for the ShadowFilter composite pass. */
+struct ShadowFilterUniforms {
     FLOAT4 color;
     FLOAT1 opacity;
-    FLOAT2 spread;
     FLOAT2 texel;
-    FLOAT2 offset; // inset field displacement, in pixels
+    FLOAT2 offset;         // inset field displacement, in pixels
     INT1   radius;
-    INT1   inset;  // 0 = drop shadow, 1 = inset
+    INT1   inset;          // 0 = drop shadow, 1 = inset
+    INT1   fromSilhouette; // 1 = source is the shape texture (.a), 0 = a field texture (.r/.g)
+    INT1   invert;         // 1 = complement the field (no earlier pass did it)
+};
+
+/**
+ * Uniforms for the ShadowFilter separable dilate and blur passes. The shape
+ * texture holds the silhouette in .a; every pass after it stores the field in
+ * .r and carries the untouched silhouette mask in .g.
+ */
+struct ShadowFilterFieldUniforms {
+    FLOAT2 texel;
+    FLOAT2 direction;      // (1, 0) horizontal pass, (0, 1) vertical pass
+    FLOAT1 spread;         // dilate pass: extent in pixels along direction; negative erodes
+    INT1   radius;         // blur pass: gaussian half-width in taps
+    INT1   fromSilhouette; // 1 = source is the shape texture (.a), 0 = a field texture (.r/.g)
+    INT1   invert;         // 1 = complement the field (first pass of an inset chain)
 };

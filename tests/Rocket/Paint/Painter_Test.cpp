@@ -453,6 +453,17 @@ TEST(Painter, ShadowSpread) {
     }));
 }
 
+TEST(Painter, ShadowSpreadThinRing) {
+    // A 1px ring silhouette dilated by 3px must become one solid 7px band, not
+    // three concentric copies of the ring.
+    EXPECT_TRUE(runCase("shadow-spread-thin-ring", 128, 128, [&](Painter& painter, Image&) {
+        auto const shape = QuadOutlineShape{ .rect = { 32.0f, 32.0f, 64.0f, 64.0f }, .borderRadius = 12.0f, .border = 1.0f };
+        painter.paint(shape, ColorBrush{ .color = white }, PaintOptions{
+            .filter = ShadowFilter{ .radius = 0.0f, .color = black, .spread = Vec2(3.0f, 3.0f) }
+        });
+    }));
+}
+
 TEST(Painter, ShadowColored) {
     EXPECT_TRUE(runCase("shadow-colored", 128, 128, [&](Painter& painter, Image&) {
         auto const shape = QuadShape{ .rect = { 32.0f, 32.0f, 48.0f, 48.0f } };

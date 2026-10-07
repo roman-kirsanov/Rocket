@@ -30,7 +30,7 @@ struct ShadowFilter {
     Vec4 color;
     /** Displacement of the shadow in pixels. */
     std::optional<Vec2> offset;
-    /** Amount in pixels by which the shadow field is dilated (for inset shadows this thickens the shadow inward). */
+    /** Amount in pixels by which the shadow field is dilated before blurring (for inset shadows this thickens the shadow inward); negative values erode it instead. */
     std::optional<Vec2> spread;
     /** Casts the shadow inward from the shape's edges, clipped to the silhouette, instead of as a drop shadow. */
     bool inset;
