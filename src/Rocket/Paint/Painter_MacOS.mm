@@ -777,10 +777,20 @@ void Painter::__init() {
 void Painter::__done() {
     PROFILE
 
-    if (_impl != nullptr) {
-        delete _impl;
-        _impl = nullptr;
+    if (_impl == nullptr) {
+        return;
     }
+
+    while (_impl->renderPassStack.empty() == false) {
+        auto& renderPass = _impl->renderPassStack.top();
+        if (renderPass.has_value() && (renderPass->encoder != nil)) {
+            _EndRenderPass(*renderPass);
+        }
+        _impl->renderPassStack.pop();
+    }
+
+    delete _impl;
+    _impl = nullptr;
 }
 
 void Painter::__beginPaint(PaintTarget const& target) {

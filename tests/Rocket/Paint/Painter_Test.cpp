@@ -551,6 +551,53 @@ TEST(Painter, NestedPaintPassesSuspendResume) {
     ASSERT_TRUE(at(innerData, 16, 16)[1] == 255);  /* inner green clear */
 }
 
+/* Destroying a painter mid-pass (nested pass open, outer pass suspended) must
+   neither crash nor submit the abandoned work; the targets keep their previous
+   content and a fresh painter keeps working afterwards. */
+TEST(Painter, DestroyWithOpenPassesAbandonsThem) {
+    auto outer = Image(Vec2{ 32.0f, 32.0f });
+    auto inner = Image(Vec2{ 32.0f, 32.0f });
+
+    {
+        auto painter = Painter();
+        painter.beginPaint(ImagePaintTarget{ .image = outer, .clearColor = Vec4{ 1.0f, 0.0f, 0.0f, 1.0f } });
+        painter.endPaint();
+        painter.beginPaint(ImagePaintTarget{ .image = inner, .clearColor = Vec4{ 1.0f, 0.0f, 0.0f, 1.0f } });
+        painter.endPaint();
+    }
+
+    {
+        auto painter = Painter();
+        painter.beginPaint(ImagePaintTarget{ .image = outer, .clearColor = Vec4{ 0.0f, 1.0f, 0.0f, 1.0f } });
+        painter.paint(QuadShape{ Vec4{ 0.0f, 0.0f, 32.0f, 32.0f } }, ColorBrush{ Vec4{ 0.0f, 0.0f, 1.0f, 1.0f } });
+        painter.beginPaint(ImagePaintTarget{ .image = inner, .clearColor = Vec4{ 0.0f, 1.0f, 0.0f, 1.0f } });
+        painter.paint(QuadShape{ Vec4{ 0.0f, 0.0f, 32.0f, 32.0f } }, ColorBrush{ Vec4{ 0.0f, 0.0f, 1.0f, 1.0f } });
+    }
+
+    auto outerData = std::vector<std::uint8_t>();
+    auto innerData = std::vector<std::uint8_t>();
+    outer.getData(outerData);
+    inner.getData(innerData);
+
+    auto const at = [](std::vector<std::uint8_t> const& d, int x, int y) {
+        return &d[(((std::size_t)y * 32) + x) * 4];
+    };
+
+    EXPECT_EQ(at(outerData, 16, 16)[0], 255); /* still red: abandoned outer pass was not submitted */
+    EXPECT_EQ(at(outerData, 16, 16)[2], 0);
+    EXPECT_EQ(at(innerData, 16, 16)[0], 255); /* still red: abandoned nested pass was not submitted */
+    EXPECT_EQ(at(innerData, 16, 16)[2], 0);
+
+    {
+        auto painter = Painter();
+        painter.beginPaint(ImagePaintTarget{ .image = outer, .clearColor = Vec4{ 0.0f, 0.0f, 1.0f, 1.0f } });
+        painter.endPaint();
+    }
+
+    outer.getData(outerData);
+    EXPECT_EQ(at(outerData, 16, 16)[2], 255); /* a fresh painter still renders */
+}
+
 /* --- layer compositing: a nested offscreen pass composited back --- */
 
 TEST(Painter, ComboNestedLayer) {
