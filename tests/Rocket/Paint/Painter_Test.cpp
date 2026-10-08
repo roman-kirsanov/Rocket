@@ -474,6 +474,17 @@ TEST(Painter, BlurImage) {
     }));
 }
 
+/* Kernels reaching past the tap cap run on a downscaled copy. Sigma 32 reaches
+   96 texels, so this blurs at half size and must come out visibly wider than
+   blur-radius16, not flattened to the same width. */
+TEST(Painter, BlurRadius32Downscaled) {
+    EXPECT_TRUE(runCase("blur-radius32", 256, 256, [&](Painter& painter, Image&) {
+        painter.paint(QuadShape{ .rect = { 64.0f, 64.0f, 128.0f, 128.0f } }, ColorBrush{ .color = red }, PaintOptions{
+            .filter = BlurFilter{ .radius = 32.0f }
+        });
+    }));
+}
+
 /* --- filter-shadow --- */
 
 TEST(Painter, ShadowPlain) {
@@ -533,6 +544,18 @@ TEST(Painter, ShadowHard) {
     }));
 }
 
+/* A box-shadow blur of 96 (sigma 48, reach 144) runs at quarter size: the
+   shadow must spread well beyond the box and stay smooth after upsampling. */
+TEST(Painter, ShadowBlur96Downscaled) {
+    EXPECT_TRUE(runCase("shadow-blur96", 256, 256, [&](Painter& painter, Image&) {
+        auto const shape = QuadShape{ .rect = { 48.0f, 40.0f, 160.0f, 160.0f } };
+        painter.paint(shape, ColorBrush{ .color = white }, PaintOptions{
+            .filter = ShadowFilter{ .radius = 96.0f, .color = black, .offset = Vec2(0.0f, 24.0f) }
+        });
+        painter.paint(shape, ColorBrush{ .color = white });
+    }));
+}
+
 /* --- filter-shadow-inset --- */
 
 /* The shadow falls inward from every edge and is clipped to the silhouette:
@@ -566,6 +589,18 @@ TEST(Painter, ShadowInsetSpread) {
         painter.paint(shape, ColorBrush{ .color = white });
         painter.paint(shape, ColorBrush{ .color = white }, PaintOptions{
             .filter = ShadowFilter{ .radius = 0.0f, .color = red, .spread = Vec2(6.0f, 6.0f), .inset = true }
+        });
+    }));
+}
+
+/* An inset blur of 48 (sigma 24, reach 72) runs at half size; the silhouette
+   clip is upsampled with it and must still stop the shadow at the box edge. */
+TEST(Painter, ShadowInsetBlur48Downscaled) {
+    EXPECT_TRUE(runCase("shadow-inset-blur48", 256, 256, [&](Painter& painter, Image&) {
+        auto const shape = QuadShape{ .rect = { 32.0f, 32.0f, 192.0f, 192.0f }, .borderRadius = 24.0f };
+        painter.paint(shape, ColorBrush{ .color = white });
+        painter.paint(shape, ColorBrush{ .color = white }, PaintOptions{
+            .filter = ShadowFilter{ .radius = 48.0f, .color = black, .offset = Vec2(0.0f, 12.0f), .inset = true }
         });
     }));
 }

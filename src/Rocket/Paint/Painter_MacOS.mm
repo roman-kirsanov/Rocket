@@ -277,6 +277,14 @@ static id<MTLSamplerState> _GetNerLinSampler() {
     return _sampler;
 }
 
+static Vec2 _GetTexelSize(id<MTLTexture> texture) {
+    return { (1.0f / static_cast<float>(texture.width)), (1.0f / static_cast<float>(texture.height)) };
+}
+
+static int _GetGaussianTaps(float extent) {
+    return std::clamp(static_cast<int>(std::ceil(extent)), 0, _BLUR_TAP_MAX);
+}
+
 static void _BeginRenderPass(_RenderPass& renderPass, id<MTLCommandBuffer> command, id<MTLTexture> texture, id<CAMetalDrawable> drawable, std::uint32_t width, std::uint32_t height, MTLPixelFormat format, std::optional<Vec4> const& clear) {
     PROFILE
 
@@ -656,32 +664,36 @@ static void _PushGradientBrushUniforms(_RenderPass const& renderPass, GradientBr
     [renderPass.encoder setFragmentBytes: &gradientUniforms length: sizeof(GradientBrushUniforms) atIndex: _BRUSH_FRAGMENT_UNIFORMS_INDEX];
 }
 
-static int _GetGaussianTaps(float extent) {
-    return std::clamp(static_cast<int>(extent), 0, _BLUR_TAP_MAX);
-}
-
-static void _PushBlurFilterUniforms(_RenderPass const& renderPass, Vec2 const& direction, BlurFilter const& filter) {
+/* filter kernels are expressed in texels of the texture they sample; `scale`
+   is that texture's size relative to the pass the filter was requested in */
+static void _PushBlurFilterUniforms(_RenderPass const& renderPass, id<MTLTexture> source, Vec2 const& direction, BlurFilter const& filter, Vec2 const& scale) {
     PROFILE
 
+    auto const texelSize = _GetTexelSize(source);
+    auto const axisScale = ((direction.x != 0.0f) ? scale.x : scale.y);
+
     auto const blurUniforms = BlurFilterUniforms{
-        .texelSize = { (1.0f / static_cast<float>(renderPass.width)), (1.0f / static_cast<float>(renderPass.height)) },
+        .texelSize = { texelSize.x, texelSize.y },
         .direction = { direction.x, direction.y },
-        .sigma     = filter.getSigma(),
-        .taps      = _GetGaussianTaps(filter.getExtent())
+        .sigma     = (filter.getSigma() * axisScale),
+        .taps      = _GetGaussianTaps(filter.getExtent() * axisScale)
     };
 
     [renderPass.encoder setFragmentBytes: &blurUniforms length: sizeof(BlurFilterUniforms) atIndex: _BRUSH_FRAGMENT_UNIFORMS_INDEX];
 }
 
-static void _PushShadowFilterFieldUniforms(_RenderPass const& renderPass, Vec2 const& direction, float spread, ShadowFilter const& filter, bool fromSilhouette) {
+static void _PushShadowFilterFieldUniforms(_RenderPass const& renderPass, id<MTLTexture> source, Vec2 const& direction, float spread, ShadowFilter const& filter, bool fromSilhouette, Vec2 const& scale) {
     PROFILE
 
+    auto const texel = _GetTexelSize(source);
+    auto const axisScale = ((direction.x != 0.0f) ? scale.x : scale.y);
+
     auto const fieldUniforms = ShadowFilterFieldUniforms{
-        .texel          = { (1.0f / static_cast<float>(renderPass.width)), (1.0f / static_cast<float>(renderPass.height)) },
+        .texel          = { texel.x, texel.y },
         .direction      = { direction.x, direction.y },
-        .spread         = std::clamp(spread, -static_cast<float>(_BLUR_TAP_MAX), static_cast<float>(_BLUR_TAP_MAX)),
-        .sigma          = filter.getSigma(),
-        .taps           = _GetGaussianTaps(filter.getExtent()),
+        .spread         = std::clamp((spread * axisScale), -static_cast<float>(_BLUR_TAP_MAX), static_cast<float>(_BLUR_TAP_MAX)),
+        .sigma          = (filter.getSigma() * axisScale),
+        .taps           = _GetGaussianTaps(filter.getExtent() * axisScale),
         .fromSilhouette = (fromSilhouette ? 1 : 0),
         .invert         = ((fromSilhouette && filter.inset) ? 1 : 0)
     };
@@ -689,18 +701,19 @@ static void _PushShadowFilterFieldUniforms(_RenderPass const& renderPass, Vec2 c
     [renderPass.encoder setFragmentBytes: &fieldUniforms length: sizeof(ShadowFilterFieldUniforms) atIndex: _BRUSH_FRAGMENT_UNIFORMS_INDEX];
 }
 
-static void _PushShadowFilterUniforms(_RenderPass const& renderPass, ShadowFilter const& filter, bool fromSilhouette) {
+static void _PushShadowFilterUniforms(_RenderPass const& renderPass, id<MTLTexture> source, ShadowFilter const& filter, bool fromSilhouette, Vec2 const& scale) {
     PROFILE
 
+    auto const texel = _GetTexelSize(source);
     auto const offset = filter.offset.value_or(Vec2{});
 
     auto const shadowUniforms = ShadowFilterUniforms{
         .color          = { filter.color.red, filter.color.green, filter.color.blue, filter.color.alpha },
         .opacity        = 1.0f,
-        .texel          = { (1.0f / static_cast<float>(renderPass.width)), (1.0f / static_cast<float>(renderPass.height)) },
-        .offset         = { offset.x, offset.y },
-        .sigma          = filter.getSigma(),
-        .taps           = _GetGaussianTaps(filter.getExtent()),
+        .texel          = { texel.x, texel.y },
+        .offset         = { (offset.x * scale.x), (offset.y * scale.y) },
+        .sigma          = (filter.getSigma() * scale.y),
+        .taps           = _GetGaussianTaps(filter.getExtent() * scale.y),
         .inset          = (filter.inset ? 1 : 0),
         .fromSilhouette = (fromSilhouette ? 1 : 0),
         .invert         = ((fromSilhouette && filter.inset) ? 1 : 0)
@@ -920,7 +933,32 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
     auto const blend = options.blend.value_or(Blend::Over);
     auto& renderPass = *_impl->renderPassStack.top();
 
-    auto const drawShape = [&](_RenderPass& pass, std::optional<Vec4> const& scissor, Blend mode) {
+    /* A kernel samples one texel per tap out to its reach, capped at
+       _BLUR_TAP_MAX. A filter reaching further runs its passes on a copy
+       downscaled by the power of two that brings the reach under the cap, and
+       the last pass samples that copy bilinearly back up onto the target. The
+       shape is drawn straight into the small copy through a scaled transform,
+       so its coverage is computed at that size rather than resampled. */
+    auto const reach = [&]() -> float {
+        if (blurFilter != nullptr) return blurFilter->getExtent();
+        if (shadowFilter != nullptr) {
+            auto const spread = shadowFilter->spread.value_or(Vec2{});
+            return std::max({ shadowFilter->getExtent(), std::abs(spread.x), std::abs(spread.y) });
+        }
+        return 0.0f;
+    }();
+
+    auto downsample = 1.0f;
+    while ((reach / downsample) > static_cast<float>(_BLUR_TAP_MAX)) downsample *= 2.0f;
+
+    auto const filterWidth = static_cast<std::uint32_t>(std::ceil(static_cast<float>(renderPass.width) / downsample));
+    auto const filterHeight = static_cast<std::uint32_t>(std::ceil(static_cast<float>(renderPass.height) / downsample));
+    auto const filterScale = Vec2{
+        (static_cast<float>(filterWidth) / static_cast<float>(renderPass.width)),
+        (static_cast<float>(filterHeight) / static_cast<float>(renderPass.height))
+    };
+
+    auto const drawShape = [&](_RenderPass& pass, std::optional<Vec4> const& scissor, Blend mode, Vec2 const& scale) {
         assert(pass.encoder != nil);
 
         auto const resolution = Vec2{
@@ -930,7 +968,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
 
         _SetScissor(pass, scissor);
         _SetViewport(pass, { {}, resolution });
-        _PushStateUniforms(pass, resolution, options.transform.value_or(Mat3{}), options.opacity.value_or(1.0f));
+        _PushStateUniforms(pass, resolution, options.transform.value_or(Mat3{}).toScaled(scale), options.opacity.value_or(1.0f));
         _PushShapeUniforms(pass, shape, true);
 
         if (colorBrush != nullptr) {
@@ -964,7 +1002,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _SetViewport(pass, { {}, resolution });
         _PushStateUniforms(pass, resolution, Mat3{}, 1.0f);
         _PushShapeUniforms(pass, Shape{ QuadShape{ Vec4{ {}, resolution } } }, false);
-        _PushBlurFilterUniforms(pass, direction, *blurFilter);
+        _PushBlurFilterUniforms(pass, source, direction, *blurFilter, filterScale);
 
         [pass.encoder setRenderPipelineState: _GetBlurFilterPipeline(pass.format, mode)];
         [pass.encoder setFragmentTexture: source atIndex: 0];
@@ -985,7 +1023,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _SetViewport(pass, { {}, resolution });
         _PushStateUniforms(pass, resolution, Mat3{}, 1.0f);
         _PushShapeUniforms(pass, Shape{ QuadShape{ Vec4{ {}, resolution } } }, false);
-        _PushShadowFilterFieldUniforms(pass, direction, spread, *shadowFilter, fromSilhouette);
+        _PushShadowFilterFieldUniforms(pass, source, direction, spread, *shadowFilter, fromSilhouette, filterScale);
 
         [pass.encoder setRenderPipelineState: pipeline];
         [pass.encoder setFragmentTexture: source atIndex: 0];
@@ -1010,7 +1048,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _SetViewport(pass, { {}, resolution });
         _PushStateUniforms(pass, resolution, transform, 1.0f);
         _PushShapeUniforms(pass, Shape{ QuadShape{ Vec4{ {}, resolution } } }, false);
-        _PushShadowFilterUniforms(pass, *shadowFilter, fromSilhouette);
+        _PushShadowFilterUniforms(pass, source, *shadowFilter, fromSilhouette, filterScale);
 
         [pass.encoder setRenderPipelineState: _GetShadowFilterCompositePipeline(pass.format, mode)];
         [pass.encoder setFragmentTexture: source atIndex: 0];
@@ -1024,17 +1062,17 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
     ) {
         _SuspendRenderPass(renderPass);
 
-        auto const& [ shapeTexture, blurTexture ] = _impl->getFilterTextures(renderPass.width, renderPass.height).textures;
+        auto const& [ shapeTexture, blurTexture ] = _impl->getFilterTextures(filterWidth, filterHeight).textures;
         auto const filterFormat = (MTLPixelFormat)__GetDefaultTextureFormat();
         auto const clearColor = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f };
 
         auto shapePass = _RenderPass{};
-        _BeginRenderPass(shapePass, renderPass.commandBuffer, shapeTexture, nil, renderPass.width, renderPass.height, filterFormat, clearColor);
-        drawShape(shapePass, std::nullopt, Blend::Over);
+        _BeginRenderPass(shapePass, renderPass.commandBuffer, shapeTexture, nil, filterWidth, filterHeight, filterFormat, clearColor);
+        drawShape(shapePass, std::nullopt, Blend::Over, filterScale);
         _EndRenderPass(shapePass);
 
         auto blurPass = _RenderPass{};
-        _BeginRenderPass(blurPass, renderPass.commandBuffer, blurTexture, nil, renderPass.width, renderPass.height, filterFormat, clearColor);
+        _BeginRenderPass(blurPass, renderPass.commandBuffer, blurTexture, nil, filterWidth, filterHeight, filterFormat, clearColor);
         drawBlur(blurPass, shapeTexture, Vec2{ 1.0f, 0.0f }, std::nullopt, Blend::Over);
         _EndRenderPass(blurPass);
 
@@ -1043,21 +1081,20 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
     } else if (shadowFilter != nullptr) {
         _SuspendRenderPass(renderPass);
 
-        auto [ source, target ] = _impl->getFilterTextures(renderPass.width, renderPass.height).textures;
+        auto [ source, target ] = _impl->getFilterTextures(filterWidth, filterHeight).textures;
         auto const filterFormat = (MTLPixelFormat)__GetDefaultTextureFormat();
         auto const clearColor = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f };
         auto const spread = shadowFilter->spread.value_or(Vec2{});
-        auto const taps = _GetGaussianTaps(shadowFilter->getExtent());
         auto fromSilhouette = true;
 
         auto shapePass = _RenderPass{};
-        _BeginRenderPass(shapePass, renderPass.commandBuffer, source, nil, renderPass.width, renderPass.height, filterFormat, clearColor);
-        drawShape(shapePass, std::nullopt, Blend::Over);
+        _BeginRenderPass(shapePass, renderPass.commandBuffer, source, nil, filterWidth, filterHeight, filterFormat, clearColor);
+        drawShape(shapePass, std::nullopt, Blend::Over, filterScale);
         _EndRenderPass(shapePass);
 
         auto const fieldPass = [&](id<MTLRenderPipelineState> pipeline, Vec2 const& direction, float extent) {
             auto pass = _RenderPass{};
-            _BeginRenderPass(pass, renderPass.commandBuffer, target, nil, renderPass.width, renderPass.height, filterFormat, clearColor);
+            _BeginRenderPass(pass, renderPass.commandBuffer, target, nil, filterWidth, filterHeight, filterFormat, clearColor);
             drawShadowField(pass, source, pipeline, direction, extent, fromSilhouette);
             _EndRenderPass(pass);
             std::swap(source, target);
@@ -1070,14 +1107,14 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         if (spread.y != 0.0f) {
             fieldPass(_GetShadowFilterDilatePipeline(filterFormat, Blend::Over), Vec2{ 0.0f, 1.0f }, spread.y);
         }
-        if (taps > 0) {
+        if (shadowFilter->getExtent() > 0.0f) {
             fieldPass(_GetShadowFilterBlurPipeline(filterFormat, Blend::Over), Vec2{ 1.0f, 0.0f }, 0.0f);
         }
 
         _ResumeRenderPass(renderPass);
         drawShadowComposite(renderPass, source, fromSilhouette, options.scissor, blend);
     } else {
-        drawShape(renderPass, options.scissor, blend);
+        drawShape(renderPass, options.scissor, blend, Vec2{ 1.0f, 1.0f });
     }
 }
 
