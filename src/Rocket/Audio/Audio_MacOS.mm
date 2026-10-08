@@ -151,7 +151,7 @@ void Sound::_Sound::scheduleFrom(bool loop, float from) {
         [node scheduleBuffer: head
                       atTime: nil
                      options: 0
-      completionCallbackType: AVAudioPlayerNodeCompletionDataPlayedBack
+      completionCallbackType: AVAudioPlayerNodeCompletionDataRendered
            completionHandler: ^(AVAudioPlayerNodeCompletionCallbackType type) {
                (void)type;
                done->finished = true;

@@ -215,8 +215,10 @@ public:
     Audio& getAudio() const;
 
     /**
-     * Returns true while the sound is audibly playing (not paused, not
-     * finished, not stopped).
+     * Returns true while the sound is playing (not paused, not finished, not
+     * stopped). A play counts as finished once its last sample has been
+     * rendered, consistent with getPosition() reaching the range length; the
+     * output device's own latency is not waited for.
      */
     bool isPlaying() const;
 
