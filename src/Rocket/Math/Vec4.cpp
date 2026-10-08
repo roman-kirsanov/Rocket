@@ -153,6 +153,48 @@ Vec4 Vec4::toTranslated(Vec2 const& translate) const {
     };
 }
 
+Vec4 Vec4::toRounded() const {
+    PROFILE
+
+    auto const minX = std::roundf(x);
+    auto const minY = std::roundf(y);
+
+    return {
+        minX,
+        minY,
+        (std::roundf(getMaxX()) - minX),
+        (std::roundf(getMaxY()) - minY)
+    };
+}
+
+Vec4 Vec4::toCeiled() const {
+    PROFILE
+
+    auto const minX = std::ceilf(x);
+    auto const minY = std::ceilf(y);
+
+    return {
+        minX,
+        minY,
+        (std::ceilf(getMaxX()) - minX),
+        (std::ceilf(getMaxY()) - minY)
+    };
+}
+
+Vec4 Vec4::toFloored() const {
+    PROFILE
+
+    auto const minX = std::floorf(x);
+    auto const minY = std::floorf(y);
+
+    return {
+        minX,
+        minY,
+        (std::floorf(getMaxX()) - minX),
+        (std::floorf(getMaxY()) - minY)
+    };
+}
+
 Vec4 Vec4::toTransformed(Mat3 const& matrix) const {
     PROFILE
 

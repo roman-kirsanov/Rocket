@@ -22,6 +22,12 @@ enum _EditKind {
     _EDIT_DELETE_FORWARD
 };
 
+static Vec4 _SnapToPixelGrid(Vec4 const& rect) {
+    PROFILE
+
+    return rect.toTranslated({ -0.5f, -0.5f }).toCeiled();
+}
+
 static Painter& _GetPainter() {
     PROFILE
 
@@ -2163,14 +2169,14 @@ void Text::_updateImage() const {
 
     for (auto const& glyph : _glyphs) {
         if (glyph.marker.alpha > 0.0f) {
-            painter.paint(QuadShape{ glyph.rect }, ColorBrush{ glyph.marker });
+            painter.paint(QuadShape{ _SnapToPixelGrid(glyph.rect) }, ColorBrush{ glyph.marker });
         }
 
         if (
             (glyph.whitespace == false) &&
             (glyph.color.alpha > 0)
         ) {
-            painter.paint(QuadShape{ glyph.bitmapRect }, ImageBrush{
+            painter.paint(QuadShape{ _SnapToPixelGrid(glyph.bitmapRect) }, ImageBrush{
                 .image = glyph.image,
                 .slice = glyph.imageSlice,
                 .color = glyph.color

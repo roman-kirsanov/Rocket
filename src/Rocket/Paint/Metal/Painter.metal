@@ -42,23 +42,37 @@ static inline float _roundBoxDistance(float2 localPos, float2 size, float4 corne
     return distance;
 }
 
+// Half-pixel linear edge profile of a signed distance (negative inside). The
+// distance is normalised by its screen-space gradient, so the ramp stays one
+// pixel wide under any transform and is pixel-exact on pixel-aligned edges.
+static inline float _edgeCoverage(float d) {
+    return saturate(0.5f - (d / max(fwidth(d), 0.0001f)));
+}
+
+// A sharp box is covered per axis: its distance field kinks at the corners,
+// where the derivatives would read both edges at once. The product of the two
+// one-axis coverages is the exact area coverage of an axis-aligned box.
+static inline float _quadCoverage(float2 localPos, float2 size, float4 corners) {
+    if (any(corners > float4(0.0f))) {
+        return _edgeCoverage(_roundBoxDistance(localPos, size, corners));
+    }
+    float2 edges = max(-localPos, (localPos - size));
+    return (_edgeCoverage(edges.x) * _edgeCoverage(edges.y));
+}
+
 // Anti-aliased coverage of the shape at a fragment, in shape-local space.
 static inline float _coverage(float2 localPos, ShapeUniforms constant& uShape) {
     if (uShape.type == 1) { // ellipse
-        float2 c  = (uShape.bounds.zw * 0.5f);
-        float  d  = length((localPos - c) / c);
-        float  aa = max(fwidth(d), 0.0001f);
-        return (1.0f - smoothstep((1.0f - aa), (1.0f + aa), d));
+        float2 c = (uShape.bounds.zw * 0.5f);
+        return _edgeCoverage(length((localPos - c) / c) - 1.0f);
     } else if (uShape.type == 2) { // quad outline (per-edge)
+        float4 b        = uShape.borders; // left, top, right, bottom
+        float  outerCov = _quadCoverage(localPos, uShape.bounds.zw, uShape.corners);
         if (any(uShape.corners > float4(0.0f))) { // rounded: outer box minus inset inner box
             // Inner per-corner radius rule: innerR = max(outerR - max(adjacent borders), 0),
             // e.g. inner TL = max(TL - max(left, top), 0). An inner QuadShape inset by the
             // border widths with that radius fits this outline seamlessly.
-            float4 b     = uShape.borders; // left, top, right, bottom
-            float  dOut  = _roundBoxDistance(localPos, uShape.bounds.zw, uShape.corners);
-            float  aaOut = max(fwidth(dOut), 0.0001f);
-            float  outerCov = (1.0f - smoothstep(-aaOut, aaOut, dOut));
-            float  innerCov = 0.0f;
+            float  innerCov  = 0.0f;
             float2 innerSize = (uShape.bounds.zw - float2((b.x + b.z), (b.y + b.w)));
             if (all(innerSize > float2(0.0f))) {
                 float4 innerCorners = max(float4(
@@ -67,37 +81,25 @@ static inline float _coverage(float2 localPos, ShapeUniforms constant& uShape) {
                     (uShape.corners.z - max(b.z, b.w)),  // BR - max(right, bottom)
                     (uShape.corners.w - max(b.x, b.w))   // BL - max(left, bottom)
                 ), float4(0.0f));
-                float dIn  = _roundBoxDistance((localPos - b.xy), innerSize, innerCorners);
-                float aaIn = max(fwidth(dIn), 0.0001f);
-                innerCov = (1.0f - smoothstep(-aaIn, aaIn, dIn));
+                innerCov = _edgeCoverage(_roundBoxDistance((localPos - b.xy), innerSize, innerCorners));
             }
             return (outerCov * (1.0f - innerCov));
         }
         float big = (max(uShape.bounds.z, uShape.bounds.w) + 1.0f);
-        float dL  = (uShape.borders.x > 0.0f) ? (localPos.x - uShape.borders.x)                    : big;
-        float dT  = (uShape.borders.y > 0.0f) ? (localPos.y - uShape.borders.y)                    : big;
-        float dR  = (uShape.borders.z > 0.0f) ? ((uShape.bounds.z - uShape.borders.z) - localPos.x) : big;
-        float dB  = (uShape.borders.w > 0.0f) ? ((uShape.bounds.w - uShape.borders.w) - localPos.y) : big;
-        float dIn = min(min(dL, dR), min(dT, dB));
-        float aa  = max(fwidth(dIn), 0.0001f);
-        return (1.0f - smoothstep(0.0f, aa, dIn));
+        float dL  = (b.x > 0.0f) ? (localPos.x - b.x)                    : big;
+        float dT  = (b.y > 0.0f) ? (localPos.y - b.y)                    : big;
+        float dR  = (b.z > 0.0f) ? ((uShape.bounds.z - b.z) - localPos.x) : big;
+        float dB  = (b.w > 0.0f) ? ((uShape.bounds.w - b.w) - localPos.y) : big;
+        float holeCov = (_edgeCoverage(-min(dL, dR)) * _edgeCoverage(-min(dT, dB))); // 1 inside the hole
+        return (outerCov * (1.0f - holeCov));
     } else if (uShape.type == 3) { // ellipse outline
-        float2 c   = (uShape.bounds.zw * 0.5f);
-        float2 ci  = max((c - uShape.borders.x), float2(0.0001f));
-        float  d   = length((localPos - c) / c);
-        float  di  = length((localPos - c) / ci);
-        float  aa  = max(fwidth(d),  0.0001f);
-        float  aai = max(fwidth(di), 0.0001f);
-        float outerCov = (1.0f - smoothstep((1.0f - aa),  (1.0f + aa),  d));
-        float innerCov = (1.0f - smoothstep((1.0f - aai), (1.0f + aai), di));
+        float2 c  = (uShape.bounds.zw * 0.5f);
+        float2 ci = max((c - uShape.borders.x), float2(0.0001f));
+        float outerCov = _edgeCoverage(length((localPos - c) / c)  - 1.0f);
+        float innerCov = _edgeCoverage(length((localPos - c) / ci) - 1.0f);
         return (outerCov * (1.0f - innerCov));
     }
-    if (any(uShape.corners > float4(0.0f))) { // filled quad, rounded corners
-        float d  = _roundBoxDistance(localPos, uShape.bounds.zw, uShape.corners);
-        float aa = max(fwidth(d), 0.0001f);
-        return (1.0f - smoothstep(-aa, aa, d));
-    }
-    return 1.0f; // filled quad
+    return _quadCoverage(localPos, uShape.bounds.zw, uShape.corners); // filled quad
 }
 
 static inline float _gaussianWeight(int i, float sigma) {
@@ -133,9 +135,16 @@ fragment float4 colorBrushFragment(VertexResult in [[stage_in]], StateUniforms c
 }
 
 fragment float4 imageBrushFragment(VertexResult in [[stage_in]], StateUniforms constant& uState [[buffer(0)]], ImageBrushUniforms constant& uBrush [[buffer(1)]], ShapeUniforms constant& uShape [[buffer(2)]], texture2d<float> texture0 [[texture(0)]], sampler sampler0 [[sampler(0)]]) {
+    float coverage = _coverage(in.localPos, uShape);
+    if (coverage <= 0.0f) {
+        return float4(0.0);
+    }
+
+    // The antialiasing fringe lies just outside the shape: clamp it back in so
+    // it samples the edge texel instead of failing the dest test below.
     float2 srcSize = (uBrush.source.zw - uBrush.source.xy);
     float2 dstSize = (uBrush.destin.zw - uBrush.destin.xy);
-    float2 dstPos  = (in.localPos - uBrush.destin.xy);
+    float2 dstPos  = (clamp(in.localPos, float2(0.0f), (uShape.bounds.zw * 0.999999f)) - uBrush.destin.xy);
 
     float4 src = float4(0.0);
     float4 dst = float4(0.0);
@@ -237,7 +246,7 @@ fragment float4 imageBrushFragment(VertexResult in [[stage_in]], StateUniforms c
         texel = float4((uBrush.color.rgb * a), a);
     }
 
-    return (texel * uState.opacity * _coverage(in.localPos, uShape));
+    return (texel * uState.opacity * coverage);
 }
 
 fragment float4 linearGradientBrushFragment(VertexResult in [[stage_in]], StateUniforms constant& uState [[buffer(0)]], GradientBrushUniforms constant& uBrush [[buffer(1)]], ShapeUniforms constant& uShape [[buffer(2)]]) {

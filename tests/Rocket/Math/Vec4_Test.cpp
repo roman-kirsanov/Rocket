@@ -153,6 +153,22 @@ TEST(Vec4, ToScaled) {
 }
 
 /* toTransformed with the identity matrix returns the rectangle unchanged. */
+/* toRounded, toCeiled and toFloored snap the edges, not the size. */
+TEST(Vec4, ToRounded) {
+    auto const rect = Vec4{ 0.4f, 1.6f, 0.4f, 2.0f }.toRounded();
+    ASSERT_TRUE((rect == Vec4{ 0.0f, 2.0f, 1.0f, 2.0f }));
+}
+
+TEST(Vec4, ToCeiled) {
+    auto const rect = Vec4{ 0.4f, 1.6f, 0.4f, 2.0f }.toCeiled();
+    ASSERT_TRUE((rect == Vec4{ 1.0f, 2.0f, 0.0f, 2.0f }));
+}
+
+TEST(Vec4, ToFloored) {
+    auto const rect = Vec4{ 0.4f, 1.6f, 0.4f, 2.0f }.toFloored();
+    ASSERT_TRUE((rect == Vec4{ 0.0f, 1.0f, 0.0f, 2.0f }));
+}
+
 TEST(Vec4, ToTransformedIdentity) {
     ASSERT_TRUE(Vec4(1.0f, 2.0f, 3.0f, 4.0f).toTransformed(Mat3{}) == Vec4(1.0f, 2.0f, 3.0f, 4.0f));
 }

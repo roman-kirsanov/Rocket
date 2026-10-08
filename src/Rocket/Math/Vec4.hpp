@@ -125,6 +125,15 @@ union Vec4 {
      */
     Vec4 toScaled(float const& scale) const;
 
+    /** Returns this rectangle with its edges rounded to the nearest integers. */
+    Vec4 toRounded() const;
+
+    /** Returns this rectangle with its edges rounded up to integers. */
+    Vec4 toCeiled() const;
+
+    /** Returns this rectangle with its edges rounded down to integers. */
+    Vec4 toFloored() const;
+
     /**
      * Returns this rectangle transformed by a 3×3 matrix.
      *

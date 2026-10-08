@@ -1818,7 +1818,7 @@ void Document::_renderNodeText(Node& node, _RenderInfo const& info) {
 
     if (editable) {
         for (auto const& rect : text->getSelectionRects()) {
-            auto const selectionShape = QuadShape{ Vec4{ (textRect.origin + rect.origin), rect.size } };
+            auto const selectionShape = QuadShape{ Vec4{ (textRect.origin + rect.origin), rect.size }.toRounded() };
             auto const selectionBrush = ColorBrush{ .color = _selectionColor };
             _painter.paint(selectionShape, selectionBrush, { .scissor = textClipRect });
         }
@@ -1840,7 +1840,7 @@ void Document::_renderNodeText(Node& node, _RenderInfo const& info) {
         (text->isSelectedRange() == false)
     ) {
         auto const& caretRect = text->getCaretRect();
-        auto const caretShape = QuadShape{ Vec4{ (textRect.origin + caretRect.origin), caretRect.size } };
+        auto const caretShape = QuadShape{ Vec4{ (textRect.origin + caretRect.origin), caretRect.size }.toRounded() };
         auto const caretBrush = ColorBrush{ .color = node._computedTextColor };
         _painter.paint(caretShape, caretBrush, { .scissor = textClipRect });
     }

@@ -64,6 +64,143 @@ static auto constexpr _STATE_FRAGMENT_UNIFORMS_INDEX = 0;
 static auto constexpr _BRUSH_FRAGMENT_UNIFORMS_INDEX = 1;
 static auto constexpr _SHAPE_FRAGMENT_UNIFORMS_INDEX = 2;
 
+static Vec4 _ResolveBorders(QuadOutlineShape const& shape) {
+    PROFILE
+
+    auto const border = shape.border.value_or(0.0f);
+
+    return Vec4{
+        shape.leftBorder.value_or(border),
+        shape.topBorder.value_or(border),
+        shape.rightBorder.value_or(border),
+        shape.bottomBorder.value_or(border)
+    };
+}
+
+template <typename QuadType>
+static Vec4 _ResolveRadius(QuadType const& shape) {
+    PROFILE
+
+    auto const radius = shape.borderRadius.value_or(0.0f);
+    auto const tl = std::max(shape.borderTopLeftRadius.value_or(radius), 0.0f);
+    auto const tr = std::max(shape.borderTopRightRadius.value_or(radius), 0.0f);
+    auto const br = std::max(shape.borderBottomRightRadius.value_or(radius), 0.0f);
+    auto const bl = std::max(shape.borderBottomLeftRadius.value_or(radius), 0.0f);
+
+    auto factor = 1.0f;
+    auto const constrain = [&](float side, float sum) {
+        if (sum > 0.0f) {
+            factor = std::min(factor, (side / sum));
+        }
+    };
+
+    constrain(shape.rect.width,  (tl + tr));
+    constrain(shape.rect.width,  (bl + br));
+    constrain(shape.rect.height, (tl + bl));
+    constrain(shape.rect.height, (tr + br));
+
+    return Vec4{ (tl * factor), (tr * factor), (br * factor), (bl * factor) };
+}
+
+static Vec2 _EdgeExpansion(Mat3 const& transform) {
+    PROFILE
+
+    auto const scaleX = std::hypot(transform.data[0], transform.data[1]);
+    auto const scaleY = std::hypot(transform.data[3], transform.data[4]);
+
+    return Vec2{
+        1.0f / std::max(scaleX, 0.0001f),
+        1.0f / std::max(scaleY, 0.0001f)
+    };
+}
+
+static void _SetBlend(MTLRenderPipelineColorAttachmentDescriptor* attachment, Blend blend) {
+    PROFILE
+
+    attachment.blendingEnabled = YES;
+    attachment.rgbBlendOperation = MTLBlendOperationAdd;
+    attachment.alphaBlendOperation = MTLBlendOperationAdd;
+
+    switch (blend) {
+        case Blend::Over:
+            // dst = src + dst * (1 - srcA)
+            attachment.sourceRGBBlendFactor = MTLBlendFactorOne;
+            attachment.destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+            attachment.sourceAlphaBlendFactor = MTLBlendFactorOne;
+            attachment.destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+            break;
+        case Blend::Add:
+            // dst = src + dst; the target's alpha is kept
+            attachment.sourceRGBBlendFactor = MTLBlendFactorOne;
+            attachment.destinationRGBBlendFactor = MTLBlendFactorOne;
+            attachment.sourceAlphaBlendFactor = MTLBlendFactorZero;
+            attachment.destinationAlphaBlendFactor = MTLBlendFactorOne;
+            break;
+        case Blend::Multiply:
+            // dst = src * dst + dst * (1 - srcA): where the source is transparent the target stays
+            attachment.sourceRGBBlendFactor = MTLBlendFactorDestinationColor;
+            attachment.destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+            attachment.sourceAlphaBlendFactor = MTLBlendFactorZero;
+            attachment.destinationAlphaBlendFactor = MTLBlendFactorOne;
+            break;
+        case Blend::Screen:
+            // dst = src + dst * (1 - src)
+            attachment.sourceRGBBlendFactor = MTLBlendFactorOne;
+            attachment.destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceColor;
+            attachment.sourceAlphaBlendFactor = MTLBlendFactorZero;
+            attachment.destinationAlphaBlendFactor = MTLBlendFactorOne;
+            break;
+    }
+}
+
+static void _SetScissor(_RenderPass const& renderPass, std::optional<Vec4> const& scissor) {
+    PROFILE
+
+    assert(renderPass.encoder != nil);
+
+    auto const passWidth = static_cast<int>(renderPass.width);
+    auto const passHeight = static_cast<int>(renderPass.height);
+
+    auto scissorInfo = MTLScissorRect{};
+
+    if (scissor.has_value()) {
+        auto const left = std::max(0, static_cast<int>(std::roundf(scissor->x)));
+        auto const top = std::max(0, static_cast<int>(std::roundf(scissor->y)));
+        auto const right = std::min(passWidth, static_cast<int>(std::roundf(scissor->x + scissor->width)));
+        auto const bottom = std::min(passHeight, static_cast<int>(std::roundf(scissor->y + scissor->height)));
+
+        scissorInfo = MTLScissorRect{
+            (NSUInteger)std::min(left, passWidth),
+            (NSUInteger)std::min(top, passHeight),
+            (NSUInteger)std::max(0, right - left),
+            (NSUInteger)std::max(0, bottom - top)
+        };
+    } else {
+        scissorInfo = MTLScissorRect{
+            0, 0,
+            (NSUInteger)passWidth,
+            (NSUInteger)passHeight
+        };
+    }
+
+    [renderPass.encoder setScissorRect: scissorInfo];
+}
+
+static void _SetViewport(_RenderPass const& renderPass, Vec4 const& viewport) {
+    PROFILE
+
+    assert(renderPass.encoder != nil);
+
+    [renderPass.encoder setViewport: MTLViewport{
+        viewport.x,
+        viewport.y,
+        viewport.width,
+        viewport.height,
+        0.0,
+        1.0
+    }];
+}
+
 static id<MTLDevice> _GetDevice() {
     PROFILE
 
@@ -105,45 +242,6 @@ static id<MTLSamplerState> _CreateSampler(MTLSamplerMinMagFilter minFilter, MTLS
     descriptor.tAddressMode = MTLSamplerAddressModeClampToEdge;
 
     return [_GetDevice() newSamplerStateWithDescriptor: descriptor];
-}
-
-static void _SetBlend(MTLRenderPipelineColorAttachmentDescriptor* attachment, Blend blend) {
-    PROFILE
-
-    attachment.blendingEnabled = YES;
-    attachment.rgbBlendOperation = MTLBlendOperationAdd;
-    attachment.alphaBlendOperation = MTLBlendOperationAdd;
-
-    switch (blend) {
-        case Blend::Over:
-            // dst = src + dst * (1 - srcA)
-            attachment.sourceRGBBlendFactor = MTLBlendFactorOne;
-            attachment.destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-            attachment.sourceAlphaBlendFactor = MTLBlendFactorOne;
-            attachment.destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-            break;
-        case Blend::Add:
-            // dst = src + dst; the target's alpha is kept
-            attachment.sourceRGBBlendFactor = MTLBlendFactorOne;
-            attachment.destinationRGBBlendFactor = MTLBlendFactorOne;
-            attachment.sourceAlphaBlendFactor = MTLBlendFactorZero;
-            attachment.destinationAlphaBlendFactor = MTLBlendFactorOne;
-            break;
-        case Blend::Multiply:
-            // dst = src * dst + dst * (1 - srcA): where the source is transparent the target stays
-            attachment.sourceRGBBlendFactor = MTLBlendFactorDestinationColor;
-            attachment.destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-            attachment.sourceAlphaBlendFactor = MTLBlendFactorZero;
-            attachment.destinationAlphaBlendFactor = MTLBlendFactorOne;
-            break;
-        case Blend::Screen:
-            // dst = src + dst * (1 - src)
-            attachment.sourceRGBBlendFactor = MTLBlendFactorOne;
-            attachment.destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceColor;
-            attachment.sourceAlphaBlendFactor = MTLBlendFactorZero;
-            attachment.destinationAlphaBlendFactor = MTLBlendFactorOne;
-            break;
-    }
 }
 
 static id<MTLRenderPipelineState> _CreatePipeline(NSString* fragmentName, MTLPixelFormat format, Blend blend) {
@@ -366,54 +464,6 @@ static void _ResumeRenderPass(_RenderPass& renderPass) {
     renderPass.encoder = [renderPass.commandBuffer renderCommandEncoderWithDescriptor: descriptor];
 }
 
-static void _SetScissor(_RenderPass const& renderPass, std::optional<Vec4> const& scissor) {
-    PROFILE
-
-    assert(renderPass.encoder != nil);
-
-    auto const passWidth = static_cast<int>(renderPass.width);
-    auto const passHeight = static_cast<int>(renderPass.height);
-
-    auto scissorInfo = MTLScissorRect{};
-
-    if (scissor.has_value()) {
-        auto const left = std::max(0, static_cast<int>(std::roundf(scissor->x)));
-        auto const top = std::max(0, static_cast<int>(std::roundf(scissor->y)));
-        auto const right = std::min(passWidth, static_cast<int>(std::roundf(scissor->x + scissor->width)));
-        auto const bottom = std::min(passHeight, static_cast<int>(std::roundf(scissor->y + scissor->height)));
-
-        scissorInfo = MTLScissorRect{
-            (NSUInteger)std::min(left, passWidth),
-            (NSUInteger)std::min(top, passHeight),
-            (NSUInteger)std::max(0, right - left),
-            (NSUInteger)std::max(0, bottom - top)
-        };
-    } else {
-        scissorInfo = MTLScissorRect{
-            0, 0,
-            (NSUInteger)passWidth,
-            (NSUInteger)passHeight
-        };
-    }
-
-    [renderPass.encoder setScissorRect: scissorInfo];
-}
-
-static void _SetViewport(_RenderPass const& renderPass, Vec4 const& viewport) {
-    PROFILE
-
-    assert(renderPass.encoder != nil);
-
-    [renderPass.encoder setViewport: MTLViewport{
-        viewport.x,
-        viewport.y,
-        viewport.width,
-        viewport.height,
-        0.0,
-        1.0
-    }];
-}
-
 static void _PushStateUniforms(_RenderPass const& renderPass, Vec2 const& resolution, Mat3 const& transform, float opacity) {
     PROFILE
 
@@ -438,52 +488,7 @@ static void _PushStateUniforms(_RenderPass const& renderPass, Vec2 const& resolu
     [renderPass.encoder setFragmentBytes: &stateUniforms length: sizeof(StateUniforms) atIndex: _STATE_FRAGMENT_UNIFORMS_INDEX];
 }
 
-static Vec4 _ResolveBorders(QuadOutlineShape const& shape) {
-    PROFILE
-
-    auto const border = shape.border.value_or(0.0f);
-
-    return Vec4{
-        shape.leftBorder.value_or(border),
-        shape.topBorder.value_or(border),
-        shape.rightBorder.value_or(border),
-        shape.bottomBorder.value_or(border)
-    };
-}
-
-// bottom-left), applying the uniform borderRadius as the fallback for any
-// corner without an explicit override. Negative radii floor to 0, then the
-// CSS corner-overlap rule (css-backgrounds-3) applies: all four radii are
-// scaled by f = min(1, w/(TL+TR), w/(BL+BR), h/(TL+BL), h/(TR+BR)), skipping
-// any ratio with a zero denominator. A lone corner may thus grow up to the
-// full shorter side, while competing adjacent radii shrink proportionally
-// instead of truncating per corner.
-template <typename QuadType>
-static Vec4 _ResolveRadius(QuadType const& shape) {
-    PROFILE
-
-    auto const radius = shape.borderRadius.value_or(0.0f);
-    auto const tl = std::max(shape.borderTopLeftRadius.value_or(radius), 0.0f);
-    auto const tr = std::max(shape.borderTopRightRadius.value_or(radius), 0.0f);
-    auto const br = std::max(shape.borderBottomRightRadius.value_or(radius), 0.0f);
-    auto const bl = std::max(shape.borderBottomLeftRadius.value_or(radius), 0.0f);
-
-    auto factor = 1.0f;
-    auto const constrain = [&](float side, float sum) {
-        if (sum > 0.0f) {
-            factor = std::min(factor, (side / sum));
-        }
-    };
-
-    constrain(shape.rect.width,  (tl + tr));
-    constrain(shape.rect.width,  (bl + br));
-    constrain(shape.rect.height, (tl + bl));
-    constrain(shape.rect.height, (tr + br));
-
-    return Vec4{ (tl * factor), (tr * factor), (br * factor), (bl * factor) };
-}
-
-static void _PushShapeUniforms(_RenderPass const& renderPass, Shape const& shape, bool fragment) {
+static void _PushShapeUniforms(_RenderPass const& renderPass, Shape const& shape, Vec2 const& expand, bool fragment) {
     PROFILE
 
     assert(renderPass.encoder != nil);
@@ -519,12 +524,12 @@ static void _PushShapeUniforms(_RenderPass const& renderPass, Shape const& shape
 
     auto const shapeUniforms = ShapeUniforms{
         .vertices = {
-            simd_make_float2(rect.x, rect.y),
-            simd_make_float2(rect.x, rect.getMaxY()),
-            simd_make_float2(rect.getMaxX(), rect.y),
-            simd_make_float2(rect.getMaxX(), rect.getMaxY())
+            simd_make_float2((rect.x - expand.x),         (rect.y - expand.y)),
+            simd_make_float2((rect.x - expand.x),         (rect.getMaxY() + expand.y)),
+            simd_make_float2((rect.getMaxX() + expand.x), (rect.y - expand.y)),
+            simd_make_float2((rect.getMaxX() + expand.x), (rect.getMaxY() + expand.y))
         },
-        .bounds  = { rect.x, rect.y, rect.width, rect.height },
+        .bounds  = { rect.x, rect.y, rect.width, rect.height }, // unexpanded: localPos and localUV stay in shape space
         .borders = { borders.left, borders.top, borders.right, borders.bottom },
         .corners = { corners.data[0], corners.data[1], corners.data[2], corners.data[3] },
         .type    = type
@@ -664,8 +669,6 @@ static void _PushGradientBrushUniforms(_RenderPass const& renderPass, GradientBr
     [renderPass.encoder setFragmentBytes: &gradientUniforms length: sizeof(GradientBrushUniforms) atIndex: _BRUSH_FRAGMENT_UNIFORMS_INDEX];
 }
 
-/* filter kernels are expressed in texels of the texture they sample; `scale`
-   is that texture's size relative to the pass the filter was requested in */
 static void _PushBlurFilterUniforms(_RenderPass const& renderPass, id<MTLTexture> source, Vec2 const& direction, BlurFilter const& filter, Vec2 const& scale) {
     PROFILE
 
@@ -966,10 +969,12 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
             static_cast<float>(pass.height)
         };
 
+        auto const transform = options.transform.value_or(Mat3{}).toScaled(scale);
+
         _SetScissor(pass, scissor);
         _SetViewport(pass, { {}, resolution });
-        _PushStateUniforms(pass, resolution, options.transform.value_or(Mat3{}).toScaled(scale), options.opacity.value_or(1.0f));
-        _PushShapeUniforms(pass, shape, true);
+        _PushStateUniforms(pass, resolution, transform, options.opacity.value_or(1.0f));
+        _PushShapeUniforms(pass, shape, _EdgeExpansion(transform), true);
 
         if (colorBrush != nullptr) {
             [pass.encoder setRenderPipelineState: _GetColorBrushPipeline(pass.format, mode)];
@@ -1001,7 +1006,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _SetScissor(pass, scissor);
         _SetViewport(pass, { {}, resolution });
         _PushStateUniforms(pass, resolution, Mat3{}, 1.0f);
-        _PushShapeUniforms(pass, Shape{ QuadShape{ Vec4{ {}, resolution } } }, false);
+        _PushShapeUniforms(pass, Shape{ QuadShape{ Vec4{ {}, resolution } } }, Vec2{}, false);
         _PushBlurFilterUniforms(pass, source, direction, *blurFilter, filterScale);
 
         [pass.encoder setRenderPipelineState: _GetBlurFilterPipeline(pass.format, mode)];
@@ -1022,7 +1027,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _SetScissor(pass, std::nullopt);
         _SetViewport(pass, { {}, resolution });
         _PushStateUniforms(pass, resolution, Mat3{}, 1.0f);
-        _PushShapeUniforms(pass, Shape{ QuadShape{ Vec4{ {}, resolution } } }, false);
+        _PushShapeUniforms(pass, Shape{ QuadShape{ Vec4{ {}, resolution } } }, Vec2{}, false);
         _PushShadowFilterFieldUniforms(pass, source, direction, spread, *shadowFilter, fromSilhouette, filterScale);
 
         [pass.encoder setRenderPipelineState: pipeline];
@@ -1047,7 +1052,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _SetScissor(pass, scissor);
         _SetViewport(pass, { {}, resolution });
         _PushStateUniforms(pass, resolution, transform, 1.0f);
-        _PushShapeUniforms(pass, Shape{ QuadShape{ Vec4{ {}, resolution } } }, false);
+        _PushShapeUniforms(pass, Shape{ QuadShape{ Vec4{ {}, resolution } } }, Vec2{}, false);
         _PushShadowFilterUniforms(pass, source, *shadowFilter, fromSilhouette, filterScale);
 
         [pass.encoder setRenderPipelineState: _GetShadowFilterCompositePipeline(pass.format, mode)];
