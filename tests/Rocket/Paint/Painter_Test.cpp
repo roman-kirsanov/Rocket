@@ -598,6 +598,63 @@ TEST(Painter, DestroyWithOpenPassesAbandonsThem) {
     EXPECT_EQ(at(outerData, 16, 16)[2], 255); /* a fresh painter still renders */
 }
 
+/* Nested passes execute in paint order: an image painted before a nested
+   pass re-renders it must show the old content, and painted after it the new. */
+TEST(Painter, NestedPassKeepsDrawOrder) {
+    auto image = Image(Vec2{ 32.0f, 32.0f });
+    auto target = Image(Vec2{ 64.0f, 32.0f });
+    auto painter = Painter();
+    auto const brush = ImageBrush{ .image = &image, .positionX = ImagePosition::Stretch, .positionY = ImagePosition::Stretch };
+
+    painter.beginPaint(ImagePaintTarget{ .image = image, .clearColor = Vec4{ 1.0f, 0.0f, 0.0f, 1.0f } });
+    painter.endPaint();
+
+    painter.beginPaint(ImagePaintTarget{ .image = target, .clearColor = Vec4{ 0.0f, 0.0f, 0.0f, 1.0f } });
+    painter.paint(QuadShape{ Vec4{ 0.0f, 0.0f, 32.0f, 32.0f } }, brush);
+    painter.beginPaint(ImagePaintTarget{ .image = image, .clearColor = Vec4{ 0.0f, 1.0f, 0.0f, 1.0f } });
+    painter.endPaint();
+    painter.paint(QuadShape{ Vec4{ 32.0f, 0.0f, 32.0f, 32.0f } }, brush);
+    painter.endPaint();
+
+    auto data = std::vector<std::uint8_t>();
+    target.getData(data);
+
+    auto const at = [&](int x, int y) {
+        return &data[(((std::size_t)y * 64) + x) * 4];
+    };
+
+    EXPECT_EQ(at(16, 16)[0], 255); /* left: image as it was before the nested pass (red) */
+    EXPECT_EQ(at(16, 16)[1], 0);
+    EXPECT_EQ(at(48, 16)[1], 255); /* right: image as re-rendered by the nested pass (green) */
+    EXPECT_EQ(at(48, 16)[0], 0);
+}
+
+/* A nested pass sampling the outer pass's target sees the outer draws made
+   before it was begun, not the target's content from before the outer pass. */
+TEST(Painter, NestedPassSeesOuterDraws) {
+    auto outer = Image(Vec2{ 32.0f, 32.0f });
+    auto inner = Image(Vec2{ 32.0f, 32.0f });
+    auto painter = Painter();
+
+    painter.beginPaint(ImagePaintTarget{ .image = outer, .clearColor = Vec4{ 1.0f, 1.0f, 0.0f, 1.0f } });
+    painter.endPaint();
+
+    painter.beginPaint(ImagePaintTarget{ .image = outer, .clearColor = Vec4{ 0.0f, 0.0f, 1.0f, 1.0f } });
+    painter.paint(QuadShape{ Vec4{ 0.0f, 0.0f, 32.0f, 32.0f } }, ColorBrush{ Vec4{ 1.0f, 0.0f, 0.0f, 1.0f } });
+    painter.beginPaint(ImagePaintTarget{ .image = inner, .clearColor = Vec4{ 0.0f, 0.0f, 0.0f, 1.0f } });
+    painter.paint(QuadShape{ Vec4{ 0.0f, 0.0f, 32.0f, 32.0f } }, ImageBrush{ .image = &outer, .positionX = ImagePosition::Stretch, .positionY = ImagePosition::Stretch });
+    painter.endPaint();
+    painter.endPaint();
+
+    auto data = std::vector<std::uint8_t>();
+    inner.getData(data);
+
+    auto const pixel = &data[(((std::size_t)16 * 32) + 16) * 4];
+
+    EXPECT_EQ(pixel[0], 255); /* red from the outer pass, not the earlier yellow */
+    EXPECT_EQ(pixel[1], 0);
+}
+
 /* --- layer compositing: a nested offscreen pass composited back --- */
 
 TEST(Painter, ComboNestedLayer) {

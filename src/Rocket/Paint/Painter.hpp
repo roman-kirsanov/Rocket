@@ -88,7 +88,10 @@ struct PaintOptions {
  * Non-copyable and non-movable. Each paint pass must be bracketed with
  * beginPaint() and endPaint(); paint() calls are only valid in between.
  * Passes may be nested: beginPaint() suspends the current pass, and
- * endPaint() resumes it. Destroying a Painter with passes still open
+ * endPaint() resumes it. Nested passes share the outermost pass's command
+ * buffer, so the GPU runs everything in the order it was painted and
+ * nothing is submitted (or presented) until the outermost endPaint().
+ * Destroying a Painter with passes still open
  * abandons them: nothing is submitted or presented, so every open target
  * keeps its previous content. Graphics pipelines are created lazily and
  * cached per texture format, so a single Painter instance can render to

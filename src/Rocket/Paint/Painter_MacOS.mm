@@ -31,11 +31,12 @@ namespace Rocket {
 struct _RenderPass {
     std::uint32_t width = 0;
     std::uint32_t height = 0;
-    MTLPixelFormat format = MTLPixelFormatInvalid; // pipelines are looked up per draw by format and blend mode
+    MTLPixelFormat format = MTLPixelFormatInvalid;
     id<MTLTexture> texture = nil;
-    id<CAMetalDrawable> drawable = nil; // window targets only; presented on submit
+    id<CAMetalDrawable> drawable = nil;
     id<MTLCommandBuffer> commandBuffer = nil;
     id<MTLRenderCommandEncoder> encoder = nil;
+    bool commit = false;
 };
 
 struct _FilterTextures {
@@ -47,6 +48,7 @@ struct _FilterTextures {
 };
 
 struct Painter::_Painter {
+    id<MTLCommandBuffer> commandBuffer = nil;
     std::stack<std::optional<_RenderPass>> renderPassStack;
     std::map<std::uint64_t, _FilterTextures> filterTextures; // keyed by (width << 32) | height
     std::uint64_t filterTexturesUse = 0;
@@ -105,7 +107,6 @@ static id<MTLSamplerState> _CreateSampler(MTLSamplerMinMagFilter minFilter, MTLS
     return [_GetDevice() newSamplerStateWithDescriptor: descriptor];
 }
 
-// Fragments output premultiplied color, so every blend mode is a plain factor pair.
 static void _SetBlend(MTLRenderPipelineColorAttachmentDescriptor* attachment, Blend blend) {
     PROFILE
 
@@ -307,7 +308,7 @@ static void _BeginRenderPass(_RenderPass& renderPass, id<MTLCommandBuffer> comma
     renderPass.encoder = [command renderCommandEncoderWithDescriptor: descriptor];
 }
 
-static void _EndRenderPass(_RenderPass& renderPass, bool submit = false) {
+static void _EndRenderPass(_RenderPass& renderPass) {
     PROFILE
 
     assert(renderPass.commandBuffer != nil);
@@ -316,14 +317,6 @@ static void _EndRenderPass(_RenderPass& renderPass, bool submit = false) {
 
     [renderPass.encoder endEncoding];
 
-    if (submit) {
-        if (renderPass.drawable != nil) {
-            [renderPass.commandBuffer presentDrawable: renderPass.drawable];
-        }
-
-        [renderPass.commandBuffer commit];
-    }
-
     renderPass.width = 0;
     renderPass.height = 0;
     renderPass.texture = nil;
@@ -331,6 +324,7 @@ static void _EndRenderPass(_RenderPass& renderPass, bool submit = false) {
     renderPass.encoder = nil;
     renderPass.commandBuffer = nil;
     renderPass.format = MTLPixelFormatInvalid;
+    renderPass.commit = false;
 }
 
 static void _SuspendRenderPass(_RenderPass& renderPass) {
@@ -444,7 +438,6 @@ static Vec4 _ResolveBorders(QuadOutlineShape const& shape) {
     };
 }
 
-// Resolves a quad's per-corner radii (top-left, top-right, bottom-right,
 // bottom-left), applying the uniform borderRadius as the fallback for any
 // corner without an explicit override. Negative radii floor to 0, then the
 // CSS corner-overlap rule (css-backgrounds-3) applies: all four radii are
@@ -806,12 +799,16 @@ void Painter::__beginPaint(PaintTarget const& target) {
         [&](ImagePaintTarget const& imageTarget) {
             assert(imageTarget.image.getTexture() != nullptr);
 
-            _impl->renderPassStack.emplace();
-            _impl->renderPassStack.top().emplace();
+            _impl->renderPassStack.emplace(_RenderPass{});
+
+            if (_impl->commandBuffer == nil) {
+                _impl->commandBuffer = [_GetQueue() commandBuffer];
+                _impl->renderPassStack.top()->commit = true;
+            }
 
             _BeginRenderPass(
                 *_impl->renderPassStack.top(),
-                [_GetQueue() commandBuffer],
+                _impl->commandBuffer,
                 (__bridge id<MTLTexture>)imageTarget.image.getTexture(),
                 nil,
                 (std::uint32_t)imageTarget.image.getSize().width,
@@ -821,19 +818,24 @@ void Painter::__beginPaint(PaintTarget const& target) {
             );
         },
         [&](WindowPaintTarget const& windowTarget) {
+            assert(windowTarget.window.getHandle() != nullptr);
+
             auto window = (__bridge NSWindow*)windowTarget.window.getHandle();
             auto layer = (CAMetalLayer*)window.contentView.layer;
 
             assert([layer isKindOfClass: [CAMetalLayer class]]);
 
-            auto drawable = [layer nextDrawable];
-            if (drawable != nil) {
-                _impl->renderPassStack.emplace();
-                _impl->renderPassStack.top().emplace();
+            if (auto drawable = [layer nextDrawable]) {
+                _impl->renderPassStack.emplace(_RenderPass{});
+
+                if (_impl->commandBuffer == nil) {
+                    _impl->commandBuffer = [_GetQueue() commandBuffer];
+                    _impl->renderPassStack.top()->commit = true;
+                }
 
                 _BeginRenderPass(
                     *_impl->renderPassStack.top(),
-                    [_GetQueue() commandBuffer],
+                    _impl->commandBuffer,
                     drawable.texture,
                     drawable,
                     (std::uint32_t)layer.drawableSize.width,
@@ -853,8 +855,21 @@ void Painter::__endPaint() {
 
     if (_impl->renderPassStack.empty() == false) {
         if (_impl->renderPassStack.top().has_value()) {
-            _EndRenderPass(*_impl->renderPassStack.top(), true);
+            auto& renderPass = *_impl->renderPassStack.top();
+            auto const commit = renderPass.commit;
+
+            if (renderPass.drawable != nil) {
+                [_impl->commandBuffer presentDrawable: renderPass.drawable];
+            }
+
+            _EndRenderPass(renderPass);
+
+            if (commit) {
+                [_impl->commandBuffer commit];
+                _impl->commandBuffer = nil;
+            }
         }
+
         _impl->renderPassStack.pop();
     }
 
