@@ -67,7 +67,7 @@ if(APPLE)
 
     set(ROCKET_SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/Rocket/Paint/Metal/Painter.metal)
     set(ROCKET_SHADER_TYPES  ${CMAKE_CURRENT_SOURCE_DIR}/src/Rocket/Paint/Metal/Painter.metal.hpp)
-    set(ROCKET_SHADER_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/src/Rocket/Paint/Metal/Painter.metal-lib.hpp)
+    set(ROCKET_SHADER_HEADER ${CMAKE_CURRENT_BINARY_DIR}/Painter.metal-lib.hpp)
     set(ROCKET_SHADER_AIR    ${CMAKE_CURRENT_BINARY_DIR}/Painter.air)
     set(ROCKET_SHADER_LIB    ${CMAKE_CURRENT_BINARY_DIR}/Painter.metallib)
 
@@ -132,6 +132,7 @@ target_include_directories(Rocket
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/lib/inplace_vector/include
+        ${CMAKE_CURRENT_BINARY_DIR}
 )
 
 target_link_libraries(Rocket

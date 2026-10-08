@@ -24,7 +24,7 @@
 #include <Rocket/Paint/Painter_Private.hpp>
 #include <Rocket/Window/Window.hpp>
 #include "Metal/Painter.metal.hpp"
-#include "Metal/Painter.metal-lib.hpp"
+#include "Painter.metal-lib.hpp"
 
 namespace Rocket {
 
