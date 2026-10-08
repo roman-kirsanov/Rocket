@@ -10,6 +10,23 @@ struct VertexResult {
     float2 screenUV;
 };
 
+// One axis of the nine-patch remap: dst offset p in [0, dstSize) to the source
+// offset inside the slice. Bands are [0, dstA), [dstA, dstSize - dstB) and
+// [dstSize - dstB, dstSize); each stretches linearly onto its source band. A
+// band is entered only when its dst width is positive (dstFit keeps dstA + dstB
+// within dstSize), so every divisor below is nonzero.
+static inline float _npatchAxis(float p, float srcSize, float dstSize, float srcA, float srcB, float dstA, float dstB) {
+    if (p < dstA) {
+        return (srcA * (p / dstA));
+    }
+    float srcEnd = (srcSize - srcB);
+    float dstEnd = (dstSize - dstB);
+    if (p < dstEnd) {
+        return (srcA + ((srcEnd - srcA) * ((p - dstA) / (dstEnd - dstA))));
+    }
+    return (srcEnd + ((srcSize - srcEnd) * ((p - dstEnd) / (dstSize - dstEnd))));
+}
+
 // Signed distance (pixels, negative inside) from a rounded box whose top-left
 // corner sits at the local origin (Y down). corners: x=TL, y=TR, z=BR, w=BL.
 //
@@ -146,9 +163,6 @@ fragment float4 imageBrushFragment(VertexResult in [[stage_in]], StateUniforms c
     float2 dstSize = (uBrush.destin.zw - uBrush.destin.xy);
     float2 dstPos  = (clamp(in.localPos, float2(0.0f), (uShape.bounds.zw * 0.999999f)) - uBrush.destin.xy);
 
-    float4 src = float4(0.0);
-    float4 dst = float4(0.0);
-
     // nPatch insets are shared by the source slicing and the dest frame: real
     // consumers swap in a matching 1x/2x/3x sprite and scale the insets together
     // with it, so both spaces agree. Guard against degenerate values CSS
@@ -159,9 +173,6 @@ fragment float4 imageBrushFragment(VertexResult in [[stage_in]], StateUniforms c
     float2 dstFit = min(float2(1.0), (dstSize / max((uBrush.npatch.xy + uBrush.npatch.zw), float2(0.0001))));
     float4 srcNP  = (uBrush.npatch * srcFit.xyxy);
     float4 dstNP  = (uBrush.npatch * dstFit.xyxy);
-
-    float4 srcMM = float4(srcNP.x, srcNP.y, (srcSize.x - srcNP.z), (srcSize.y - srcNP.w));
-    float4 dstMM = float4(dstNP.x, dstNP.y, (dstSize.x - dstNP.z), (dstSize.y - dstNP.w));
 
     // Floor-modulo so tiles before the image origin continue the pattern
     // instead of mirroring it (fmod keeps the sign; abs would reflect).
@@ -180,64 +191,14 @@ fragment float4 imageBrushFragment(VertexResult in [[stage_in]], StateUniforms c
         return float4(0.0);
     }
 
-    if (all(dstPos >= dstMM.xy) && all(dstPos < dstMM.zw)) {
-        src = srcMM;
-        dst = dstMM;
-    } else {
-        float4 srcTL = float4(0.0, 0.0, srcNP.x, srcNP.y);
-        float4 dstTL = float4(0.0, 0.0, dstNP.x, dstNP.y);
-        if (all(dstPos >= dstTL.xy) && all(dstPos < dstTL.zw)) {
-            src = srcTL; dst = dstTL;
-        } else {
-            float4 srcTM = float4(srcNP.x, 0.0, (srcSize.x - srcNP.z), srcNP.y);
-            float4 dstTM = float4(dstNP.x, 0.0, (dstSize.x - dstNP.z), dstNP.y);
-            if (all(dstPos >= dstTM.xy) && all(dstPos < dstTM.zw)) {
-                src = srcTM; dst = dstTM;
-            } else {
-                float4 srcTR = float4((srcSize.x - srcNP.z), 0.0, srcSize.x, srcNP.y);
-                float4 dstTR = float4((dstSize.x - dstNP.z), 0.0, dstSize.x, dstNP.y);
-                if (all(dstPos >= dstTR.xy) && all(dstPos < dstTR.zw)) {
-                    src = srcTR; dst = dstTR;
-                } else {
-                    float4 srcML = float4(0.0, srcNP.y, srcNP.x, (srcSize.y - srcNP.w));
-                    float4 dstML = float4(0.0, dstNP.y, dstNP.x, (dstSize.y - dstNP.w));
-                    if (all(dstPos >= dstML.xy) && all(dstPos < dstML.zw)) {
-                        src = srcML; dst = dstML;
-                    } else {
-                        float4 srcMR = float4((srcSize.x - srcNP.z), srcNP.y, srcSize.x, (srcSize.y - srcNP.w));
-                        float4 dstMR = float4((dstSize.x - dstNP.z), dstNP.y, dstSize.x, (dstSize.y - dstNP.w));
-                        if (all(dstPos >= dstMR.xy) && all(dstPos < dstMR.zw)) {
-                            src = srcMR; dst = dstMR;
-                        } else {
-                            float4 srcBL = float4(0.0, (srcSize.y - srcNP.w), srcNP.x, srcSize.y);
-                            float4 dstBL = float4(0.0, (dstSize.y - dstNP.w), dstNP.x, dstSize.y);
-                            if (all(dstPos >= dstBL.xy) && all(dstPos < dstBL.zw)) {
-                                src = srcBL; dst = dstBL;
-                            } else {
-                                float4 srcBM = float4(srcNP.x, (srcSize.y - srcNP.w), (srcSize.x - srcNP.z), srcSize.y);
-                                float4 dstBM = float4(dstNP.x, (dstSize.y - dstNP.w), (dstSize.x - dstNP.z), dstSize.y);
-                                if (all(dstPos >= dstBM.xy) && all(dstPos < dstBM.zw)) {
-                                    src = srcBM; dst = dstBM;
-                                } else {
-                                    float4 srcBR = float4((srcSize.x - srcNP.z), (srcSize.y - srcNP.w), srcSize.x, srcSize.y);
-                                    float4 dstBR = float4((dstSize.x - dstNP.z), (dstSize.y - dstNP.w), dstSize.x, dstSize.y);
-                                    if (all(dstPos >= dstBR.xy) && all(dstPos < dstBR.zw)) {
-                                        src = srcBR; dst = dstBR;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+    float2 srcPos = float2(
+        _npatchAxis(dstPos.x, srcSize.x, dstSize.x, srcNP.x, srcNP.z, dstNP.x, dstNP.z),
+        _npatchAxis(dstPos.y, srcSize.y, dstSize.y, srcNP.y, srcNP.w, dstNP.y, dstNP.w)
+    );
+    float2 suv = ((uBrush.source.xy + srcPos) / uBrush.size.xy);
 
-    float2 duv = ((dstPos - dst.xy) / (dst.zw - dst.xy));
-    float2 suv = ((uBrush.source.xy + mix(src.xy, src.zw, duv)) / uBrush.size.xy);
-
-    if (uBrush.flip.x == 1.0) suv.x = ((uBrush.source.z - mix(src.x, src.z, duv.x)) / uBrush.size.x);
-    if (uBrush.flip.y == 1.0) suv.y = ((uBrush.source.w - mix(src.y, src.w, duv.y)) / uBrush.size.y);
+    if (uBrush.flip.x == 1.0) suv.x = ((uBrush.source.z - srcPos.x) / uBrush.size.x);
+    if (uBrush.flip.y == 1.0) suv.y = ((uBrush.source.w - srcPos.y) / uBrush.size.y);
 
     float4 texel = texture0.sample(sampler0, suv);
 
