@@ -306,6 +306,31 @@ TEST(Painter, ImageRepeat) {
     }));
 }
 
+/* Tiles before the image origin must continue the pattern, not mirror it. */
+TEST(Painter, ImageRepeatCenter) {
+    EXPECT_TRUE(runCase("image-repeat-center", 128, 128, [&](Painter& painter, Image&) {
+        painter.paint(QuadShape{ .rect = { 8.0f, 8.0f, 112.0f, 112.0f } }, ImageBrush{
+            .image     = &checker,
+            .positionX = ImagePosition::Center,
+            .positionY = ImagePosition::Center,
+            .repeatX   = true,
+            .repeatY   = true
+        });
+    }));
+}
+
+TEST(Painter, ImageRepeatEnd) {
+    EXPECT_TRUE(runCase("image-repeat-end", 128, 128, [&](Painter& painter, Image&) {
+        painter.paint(QuadShape{ .rect = { 8.0f, 8.0f, 112.0f, 112.0f } }, ImageBrush{
+            .image     = &checker,
+            .positionX = ImagePosition::End,
+            .positionY = ImagePosition::End,
+            .repeatX   = true,
+            .repeatY   = true
+        });
+    }));
+}
+
 TEST(Painter, ImageTint) {
     EXPECT_TRUE(runCase("image-tint", 128, 128, [&](Painter& painter, Image&) {
         painter.paint(QuadShape{ .rect = { 8.0f, 8.0f, 112.0f, 112.0f } }, ImageBrush{

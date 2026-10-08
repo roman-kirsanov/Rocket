@@ -154,8 +154,10 @@ fragment float4 imageBrushFragment(VertexResult in [[stage_in]], StateUniforms c
     float4 srcMM = float4(srcNP.x, srcNP.y, (srcSize.x - srcNP.z), (srcSize.y - srcNP.w));
     float4 dstMM = float4(dstNP.x, dstNP.y, (dstSize.x - dstNP.z), (dstSize.y - dstNP.w));
 
-    if (uBrush.repeat.x == 1.0) dstPos.x = abs(fmod(dstPos.x, dstSize.x));
-    if (uBrush.repeat.y == 1.0) dstPos.y = abs(fmod(dstPos.y, dstSize.y));
+    // Floor-modulo so tiles before the image origin continue the pattern
+    // instead of mirroring it (fmod keeps the sign; abs would reflect).
+    if (uBrush.repeat.x == 1.0) dstPos.x -= (dstSize.x * floor(dstPos.x / dstSize.x));
+    if (uBrush.repeat.y == 1.0) dstPos.y -= (dstSize.y * floor(dstPos.y / dstSize.y));
 
     // Without repeat, fragments outside the positioned image rect contribute
     // nothing: extrapolated UVs would otherwise hit the ClampToEdge sampler and
