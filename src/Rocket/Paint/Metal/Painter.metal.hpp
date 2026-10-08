@@ -51,7 +51,7 @@ struct ImageBrushUniforms {
     FLOAT4 destin;
 };
 
-/** Uniforms for the GradientBrush fragment shaders (linear and radial). */
+/** Uniforms for the GradientBrush fragment shaders (linear and radial). Colors are premultiplied. */
 struct GradientBrushUniforms {
     FLOAT2 startPoint;
     FLOAT4 startColor;

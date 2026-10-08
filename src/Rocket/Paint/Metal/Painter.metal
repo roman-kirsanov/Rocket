@@ -275,8 +275,7 @@ fragment float4 linearGradientBrushFragment(VertexResult in [[stage_in]], StateU
         result = uBrush.stopColor;
     }
 
-    float a = (result.a * uState.opacity * _coverage(in.localPos, uShape));
-    return float4((result.rgb * a), a);
+    return (result * uState.opacity * _coverage(in.localPos, uShape));
 }
 
 fragment float4 radialGradientBrushFragment(VertexResult in [[stage_in]], StateUniforms constant& uState [[buffer(0)]], GradientBrushUniforms constant& uBrush [[buffer(1)]], ShapeUniforms constant& uShape [[buffer(2)]]) {
@@ -301,8 +300,7 @@ fragment float4 radialGradientBrushFragment(VertexResult in [[stage_in]], StateU
         result = uBrush.stopColor;
     }
 
-    float a = (result.a * uState.opacity * _coverage(in.localPos, uShape));
-    return float4((result.rgb * a), a);
+    return (result * uState.opacity * _coverage(in.localPos, uShape));
 }
 
 fragment float4 blurFilterFragment(VertexResult in [[stage_in]], StateUniforms constant& uState [[buffer(0)]], BlurFilterUniforms constant& uFilter [[buffer(1)]], texture2d<float> texture0 [[texture(0)]], sampler sampler0 [[sampler(0)]]) {

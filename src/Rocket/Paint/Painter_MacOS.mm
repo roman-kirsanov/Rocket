@@ -631,16 +631,20 @@ static void _PushGradientBrushUniforms(_RenderPass const& renderPass, GradientBr
         stopColor  = std::get<1>(gradientBrush.stops[stopCount - 1]);
     }
 
+    // Stops are premultiplied here so the shader interpolates in premultiplied
+    // space: a fade to transparent then loses coverage without darkening.
+    auto const premultiply = [](Vec4 const& c) { return FLOAT4{ (c.red * c.alpha), (c.green * c.alpha), (c.blue * c.alpha), c.alpha }; };
+
     auto gradientUniforms = GradientBrushUniforms{
         .startPoint = { startPosition.x, startPosition.y },
-        .startColor = { startColor.red, startColor.green, startColor.blue, startColor.alpha },
+        .startColor = premultiply(startColor),
         .stopPoint  = { stopPosition.x, stopPosition.y },
-        .stopColor  = { stopColor.red, stopColor.green, stopColor.blue, stopColor.alpha },
+        .stopColor  = premultiply(stopColor),
         .stopCount  = stopCount
     };
     for (auto i = 0; i < stopCount; i++) {
         auto const& [ position, color ] = gradientBrush.stops[i];
-        gradientUniforms.stopColors[i]   = { color.red, color.green, color.blue, color.alpha };
+        gradientUniforms.stopColors[i]   = premultiply(color);
         gradientUniforms.stopPosition[i] = position;
     }
 

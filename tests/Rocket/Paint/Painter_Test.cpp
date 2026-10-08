@@ -165,6 +165,19 @@ TEST(Painter, GradientLinearVertical) {
     }));
 }
 
+/* An opaque-to-transparent fade over white must lighten towards pink, never pass through dark red. */
+TEST(Painter, GradientLinearFade) {
+    EXPECT_TRUE(runCase("gradient-linear-fade", 128, 128, [&](Painter& painter, Image&) {
+        painter.paint(QuadShape{ .rect = { 8.0f, 8.0f, 112.0f, 112.0f } }, ColorBrush{ .color = white });
+        painter.paint(QuadShape{ .rect = { 8.0f, 8.0f, 112.0f, 112.0f } }, GradientBrush{
+            .startPosition = Vec2{ 0.0f, 0.0f },
+            .stopPosition  = Vec2{ 1.0f, 0.0f },
+            .startColor    = red,
+            .stopColor     = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f }
+        });
+    }));
+}
+
 /* --- gradient-radial --- */
 
 TEST(Painter, GradientRadialCentered) {
@@ -202,6 +215,19 @@ TEST(Painter, GradientRadialOffcenter) {
             .stopPosition  = Vec2{ 1.0f, 1.0f },
             .startColor    = Vec4{ 0.0f, 1.0f, 1.0f, 1.0f },
             .stopColor     = Vec4{ 0.1f, 0.1f, 0.4f, 1.0f }
+        });
+    }));
+}
+
+TEST(Painter, GradientRadialFade) {
+    EXPECT_TRUE(runCase("gradient-radial-fade", 128, 128, [&](Painter& painter, Image&) {
+        painter.paint(QuadShape{ .rect = { 8.0f, 8.0f, 112.0f, 112.0f } }, ColorBrush{ .color = white });
+        painter.paint(QuadShape{ .rect = { 8.0f, 8.0f, 112.0f, 112.0f } }, GradientBrush{
+            .radial        = true,
+            .startPosition = Vec2{ 0.5f, 0.5f },
+            .stopPosition  = Vec2{ 1.0f, 0.5f },
+            .startColor    = red,
+            .stopColor     = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f }
         });
     }));
 }
