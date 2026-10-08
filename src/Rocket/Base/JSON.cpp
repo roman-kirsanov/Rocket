@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <string_view>
 #include <charconv>
+#include <xlocale.h>
 #include <format>
 #include <Rocket/Base/Profile.hpp>
 #include <Rocket/Base/JSON.hpp>
@@ -405,21 +406,15 @@ JSONValue ParseJSON(std::string const& text) {
             }
         }
 
-        auto const first = text.data() + start;
-        auto const last = text.data() + position;
-        auto value = 0.0;
-        auto const result = std::from_chars(first, last, value);
-        if (result.ec == std::errc::result_out_of_range) {
-            /* Values too small for a double quietly underflow to zero, but
-             * overflow to infinity is an error, as in the reference
-             * implementation. from_chars leaves `value` unspecified here, so
-             * let strtod (locale-independent for this token) decide which. */
-            value = std::strtod(std::string(first, last).c_str(), nullptr);
-            if (std::isinf(value)) {
-                failAt(start, std::format("number overflow parsing '{}'", std::string_view(first, last)));
-            }
-        } else if (result.ec != std::errc{} || result.ptr != last) {
-            failAt(start, "invalid number");
+        /* The token is already validated against the JSON grammar above, so
+         * strtod_l in the C locale (a null locale_t) parses all of it. The
+         * floating-point std::from_chars needs macOS 26. Values too small for
+         * a double quietly underflow to zero, but overflow to infinity is an
+         * error, as in the reference implementation. */
+        auto const token = std::string(text, start, position - start);
+        auto const value = strtod_l(token.c_str(), nullptr, nullptr);
+        if (std::isinf(value)) {
+            failAt(start, std::format("number overflow parsing '{}'", token));
         }
         return value;
     };
