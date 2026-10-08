@@ -1939,6 +1939,107 @@ TEST(Document, RenderShadowRebakesOnBorderRadiusChange) {
     ASSERT_TRUE(imagePasses == 6);
 }
 
+/* An inset shadow is baked from the node's padding box (the border box inset
+   by the border widths, corner radii reduced to match) and painted inside the
+   node, after the background and border and before its text and children, so
+   the node needs no layer image. The bake carries the inset flag and the
+   offset (the painter applies it in the filter), and moving the node does not
+   rebake. */
+TEST(Document, RenderInsetShadowPaintsInsideNodeWithoutLayer) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    document.setScale(1.0f);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    a.setBorderRadius(8.0f);
+    a.setBorderWidth(2.0f);
+    a.setBackground(ColorBrush{ .color = COLOR_WHITE });
+    a.setBorder(ColorBrush{ .color = COLOR_BLACK });
+    a.setShadow(Shadow{ .offset = Vec2{ 2.0f, 3.0f }, .blur = 4.0f, .inset = true });
+    document.appendChild(a);
+
+    auto child = Node();
+    child.setWidth(20.0f);
+    child.setHeight(20.0f);
+    child.setBackground(ColorBrush{ .color = COLOR_BLACK });
+    a.appendChild(child);
+
+    auto sink = NiceMock<PainterSink>();
+    auto scope = SinkScope(sink);
+
+    auto depth = 0;
+    auto imagePasses = 0;
+    auto bakes = std::vector<ShadowFilter>();
+    auto bakeShape = std::optional<QuadShape>();
+    auto windowPaints = std::vector<std::string>();
+    ON_CALL(sink, beginPaint(_)).WillByDefault(Invoke([&](PaintTarget const& target) {
+        depth += 1;
+        if (target.as<ImagePaintTarget>() != nullptr) imagePasses += 1;
+    }));
+    ON_CALL(sink, endPaint()).WillByDefault(Invoke([&depth]() { depth -= 1; }));
+    ON_CALL(sink, paint(_, _, _)).WillByDefault(Invoke(
+        [&](Shape const& shape, Brush const& brush, PaintOptions const& options) {
+            if (options.filter.has_value() && (options.filter->as<ShadowFilter>() != nullptr)) {
+                bakes.push_back(*options.filter->as<ShadowFilter>());
+                bakeShape = *shape.as<QuadShape>();
+            }
+            else if (depth == 1) {
+                windowPaints.push_back(brush.as<ImageBrush>() != nullptr ? "shadow" : "fill");
+            }
+        }
+    ));
+
+    /* first render: only the bake pass, no layer */
+    document.update();
+    document.render();
+    ASSERT_TRUE(imagePasses == 1);
+    ASSERT_TRUE(bakes.size() == 1);
+    ASSERT_TRUE(bakes[0].inset == true);
+    ASSERT_TRUE(bakes[0].offset.has_value());
+    ASSERT_TRUE(bakes[0].offset.value() == Vec2(2.0f, 3.0f));
+    /* the silhouette is the 100x50 box minus the 2px border, offset by the
+       4px blur padding, with 8 - 2 corners */
+    ASSERT_TRUE(bakeShape.has_value());
+    ASSERT_TRUE(bakeShape->rect == Vec4(4.0f, 4.0f, 96.0f, 46.0f));
+    ASSERT_TRUE(bakeShape->borderTopLeftRadius == 6.0f);
+    ASSERT_TRUE(bakeShape->borderBottomRightRadius == 6.0f);
+
+    /* onto the window: the background, the border, the shadow, then the child */
+    ASSERT_TRUE(windowPaints.size() == 4);
+    ASSERT_TRUE(windowPaints[0] == "fill");
+    ASSERT_TRUE(windowPaints[1] == "fill");
+    ASSERT_TRUE(windowPaints[2] == "shadow");
+    ASSERT_TRUE(windowPaints[3] == "fill");
+
+    /* moving the node reuses the bake */
+    a.setMarginLeft(10.0f);
+    document.update();
+    document.render();
+    ASSERT_TRUE(imagePasses == 1);
+    ASSERT_TRUE(bakes.size() == 1);
+
+    /* changing the offset rebakes: an inset offset is part of the bake */
+    a.setShadow(Shadow{ .offset = Vec2{ 0.0f, 0.0f }, .blur = 4.0f, .inset = true });
+    document.update();
+    document.render();
+    ASSERT_TRUE(bakes.size() == 2);
+
+    /* swapping the left and right border widths keeps the padding box size
+       but changes the inner corner radii: rebake */
+    a.setBorderLeftWidth(4.0f);
+    a.setBorderRightWidth(0.0f);
+    document.update();
+    document.render();
+    ASSERT_TRUE(bakes.size() == 3);
+    ASSERT_TRUE(bakeShape->rect == Vec4(4.0f, 4.0f, 96.0f, 46.0f));
+    ASSERT_TRUE(bakeShape->borderTopLeftRadius == 4.0f);
+    ASSERT_TRUE(bakeShape->borderTopRightRadius == 6.0f);
+}
+
 /* The layer and shadow composites of a shadowed node inside a scroll viewport
    carry the ancestor clip as their scissor: a shadow scrolled out of the
    viewport cannot ghost onto the window outside it. The composites are the

@@ -318,7 +318,9 @@ private:
     void _renderNodeText(Node&, _RenderInfo const&);
     void _renderNodePaint(Node&, _RenderInfo const&);
     void _renderNodeForeground(Node&, _RenderInfo const&);
-    void _renderNodeShadow(Node&, _RenderInfo const&, ImageBrush const&);
+    void _renderNodeShadow(Node&, _RenderInfo const&, QuadShape const&, Brush const&);
+    void _renderNodeOuterShadow(Node&, _RenderInfo const&, ImageBrush const&);
+    void _renderNodeInnerShadow(Node&, _RenderInfo const&);
     void _renderAll();
     void _triggerMouseWheel(Vec2 const&, KeyModifiers const&, bool&);
     void _triggerMouseDown(Mouse, KeyModifiers const&, bool&);

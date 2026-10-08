@@ -16,8 +16,7 @@ namespace Rocket {
 /**
  * Drop shadow descriptor.
  *
- * All fields are optional; unset fields fall back to renderer defaults
- * (except inset, which is not yet honored).
+ * All fields are optional; unset fields fall back to renderer defaults.
  */
 struct Shadow {
     /** Shadow RGBA color. */
@@ -28,7 +27,7 @@ struct Shadow {
     std::optional<Vec2> spread;
     /** Blur radius in pixels. */
     std::optional<float> blur;
-    /** Casts the shadow inward from the shape's edges instead of as a drop shadow. Not yet honored by the renderer. */
+    /** Casts the shadow inward from the node's padding box (inside the border), under its text and children, instead of as a drop shadow. */
     std::optional<bool> inset;
     bool operator==(Shadow const&) const;
     bool operator!=(Shadow const&) const;

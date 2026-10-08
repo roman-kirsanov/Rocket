@@ -533,6 +533,63 @@ TEST(Painter, ShadowHard) {
     }));
 }
 
+/* --- filter-shadow-inset --- */
+
+/* The shadow falls inward from every edge and is clipped to the silhouette:
+   nothing paints outside the white box. */
+TEST(Painter, ShadowInsetPlain) {
+    EXPECT_TRUE(runCase("shadow-inset-plain", 128, 128, [&](Painter& painter, Image&) {
+        auto const shape = QuadShape{ .rect = { 24.0f, 24.0f, 80.0f, 80.0f } };
+        painter.paint(shape, ColorBrush{ .color = white });
+        painter.paint(shape, ColorBrush{ .color = white }, PaintOptions{
+            .filter = ShadowFilter{ .radius = 8.0f, .color = black, .inset = true }
+        });
+    }));
+}
+
+/* The offset shifts the shadow inside the box (dark top/left, none at
+   bottom/right) while the silhouette clip stays in place. */
+TEST(Painter, ShadowInsetOffset) {
+    EXPECT_TRUE(runCase("shadow-inset-offset", 128, 128, [&](Painter& painter, Image&) {
+        auto const shape = QuadShape{ .rect = { 24.0f, 24.0f, 80.0f, 80.0f } };
+        painter.paint(shape, ColorBrush{ .color = white });
+        painter.paint(shape, ColorBrush{ .color = white }, PaintOptions{
+            .filter = ShadowFilter{ .radius = 8.0f, .color = black, .offset = Vec2(6.0f, 6.0f), .inset = true }
+        });
+    }));
+}
+
+/* A hard inset shadow with spread is a solid inner band of the spread width. */
+TEST(Painter, ShadowInsetSpread) {
+    EXPECT_TRUE(runCase("shadow-inset-spread", 128, 128, [&](Painter& painter, Image&) {
+        auto const shape = QuadShape{ .rect = { 24.0f, 24.0f, 80.0f, 80.0f } };
+        painter.paint(shape, ColorBrush{ .color = white });
+        painter.paint(shape, ColorBrush{ .color = white }, PaintOptions{
+            .filter = ShadowFilter{ .radius = 0.0f, .color = red, .spread = Vec2(6.0f, 6.0f), .inset = true }
+        });
+    }));
+}
+
+/* The Document's composition of a bordered node: a rounded outline, then the
+   inset shadow on the padding box (border box inset by the border width,
+   corner radii reduced by it), so the shadow hugs the border's inner edge
+   without painting over it. */
+TEST(Painter, ShadowInsetPaddingBox) {
+    EXPECT_TRUE(runCase("shadow-inset-padding-box", 128, 128, [&](Painter& painter, Image&) {
+        auto const border = 6.0f;
+        auto const outer = QuadShape{ .rect = { 16.0f, 16.0f, 96.0f, 96.0f }, .borderRadius = 20.0f };
+        auto const inner = QuadShape{
+            .rect = { (16.0f + border), (16.0f + border), (96.0f - (border * 2.0f)), (96.0f - (border * 2.0f)) },
+            .borderRadius = (20.0f - border)
+        };
+        painter.paint(outer, ColorBrush{ .color = white });
+        painter.paint(QuadOutlineShape{ .rect = outer.rect, .borderRadius = outer.borderRadius, .border = border }, ColorBrush{ .color = red });
+        painter.paint(inner, ColorBrush{ .color = white }, PaintOptions{
+            .filter = ShadowFilter{ .radius = 8.0f, .color = black, .offset = Vec2(0.0f, 4.0f), .inset = true }
+        });
+    }));
+}
+
 /* --- combo --- */
 
 TEST(Painter, ComboGradientBlur) {

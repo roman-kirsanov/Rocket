@@ -136,6 +136,30 @@ static float _SnapBorderToPixelGrid(float value, float scale) {
     return (value > 0.0f) ? std::max((1.0f / scale), _SnapToPixelGrid(value, scale)) : 0.0f;
 }
 
+static float _ResolveRadius(std::optional<float> const& corner, std::optional<float> const& uniform) {
+    return corner.value_or(uniform.value_or(0.0f));
+}
+
+/* the box inside the border, with each corner radius reduced by the wider
+   of its two adjacent borders (matches the painter's outline inner edge) */
+static QuadShape _GetPaddingShape(QuadShape const& borderShape, Vec4 const& borderEdge) {
+    auto const inner = [&](std::optional<float> const& corner, float a, float b) -> std::optional<float> {
+        return std::max(0.0f, (_ResolveRadius(corner, borderShape.borderRadius) - std::max(a, b)));
+    };
+    return QuadShape{
+        .rect = Vec4{
+            (borderShape.rect.x + borderEdge.left),
+            (borderShape.rect.y + borderEdge.top),
+            std::max(0.0f, (borderShape.rect.width - borderEdge.left - borderEdge.right)),
+            std::max(0.0f, (borderShape.rect.height - borderEdge.top - borderEdge.bottom))
+        },
+        .borderTopLeftRadius = inner(borderShape.borderTopLeftRadius, borderEdge.left, borderEdge.top),
+        .borderTopRightRadius = inner(borderShape.borderTopRightRadius, borderEdge.right, borderEdge.top),
+        .borderBottomLeftRadius = inner(borderShape.borderBottomLeftRadius, borderEdge.left, borderEdge.bottom),
+        .borderBottomRightRadius = inner(borderShape.borderBottomRightRadius, borderEdge.right, borderEdge.bottom)
+    };
+}
+
 Document::~Document() {
     PROFILE
 
@@ -1619,6 +1643,7 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
 
     _renderNodeBackground(node, info);
     _renderNodeBorder(node, info);
+    _renderNodeInnerShadow(node, info);
     _renderNodeText(node, info);
     _renderNodePaint(node, info);
 
@@ -1666,7 +1691,7 @@ Document::_RenderInfo Document::_beginNodeRender(Node& node, Vec2 const& offset)
 
     auto const needsLayer = (
         node._opacity.value_or(1.0f) < 1.0f ||
-        node._shadow.has_value()
+        (node._shadow.has_value() && (node._shadow->inset.value_or(false) == false))
     );
 
     if (needsLayer) {
@@ -1730,7 +1755,7 @@ void Document::_endNodeRender(Node& node, _RenderInfo const& info) {
             .filterMin = ImageFilter::Nearest
         };
 
-        _renderNodeShadow(node, info, brush);
+        _renderNodeOuterShadow(node, info, brush);
 
         _painter.paint(shape, brush, {
             .scissor = info.compositeScissor,
@@ -1837,10 +1862,30 @@ void Document::_renderNodeForeground(Node& node, _RenderInfo const& info) {
     }
 }
 
-void Document::_renderNodeShadow(Node& node, _RenderInfo const& info, ImageBrush const& brush) {
+void Document::_renderNodeOuterShadow(Node& node, _RenderInfo const& info, ImageBrush const& brush) {
     PROFILE
 
-    auto const& layerRect = *info.layerRect;
+    if (node._shadow.has_value() == false) return;
+    if (node._shadow->inset.value_or(false) == true) return;
+
+    _renderNodeShadow(node, info, QuadShape{ *info.layerRect }, brush);
+}
+
+void Document::_renderNodeInnerShadow(Node& node, _RenderInfo const& info) {
+    PROFILE
+
+    if (node._shadow.has_value() == false) return;
+    if (node._shadow->inset.value_or(false) == false) return;
+
+    auto const shape = _GetPaddingShape(info.borderShape, (node._computedBorderEdge * _scale));
+
+    if ((shape.rect.width <= 0.0f) || (shape.rect.height <= 0.0f)) return;
+
+    _renderNodeShadow(node, info, shape, ColorBrush{ .color = COLOR_BLACK });
+}
+
+void Document::_renderNodeShadow(Node& node, _RenderInfo const& info, QuadShape const& shape, Brush const& brush) {
+    PROFILE
 
     if (node._shadow.has_value() == false) return;
 
@@ -1849,6 +1894,7 @@ void Document::_renderNodeShadow(Node& node, _RenderInfo const& info, ImageBrush
 
     if (shadowColor.alpha <= 0.0f) return;
 
+    auto const inset   = shadow.inset.value_or(false);
     auto const radius  = (shadow.blur.value_or(0.0f) * _scale);
     auto const spread  = (shadow.spread.value_or(Vec2{}) * _scale);
     auto const offset = (shadow.offset.value_or(Vec2{}) * _scale);
@@ -1857,27 +1903,35 @@ void Document::_renderNodeShadow(Node& node, _RenderInfo const& info, ImageBrush
         std::ceil(radius + std::max(spread.y, 0.0f))
     };
     auto const shadowSize = Vec2{
-        (layerRect.width  + (padding.x * 2.0f)),
-        (layerRect.height + (padding.y * 2.0f))
+        (shape.rect.width  + (padding.x * 2.0f)),
+        (shape.rect.height + (padding.y * 2.0f))
     };
-    auto const shadowShape = QuadShape{
-        Vec4{ padding, layerRect.size }
-    };
+    auto shadowShape = shape;
+    shadowShape.rect = Vec4{ padding, shape.rect.size };
 
     auto rebake = false;
     auto shadowKey = shadow;
-    shadowKey.offset = std::nullopt;
+    if (inset == false) shadowKey.offset = std::nullopt; /* a drop shadow applies its offset at composite time */
 
-    auto const clipKey = info.clipRect.getIntersection(
-        Vec4{ 0.0f, 0.0f, layerRect.width, layerRect.height }
-    );
+    /* the inner silhouette is the border box, which doesn't depend on the clip */
+    auto const clipKey = inset
+        ? std::optional<Vec4>{}
+        : std::optional<Vec4>{ info.clipRect.getIntersection(Vec4{ {}, shape.rect.size }) };
 
-    auto const radiusKey = Vec4{
-        node._borderTopLeftRadius.value_or(node._borderRadius.value_or(0.0f)),
-        node._borderTopRightRadius.value_or(node._borderRadius.value_or(0.0f)),
-        node._borderBottomRightRadius.value_or(node._borderRadius.value_or(0.0f)),
-        node._borderBottomLeftRadius.value_or(node._borderRadius.value_or(0.0f))
-    };
+    /* the inner silhouette's radii already fold in the border widths */
+    auto const radiusKey = inset
+        ? Vec4{
+            _ResolveRadius(shape.borderTopLeftRadius, shape.borderRadius),
+            _ResolveRadius(shape.borderTopRightRadius, shape.borderRadius),
+            _ResolveRadius(shape.borderBottomRightRadius, shape.borderRadius),
+            _ResolveRadius(shape.borderBottomLeftRadius, shape.borderRadius)
+        }
+        : Vec4{
+            _ResolveRadius(node._borderTopLeftRadius, node._borderRadius),
+            _ResolveRadius(node._borderTopRightRadius, node._borderRadius),
+            _ResolveRadius(node._borderBottomRightRadius, node._borderRadius),
+            _ResolveRadius(node._borderBottomLeftRadius, node._borderRadius)
+        };
 
     if (
         (node._shadowImage == nullptr) ||
@@ -1910,14 +1964,16 @@ void Document::_renderNodeShadow(Node& node, _RenderInfo const& info, ImageBrush
                 ShadowFilter{
                     .radius = radius,
                     .color = shadowColor,
-                    .spread = (shadow.spread.has_value() ? std::optional<Vec2>{ spread } : std::optional<Vec2>{})
+                    .offset = (inset ? std::optional<Vec2>{ offset } : std::optional<Vec2>{}),
+                    .spread = (shadow.spread.has_value() ? std::optional<Vec2>{ spread } : std::optional<Vec2>{}),
+                    .inset = inset
                 }
             }
         });
         _painter.endPaint();
     }
 
-    auto const shadowImageShape = QuadShape{ Vec4{ (layerRect.origin - padding + offset), shadowSize } };
+    auto const shadowImageShape = QuadShape{ Vec4{ (shape.rect.origin - padding + (inset ? Vec2{} : offset)), shadowSize } };
     auto const shadowImageBrush = ImageBrush{
         .image = &*node._shadowImage,
         .positionX = ImagePosition::Start,
@@ -1926,8 +1982,8 @@ void Document::_renderNodeShadow(Node& node, _RenderInfo const& info, ImageBrush
         .filterMin = ImageFilter::Nearest
     };
     _painter.paint(shadowImageShape, shadowImageBrush, {
-        .scissor = info.compositeScissor,
-        .opacity = node._opacity
+        .scissor = (inset ? info.scissorRect : info.compositeScissor),
+        .opacity = (inset ? std::optional<float>{} : node._opacity)
     });
 }
 
