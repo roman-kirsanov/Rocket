@@ -763,6 +763,26 @@ TEST(Painter, NestedPassSeesOuterDraws) {
     EXPECT_EQ(pixel[1], 0);
 }
 
+/* A semi-transparent clear color is straight RGBA like every brush color, so
+   a layer cleared to half-alpha red composites exactly like a half-alpha red
+   fill: the left half (the layer) and the right half (the fill) must match. */
+TEST(Painter, LayerClearSemitransparent) {
+    EXPECT_TRUE(runCase("layer-clear-semitransparent", 128, 128, [&](Painter& painter, Image&) {
+        auto const color = Vec4{ 1.0f, 0.0f, 0.0f, 0.5f };
+        auto layer = Image(Vec2(64.0f, 128.0f));
+
+        painter.beginPaint(ImagePaintTarget{ .image = layer, .clearColor = color });
+        painter.endPaint();
+
+        painter.paint(QuadShape{ .rect = { 0.0f, 0.0f, 64.0f, 128.0f } }, ImageBrush{
+            .image     = &layer,
+            .positionX = ImagePosition::Start,
+            .positionY = ImagePosition::Start
+        });
+        painter.paint(QuadShape{ .rect = { 64.0f, 0.0f, 64.0f, 128.0f } }, ColorBrush{ .color = color });
+    }));
+}
+
 /* --- layer compositing: a nested offscreen pass composited back --- */
 
 TEST(Painter, ComboNestedLayer) {

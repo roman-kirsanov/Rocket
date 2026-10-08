@@ -30,7 +30,7 @@ class Window;
 struct ImagePaintTarget {
     /** The image to render into. */
     Image& image;
-    /** If set, the image is cleared to this color at the start of the pass. */
+    /** If set, the image is cleared to this straight (non-premultiplied) RGBA color at the start of the pass. */
     std::optional<Vec4> clearColor;
 };
 
@@ -46,7 +46,7 @@ struct ImagePaintTarget {
 struct WindowPaintTarget {
     /** The window to render into. */
     class Window& window;
-    /** If set, the drawable is cleared to this color at the start of the pass. */
+    /** If set, the drawable is cleared to this straight (non-premultiplied) RGBA color at the start of the pass. */
     std::optional<Vec4> clearColor;
 };
 

@@ -296,7 +296,12 @@ static void _BeginRenderPass(_RenderPass& renderPass, id<MTLCommandBuffer> comma
 
     if (clear.has_value()) {
         descriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
-        descriptor.colorAttachments[0].clearColor = ::MTLClearColorMake(clear->red, clear->green, clear->blue, clear->alpha);
+        descriptor.colorAttachments[0].clearColor = ::MTLClearColorMake( /* the target is premultiplied; the clear color is straight RGBA */
+            (clear->red * clear->alpha),
+            (clear->green * clear->alpha),
+            (clear->blue * clear->alpha),
+            clear->alpha
+        );
     }
 
     renderPass.width = width;
