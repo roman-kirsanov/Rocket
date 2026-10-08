@@ -902,8 +902,8 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
     auto const gradientBrush = brush.as<GradientBrush>();
     auto const blurFilter = options.filter.has_value() ? options.filter->as<BlurFilter>() : nullptr;
     auto const shadowFilter = options.filter.has_value() ? options.filter->as<ShadowFilter>() : nullptr;
-    auto& renderPass = *_impl->renderPassStack.top();
     auto const blend = options.blend.value_or(Blend::Over);
+    auto& renderPass = *_impl->renderPassStack.top();
 
     auto const drawShape = [&](_RenderPass& pass, std::optional<Vec4> const& scissor, Blend mode) {
         assert(pass.encoder != nil);
@@ -987,9 +987,6 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
             static_cast<float>(pass.height)
         };
 
-        // A drop shadow is displaced by translating the composite quad; an inset shadow
-        // keeps the quad in place and shifts the sampled field in the shader instead, so
-        // the silhouette mask stays aligned with the shape.
         auto const transform = shadowFilter->inset
             ? Mat3{}
             : Mat3{}.toTranslated(shadowFilter->offset.value_or(Vec2{}));
@@ -1031,10 +1028,6 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
     } else if (shadowFilter != nullptr) {
         _SuspendRenderPass(renderPass);
 
-        // Dilate (per axis), then blur horizontally, ping-ponging between the two
-        // scratch textures; the composite blurs vertically onto the target. Passes
-        // with nothing to do are skipped, so the composite may read the shape
-        // texture directly.
         auto [ source, target ] = _impl->getFilterTextures(renderPass.width, renderPass.height).textures;
         auto const filterFormat = (MTLPixelFormat)__GetDefaultTextureFormat();
         auto const clearColor = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f };
