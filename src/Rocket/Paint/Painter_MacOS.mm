@@ -1002,8 +1002,8 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
     auto const colorBrush = brush.as<ColorBrush>();
     auto const imageBrush = brush.as<ImageBrush>();
     auto const gradientBrush = brush.as<GradientBrush>();
-    auto const blurFilter = options.filter.has_value() ? options.filter->as<BlurFilter>() : nullptr;
     auto const shadowFilter = options.filter.has_value() ? options.filter->as<ShadowFilter>() : nullptr;
+    auto const blurFilter = options.filter.has_value() ? options.filter->as<BlurFilter>() : nullptr;
     auto const blend = options.blend.value_or(Blend::Over);
 
     auto const drawShape = [&](_RenderPass& pass, std::optional<Vec4> const& scissor, Blend mode, Vec2 const& scale) {
