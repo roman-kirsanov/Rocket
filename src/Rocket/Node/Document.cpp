@@ -1895,12 +1895,18 @@ void Document::_renderNodeShadow(Node& node, _RenderInfo const& info, QuadShape 
     if (shadowColor.alpha <= 0.0f) return;
 
     auto const inset   = shadow.inset.value_or(false);
-    auto const radius  = (shadow.blur.value_or(0.0f) * _scale);
     auto const spread  = (shadow.spread.value_or(Vec2{}) * _scale);
-    auto const offset = (shadow.offset.value_or(Vec2{}) * _scale);
+    auto const offset  = (shadow.offset.value_or(Vec2{}) * _scale);
+    auto const filter  = ShadowFilter{
+        .radius = (shadow.blur.value_or(0.0f) * _scale),
+        .color = shadowColor,
+        .offset = (inset ? std::optional<Vec2>{ offset } : std::optional<Vec2>{}),
+        .spread = (shadow.spread.has_value() ? std::optional<Vec2>{ spread } : std::optional<Vec2>{}),
+        .inset = inset
+    };
     auto const padding = Vec2{
-        std::ceil(radius + std::max(spread.x, 0.0f)),
-        std::ceil(radius + std::max(spread.y, 0.0f))
+        std::ceil(filter.getExtent() + std::max(spread.x, 0.0f)),
+        std::ceil(filter.getExtent() + std::max(spread.y, 0.0f))
     };
     auto const shadowSize = Vec2{
         (shape.rect.width  + (padding.x * 2.0f)),
@@ -1959,17 +1965,7 @@ void Document::_renderNodeShadow(Node& node, _RenderInfo const& info, QuadShape 
                 .clearColor = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f }
             }
         );
-        _painter.paint(shadowShape, brush, {
-            .filter = Filter{
-                ShadowFilter{
-                    .radius = radius,
-                    .color = shadowColor,
-                    .offset = (inset ? std::optional<Vec2>{ offset } : std::optional<Vec2>{}),
-                    .spread = (shadow.spread.has_value() ? std::optional<Vec2>{ spread } : std::optional<Vec2>{}),
-                    .inset = inset
-                }
-            }
-        });
+        _painter.paint(shadowShape, brush, { .filter = Filter{ filter } });
         _painter.endPaint();
     }
 

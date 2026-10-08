@@ -21,6 +21,23 @@ TEST(Filter, BlurFilterEqualityFollowsRadius) {
     ASSERT_TRUE(!(a == c));
 }
 
+/* Radius follows the CSS feature each filter mirrors: filter: blur() takes
+   the standard deviation itself, box-shadow takes twice it. Both kernels
+   reach three sigmas. */
+TEST(Filter, RadiusFollowsWebConventions) {
+    auto const blur = BlurFilter{ .radius = 4.0f };
+    ASSERT_TRUE(blur.getSigma() == 4.0f);
+    ASSERT_TRUE(blur.getExtent() == 12.0f);
+
+    auto const shadow = ShadowFilter{ .radius = 8.0f };
+    ASSERT_TRUE(shadow.getSigma() == 4.0f);
+    ASSERT_TRUE(shadow.getExtent() == 12.0f);
+
+    auto const hard = ShadowFilter{ .radius = 0.0f };
+    ASSERT_TRUE(hard.getSigma() == 0.0f);
+    ASSERT_TRUE(hard.getExtent() == 0.0f);
+}
+
 /* ShadowFilter equality covers all four fields. */
 TEST(Filter, ShadowFilterEqualityCoversAllFields) {
     ShadowFilter a{4.0f, Vec4(0.0f, 0.0f, 0.0f, 1.0f), Vec2(1.0f, 2.0f), Vec2(3.0f, 4.0f)};

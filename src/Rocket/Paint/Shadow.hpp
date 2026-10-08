@@ -25,7 +25,7 @@ struct Shadow {
     std::optional<Vec2> offset;
     /** Amount by which the shadow is expanded beyond the shape boundary. */
     std::optional<Vec2> spread;
-    /** Blur radius in pixels. */
+    /** Blur radius in pixels, as CSS box-shadow defines it: twice the gaussian's standard deviation. */
     std::optional<float> blur;
     /** Casts the shadow inward from the node's padding box (inside the border), under its text and children, instead of as a drop shadow. */
     std::optional<bool> inset;

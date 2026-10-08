@@ -344,12 +344,12 @@ fragment float4 shadowFilterDilateFragment(VertexResult in [[stage_in]], ShadowF
 
 // Separable gaussian blur of the field along one axis.
 fragment float4 shadowFilterBlurFragment(VertexResult in [[stage_in]], ShadowFilterFieldUniforms constant& uFilter [[buffer(1)]], texture2d<float> texture0 [[texture(0)]], sampler sampler0 [[sampler(0)]]) {
-    float  sigma = max(float(uFilter.radius) / 3.0f, 0.0001f);
+    float  sigma = max(uFilter.sigma, 0.0001f);
     float2 step  = (uFilter.direction * uFilter.texel);
     float  sum   = 0.0f;
     float  wsum  = 0.0f;
 
-    for (int i = -uFilter.radius; i <= uFilter.radius; i++) {
+    for (int i = -uFilter.taps; i <= uFilter.taps; i++) {
         float w = _gaussianWeight(i, sigma);
         sum  += (_shadowField(texture0, sampler0, (in.screenUV + (step * float(i))), uFilter.fromSilhouette, uFilter.invert).x * w);
         wsum += w;
@@ -362,7 +362,7 @@ fragment float4 shadowFilterBlurFragment(VertexResult in [[stage_in]], ShadowFil
 
 // Vertical gaussian blur of the field, tinted and composited onto the target.
 fragment float4 shadowFilterCompositeFragment(VertexResult in [[stage_in]], ShadowFilterUniforms constant& uFilter [[buffer(1)]], texture2d<float> texture0 [[texture(0)]], sampler sampler0 [[sampler(0)]]) {
-    float sigma = max(float(uFilter.radius) / 3.0f, 0.0001f);
+    float sigma = max(uFilter.sigma, 0.0001f);
     float sum   = 0.0f;
     float wsum  = 0.0f;
 
@@ -374,7 +374,7 @@ fragment float4 shadowFilterCompositeFragment(VertexResult in [[stage_in]], Shad
         fieldUV -= (uFilter.offset * uFilter.texel);
     }
 
-    for (int i = -int(uFilter.radius); i <= int(uFilter.radius); i++) {
+    for (int i = -uFilter.taps; i <= uFilter.taps; i++) {
         float w   = _gaussianWeight(i, sigma);
         float2 uv = (fieldUV + float2(0.0f, float(i) * uFilter.texel.y));
         sum  += (_shadowField(texture0, sampler0, uv, uFilter.fromSilhouette, uFilter.invert).x * w);

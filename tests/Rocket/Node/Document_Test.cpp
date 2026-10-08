@@ -2002,9 +2002,9 @@ TEST(Document, RenderInsetShadowPaintsInsideNodeWithoutLayer) {
     ASSERT_TRUE(bakes[0].offset.has_value());
     ASSERT_TRUE(bakes[0].offset.value() == Vec2(2.0f, 3.0f));
     /* the silhouette is the 100x50 box minus the 2px border, offset by the
-       4px blur padding, with 8 - 2 corners */
+       blur's 6px reach (three sigmas of blur / 2), with 8 - 2 corners */
     ASSERT_TRUE(bakeShape.has_value());
-    ASSERT_TRUE(bakeShape->rect == Vec4(4.0f, 4.0f, 96.0f, 46.0f));
+    ASSERT_TRUE(bakeShape->rect == Vec4(6.0f, 6.0f, 96.0f, 46.0f));
     ASSERT_TRUE(bakeShape->borderTopLeftRadius == 6.0f);
     ASSERT_TRUE(bakeShape->borderBottomRightRadius == 6.0f);
 
@@ -2035,7 +2035,7 @@ TEST(Document, RenderInsetShadowPaintsInsideNodeWithoutLayer) {
     document.update();
     document.render();
     ASSERT_TRUE(bakes.size() == 3);
-    ASSERT_TRUE(bakeShape->rect == Vec4(4.0f, 4.0f, 96.0f, 46.0f));
+    ASSERT_TRUE(bakeShape->rect == Vec4(6.0f, 6.0f, 96.0f, 46.0f));
     ASSERT_TRUE(bakeShape->borderTopLeftRadius == 4.0f);
     ASSERT_TRUE(bakeShape->borderTopRightRadius == 6.0f);
 }
@@ -2259,10 +2259,11 @@ TEST(Document, RenderShadowCompositeNotClippedToOwnRect) {
     document.update();
     document.render();
 
-    /* the shadow image composites first, padded by the blur beyond the node's
-       border rect on every side; the layer image follows at the node's rect */
+    /* the shadow image composites first, padded by the blur's 6px reach (three
+       sigmas of blur / 2) beyond the node's border rect on every side; the
+       layer image follows at the node's rect */
     ASSERT_TRUE(composites.size() == 2);
-    ASSERT_TRUE(composites[0].rect == Vec4(-4.0f, -4.0f, 108.0f, 58.0f));
+    ASSERT_TRUE(composites[0].rect == Vec4(-6.0f, -6.0f, 112.0f, 62.0f));
     ASSERT_TRUE(composites[1].rect == Vec4(0.0f, 0.0f, 100.0f, 50.0f));
 
     /* both scissors are the document-sized clip, which contains the whole

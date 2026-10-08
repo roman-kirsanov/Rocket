@@ -76,7 +76,8 @@ struct ShadowFilterUniforms {
     FLOAT1 opacity;
     FLOAT2 texel;
     FLOAT2 offset;         // inset field displacement, in pixels
-    INT1   radius;
+    FLOAT1 sigma;          // gaussian standard deviation in texels
+    INT1   taps;           // gaussian half-width in taps
     INT1   inset;          // 0 = drop shadow, 1 = inset
     INT1   fromSilhouette; // 1 = source is the shape texture (.a), 0 = a field texture (.r/.g)
     INT1   invert;         // 1 = complement the field (no earlier pass did it)
@@ -91,7 +92,8 @@ struct ShadowFilterFieldUniforms {
     FLOAT2 texel;
     FLOAT2 direction;      // (1, 0) horizontal pass, (0, 1) vertical pass
     FLOAT1 spread;         // dilate pass: extent in pixels along direction; negative erodes
-    INT1   radius;         // blur pass: gaussian half-width in taps
+    FLOAT1 sigma;          // blur pass: gaussian standard deviation in texels
+    INT1   taps;           // blur pass: gaussian half-width in taps
     INT1   fromSilhouette; // 1 = source is the shape texture (.a), 0 = a field texture (.r/.g)
     INT1   invert;         // 1 = complement the field (first pass of an inset chain)
 };
