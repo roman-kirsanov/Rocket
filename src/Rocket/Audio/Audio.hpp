@@ -105,7 +105,7 @@ public:
      * @param length Range length in milliseconds; 0 plays to the end of
      *               the clip.
      */
-    Sound(Audio& audio, float start = 0.0f, float length = 0.0f);
+    Sound(Audio const& audio, float start = 0.0f, float length = 0.0f);
 
     Sound(Sound &&) = delete;
     Sound(Sound const&) = delete;
@@ -212,7 +212,7 @@ public:
     float getStart() const;
 
     /** Returns the audio the sound plays from. */
-    Audio& getAudio() const;
+    Audio const& getAudio() const;
 
     /**
      * Returns true while the sound is playing (not paused, not finished, not
@@ -227,7 +227,7 @@ public:
 private:
     struct _Sound;
     _Sound* _impl;
-    Audio* _audio;
+    Audio const* _audio;
     float _start;
     float _length;
     float _volume;

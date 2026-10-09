@@ -85,7 +85,7 @@ Sound::~Sound() {
     __done();
 }
 
-Sound::Sound(Audio& audio, float start, float length)
+Sound::Sound(Audio const& audio, float start, float length)
     : _impl(nullptr)
     , _audio(&audio)
     , _start(start)
@@ -252,7 +252,7 @@ float Sound::getStart() const {
     return _start;
 }
 
-Audio& Sound::getAudio() const {
+Audio const& Sound::getAudio() const {
     PROFILE
 
     return *_audio;
