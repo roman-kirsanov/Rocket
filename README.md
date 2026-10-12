@@ -2,6 +2,8 @@
 
 **Declarative native UI for modern C++.**
 
+https://github.com/user-attachments/assets/9a6af07c-1026-42cd-a801-980949e486c1
+
 ```cpp
 void Button(std::string const& title, std::function<void()> const& onClick) {
     Node({
