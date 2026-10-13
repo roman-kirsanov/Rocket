@@ -167,7 +167,8 @@ private:
 
 /** Fired when the mouse wheel is scrolled over the target node: the hovered
     node, or the Document when there is none. preventDefault() cancels the
-    scroll. */
+    scroll. A pinch on the trackpad arrives as this event with the control
+    modifier set (see MouseWheelWindowEvent). */
 class MouseWheelNodeEvent : public NodeEvent {
 public:
     /**

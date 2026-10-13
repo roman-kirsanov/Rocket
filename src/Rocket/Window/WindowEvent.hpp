@@ -173,6 +173,13 @@ private:
  * The mouse wheel or trackpad scrolled.
  *
  * Note: getPosition returns the scroll delta (x/y), not a cursor position.
+ *
+ * A pinch on the trackpad arrives as this event too, as it does in Chrome:
+ * with the control modifier set although no key is held, no horizontal delta,
+ * and a vertical delta of 100 times the natural logarithm of the change in
+ * scale, positive while the fingers spread apart. A listener that multiplies
+ * its scale by exp(delta.y / 100) follows the fingers. A pinch cannot be told
+ * apart from a wheel turned with Control held.
  */
 class MouseWheelWindowEvent : public WindowEvent {
 public:

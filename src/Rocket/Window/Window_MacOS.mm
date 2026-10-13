@@ -1,4 +1,5 @@
 #include <map>
+#include <cmath>
 #include <optional>
 #include <iostream>
 #include <cassert>
@@ -482,6 +483,20 @@ static std::string _SanitizeInput(NSString*);
 
     if (self->_onMouseWheel != nil) {
         self->_onMouseWheel({ deltaX, deltaY }, Rocket::_ModifiersConvert(event.modifierFlags));
+    }
+}
+
+- (void)magnifyWithEvent:(NSEvent*)event {
+    PROFILE
+
+    /* A pinch is reported as a wheel turn with Control held, as Chrome does it: the turn is
+       100 times the natural logarithm of the change in scale, so a listener that multiplies
+       its scale by exp(wheel.y / 100) follows the fingers. */
+    if (self->_onMouseWheel != nil) {
+        auto modifiers = Rocket::_ModifiersConvert(event.modifierFlags);
+        modifiers.control = true;
+
+        self->_onMouseWheel({ 0.0f, (std::log(1.0f + static_cast<float>(event.magnification)) * 100.0f) }, modifiers);
     }
 }
 
