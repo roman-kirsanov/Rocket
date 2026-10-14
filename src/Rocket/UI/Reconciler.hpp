@@ -170,7 +170,6 @@ private:
     void _removeComponentChild(_Component*, _Component*);
     void _removeComponentFromParent(_Component*);
     void _unmountComponent(_Component*);
-    bool _checkKeyDuplicate(std::string const& key);
     void _beginUpdate();
     void _endUpdate();
     void _abortUpdate();

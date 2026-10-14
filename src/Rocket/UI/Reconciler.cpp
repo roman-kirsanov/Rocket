@@ -1,5 +1,6 @@
 #include <stack>
 #include <stdexcept>
+#include <unordered_set>
 #include <unordered_map>
 #include <inplace_vector.hpp>
 #include <Rocket/UI/Reconciler.hpp>
@@ -22,6 +23,7 @@ struct Reconciler::_Component {
     _Component* lastChild = nullptr;
     _Component* nextSibling = nullptr;
     _Component* prevSibling = nullptr;
+    _Component* expectedNextChild = nullptr;
     std::int64_t type = 0;
     std::int64_t index = 0;
     std::string id;
@@ -30,6 +32,7 @@ struct Reconciler::_Component {
     std::int64_t revision = 0;
     std::int64_t nextChildIndex = 0;
     std::int64_t nextStateIndex = 0;
+    std::unordered_set<std::string> usedKeys;
     std::unordered_map<std::int64_t, std::any> state;
     std::unordered_map<std::int64_t, std::int64_t> keySeq;
     lyn::inplace_vector<_Context, _contextCapacity> contexts;
@@ -248,24 +251,35 @@ void Reconciler::_openComponent(std::int64_t type, std::string const& name, std:
         throw std::runtime_error("Reconciler is not updating");
     }
 
-    if ((key.empty() == false) && _checkKeyDuplicate(key)) {
-        throw std::runtime_error(
-            std::format("Component `{}` renders duplicate key `{}` for `{}`", _currentComponent->name, key, name)
-        );
-    }
+    auto id = std::string();
 
-    auto id = (
-        key.empty()
-            ? (name + std::to_string(_currentComponent->keySeq[type]++))
-            : key
-    );
+    if (key.empty()) {
+        id = (name + std::to_string(_currentComponent->keySeq[type]++));
+    } else {
+        id = key;
+
+        auto [ _, inserted ] = _currentComponent->usedKeys.insert(key);
+        if (inserted == false) {
+            throw std::runtime_error(
+                std::format("Component `{}` renders duplicate key `{}` for `{}`", _currentComponent->name, key, name)
+            );
+        }
+    }
 
     auto component = static_cast<_Component*>(nullptr);
 
-    for (auto child = _currentComponent->firstChild; child != nullptr; child = child->nextSibling) {
-        if ((child->id == id) && (child->type == type)) {
-            component = child;
-            break;
+    if (
+        (_currentComponent->expectedNextChild != nullptr) &&
+        (_currentComponent->expectedNextChild->id == id) &&
+        (_currentComponent->expectedNextChild->type == type)
+    ) {
+        component = _currentComponent->expectedNextChild;
+    } else {
+        for (auto child = _currentComponent->firstChild; child != nullptr; child = child->nextSibling) {
+            if ((child->id == id) && (child->type == type)) {
+                component = child;
+                break;
+            }
         }
     }
 
@@ -283,11 +297,14 @@ void Reconciler::_openComponent(std::int64_t type, std::string const& name, std:
     component->nextChildIndex = 0;
     component->nextStateIndex = 0;
     component->contexts.clear();
+    component->usedKeys.clear();
+    component->expectedNextChild = component->firstChild;
 
     for (auto& entry : component->keySeq) {
         entry.second = 0;
     }
 
+    _currentComponent->expectedNextChild = component->nextSibling;
     _currentComponent = component;
 }
 
@@ -366,25 +383,6 @@ void Reconciler::_unmountComponent(_Component* component) {
     }
 }
 
-bool Reconciler::_checkKeyDuplicate(std::string const& key) {
-    PROFILE
-
-    if (_currentComponent == nullptr) {
-        throw std::runtime_error("Current component not found");
-    }
-
-    for (auto child = _currentComponent->firstChild; child != nullptr; child = child->nextSibling) {
-        if (
-            (child->revision == _currentComponent->revision) &&
-            (child->key == key)
-        ) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 void Reconciler::_beginUpdate() {
     PROFILE
 
@@ -393,7 +391,9 @@ void Reconciler::_beginUpdate() {
     _rootComponent->revision += 1;
     _rootComponent->nextChildIndex = 0;
     _rootComponent->nextStateIndex = 0;
-    _rootComponent->keySeq = {};
+    _rootComponent->keySeq.clear();
+    _rootComponent->usedKeys.clear();
+    _rootComponent->expectedNextChild = _rootComponent->firstChild;
 
     _currentComponent = _rootComponent;
 }

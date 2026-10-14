@@ -547,3 +547,32 @@ TEST(Reconciler, KeyedSiblingsRemovedAndAdded) {
     ASSERT_TRUE(itemValues["500"] == 1);
     ASSERT_TRUE(itemValues["501"] == 4);
 }
+
+TEST(Reconciler, KeyedSiblingInsertedInTheMiddle) {
+    auto reconciler = Reconciler();
+    auto keys = std::vector<std::string>{ "m1", "m2", "m3" };
+
+    reconciler.setUpdateFn([&] {
+        for (auto& key : keys) {
+            Item({ .key = key });
+        }
+    });
+
+    reconciler.update();
+    reconciler.update();
+
+    /* the newcomer breaks the order once; the siblings after it are still
+       found and keep their state */
+    keys = { "m1", "mx", "m2", "m3" };
+    reconciler.update();
+    ASSERT_TRUE(itemValues["m1"] == 3);
+    ASSERT_TRUE(itemValues["mx"] == 1);
+    ASSERT_TRUE(itemValues["m2"] == 3);
+    ASSERT_TRUE(itemValues["m3"] == 3);
+
+    /* the newcomer is appended to the children last, yet the next update
+       renders it in the middle and every sibling is still found */
+    reconciler.update();
+    ASSERT_TRUE(itemValues["mx"] == 2);
+    ASSERT_TRUE(itemValues["m3"] == 4);
+}
