@@ -65,23 +65,21 @@ void Painter::paint(Shape const& shape, Brush const& brush, PaintOptions const& 
     shape.match(
         [&](QuadShape const& quadShape) {
             shapeRect  = quadShape.rect;
-            shapeValid = (quadShape.rect.width > 0.0f) && (quadShape.rect.height > 0.0f);
+            shapeValid = (quadShape.rect.isEmpty() == false);
         },
         [&](EllipseShape const& ellipseShape) {
             shapeRect  = ellipseShape.rect;
-            shapeValid = (ellipseShape.rect.width > 0.0f) && (ellipseShape.rect.height > 0.0f);
+            shapeValid = (ellipseShape.rect.isEmpty() == false);
         },
         [&](QuadOutlineShape const& quadOutlineShape) {
             auto const borders = _ResolveBorders(quadOutlineShape);
             shapeRect  = quadOutlineShape.rect;
-            shapeValid = (quadOutlineShape.rect.width > 0.0f)
-                      && (quadOutlineShape.rect.height > 0.0f)
+            shapeValid = (quadOutlineShape.rect.isEmpty() == false)
                       && ((borders.left > 0.0f) || (borders.top > 0.0f) || (borders.right > 0.0f) || (borders.bottom > 0.0f));
         },
         [&](EllipseOutlineShape const& ellipseOutlineShape) {
             shapeRect  = ellipseOutlineShape.rect;
-            shapeValid = (ellipseOutlineShape.rect.width > 0.0f)
-                      && (ellipseOutlineShape.rect.height > 0.0f)
+            shapeValid = (ellipseOutlineShape.rect.isEmpty() == false)
                       && (ellipseOutlineShape.border.value_or(0.0f) > 0.0f);
         }
     );

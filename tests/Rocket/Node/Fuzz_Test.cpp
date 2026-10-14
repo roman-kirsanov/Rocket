@@ -233,7 +233,7 @@ struct Fuzzer {
                    empty clip region (zero width or height) is trivially inside */
                 auto const& clip = child->getComputedClipRect();
                 auto const& parentClip = node->getComputedClipRect();
-                if ((clip.width > 0.0f) && (clip.height > 0.0f)) {
+                if (clip.isEmpty() == false) {
                     ASSERT_TRUE(
                         (clip.x >= parentClip.x - 0.01f) &&
                         (clip.y >= parentClip.y - 0.01f) &&

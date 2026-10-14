@@ -517,3 +517,33 @@ TEST(Reconciler, DuplicateKeysTypes) {
         ASSERT_TRUE(trackedDtor == dtorsBefore + 1);
     }
 }
+
+TEST(Reconciler, KeyedSiblingsRemovedAndAdded) {
+    auto reconciler = Reconciler();
+    auto keys = std::vector<std::string>();
+
+    for (auto i = 0; i < 1000; i++) {
+        keys.push_back(std::to_string(i));
+    }
+
+    reconciler.setUpdateFn([&] {
+        for (auto& key : keys) {
+            Item({ .key = key });
+        }
+    });
+
+    reconciler.update();
+    reconciler.update();
+    ASSERT_TRUE(itemValues["0"] == 2);
+    ASSERT_TRUE(itemValues["999"] == 2);
+
+    /* A removed key unmounts; when it comes back it starts with fresh state. */
+    keys.erase(keys.begin() + 500);
+    reconciler.update();
+    ASSERT_TRUE(itemValues["501"] == 3);
+
+    keys.push_back("500");
+    reconciler.update();
+    ASSERT_TRUE(itemValues["500"] == 1);
+    ASSERT_TRUE(itemValues["501"] == 4);
+}

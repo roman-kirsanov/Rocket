@@ -151,7 +151,10 @@ public:
      *  painter and the node's border box in paint-target pixels (already
      *  scaled and offset for scrolling and layers). Fires on this node only and
      *  never bubbles. Shapes are given in the same pixels; clipping is up to
-     *  the listener, and changing the tree from a listener throws. */
+     *  the listener, and changing the tree from a listener throws. Like the rest
+     *  of the node, it fires only when the node's border box is visible: a
+     *  node scrolled or clipped out of view is not painted, whatever the
+     *  listener would draw outside its box. */
     Pub<class Painter const&, Vec4 const&> onPaint;
 
     Node();
@@ -953,6 +956,7 @@ private:
     Vec4 _computedBorderRectInDocument;
     Vec4 _computedMarginRectInDocument;
     Vec4 _computedClipRectInDocument;
+    Vec4 _computedVisibleRectInDocument;
     std::int64_t _computedZIndex;
     std::unique_ptr<Image> _layerImage;
     std::unique_ptr<Image> _shadowImage;

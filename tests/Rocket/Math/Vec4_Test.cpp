@@ -118,6 +118,33 @@ TEST(Vec4, GetIntersectionDisjoint) {
     ASSERT_TRUE(a.getIntersection(Vec4(0.0f, 10.0f, 5.0f, 5.0f)) == Vec4());
 }
 
+/* getUnion returns the smallest rectangle containing both, for overlapping
+   and for disjoint rectangles alike. */
+TEST(Vec4, GetUnion) {
+    Vec4 a(0.0f, 0.0f, 10.0f, 10.0f);
+    ASSERT_TRUE(a.getUnion(Vec4(5.0f, 5.0f, 10.0f, 10.0f)) == Vec4(0.0f, 0.0f, 15.0f, 15.0f));
+    ASSERT_TRUE(a.getUnion(Vec4(20.0f, -5.0f, 5.0f, 5.0f)) == Vec4(0.0f, -5.0f, 25.0f, 15.0f));
+    ASSERT_TRUE(a.getUnion(Vec4(2.0f, 3.0f, 4.0f, 5.0f)) == a);
+}
+
+/* getUnion ignores an empty rectangle on either side, wherever it lies. */
+TEST(Vec4, GetUnionEmpty) {
+    Vec4 a(5.0f, 5.0f, 10.0f, 10.0f);
+    ASSERT_TRUE(a.getUnion(Vec4()) == a);
+    ASSERT_TRUE(Vec4().getUnion(a) == a);
+    ASSERT_TRUE(a.getUnion(Vec4(100.0f, 100.0f, 0.0f, 50.0f)) == a);
+    ASSERT_TRUE(Vec4().getUnion(Vec4()) == Vec4());
+}
+
+/* isEmpty holds for a rectangle with no area, on either axis. */
+TEST(Vec4, IsEmpty) {
+    ASSERT_FALSE(Vec4(0.0f, 0.0f, 10.0f, 5.0f).isEmpty());
+    ASSERT_TRUE(Vec4().isEmpty());
+    ASSERT_TRUE(Vec4(3.0f, 4.0f, 0.0f, 5.0f).isEmpty());
+    ASSERT_TRUE(Vec4(3.0f, 4.0f, 10.0f, 0.0f).isEmpty());
+    ASSERT_TRUE(Vec4(3.0f, 4.0f, -1.0f, 5.0f).isEmpty());
+}
+
 /* getEdgePoint returns the boundary point toward the given point. */
 TEST(Vec4, GetEdgePoint) {
     Vec4 rect(0.0f, 0.0f, 10.0f, 10.0f);

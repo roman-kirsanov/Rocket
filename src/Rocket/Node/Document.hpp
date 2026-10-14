@@ -306,6 +306,7 @@ private:
     void _flushEvents();
     void _updateLayout();
     void _updateNode(Node&);
+    void _updateVisibleRect(Node&, Vec4 const&);
     void _updateTextScroll(Node&);
     void _updateInputArea();
     void _updateCursor();

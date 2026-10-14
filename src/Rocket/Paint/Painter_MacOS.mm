@@ -236,7 +236,7 @@ static std::optional<Vec4> _FilterBounds(Vec4 const& bounds, Mat3 const& transfo
 
     auto const rect = Vec4{ left, top, (right - left), (bottom - top) }.getIntersection(Vec4{ {}, target });
 
-    if ((rect.width <= 0.0f) || (rect.height <= 0.0f)) {
+    if (rect.isEmpty()) {
         return std::nullopt;
     }
 
@@ -1143,7 +1143,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         }
 
         auto const targetScissor = options.scissor.has_value() ? filterBounds->getIntersection(*options.scissor) : *filterBounds;
-        if ((targetScissor.width <= 0.0f) || (targetScissor.height <= 0.0f)) {
+        if (targetScissor.isEmpty()) {
             return;
         }
 
@@ -1181,7 +1181,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         }
 
         auto const targetScissor = options.scissor.has_value() ? filterBounds->getIntersection(*options.scissor) : *filterBounds;
-        if ((targetScissor.width <= 0.0f) || (targetScissor.height <= 0.0f)) {
+        if (targetScissor.isEmpty()) {
             return;
         }
 

@@ -2132,15 +2132,162 @@ TEST(Document, RenderShadowCompositeScissoredToScrollViewport) {
     document.render();
     ASSERT_TRUE(chip.getComputedBorderRect().getMaxX() <= viewport.x);
 
-    /* everything composited for the chip now lies left of the viewport, on
-       otherwise-visible window area — and every composite is scissored to the
-       viewport, so no ghost shadow can appear */
-    ASSERT_TRUE(composites.size() == 2);
-    for (auto const& composite : composites) {
-        ASSERT_TRUE(composite.rect.getMaxX() <= viewport.x);
-        ASSERT_TRUE(composite.scissor.has_value());
-        ASSERT_TRUE(composite.scissor.value() == viewport);
+    /* the chip and its shadow now lie wholly left of the viewport, on
+       otherwise-visible window area: nothing of them can show, so nothing is
+       composited and no ghost shadow can appear */
+    ASSERT_TRUE(composites.empty());
+}
+
+/* -------------------- skipping what cannot show -------------------------- */
+
+/* Updates and renders, returning the rect of every quad painted. */
+static std::vector<Vec4> _RenderQuads(Document& document) {
+    auto sink = NiceMock<PainterSink>();
+    auto scope = SinkScope(sink);
+    auto rects = std::vector<Vec4>();
+
+    ON_CALL(sink, paint(_, _, _)).WillByDefault(Invoke(
+        [&rects](Shape const& shape, Brush const&, PaintOptions const&) {
+            if (auto const quad = shape.as<QuadShape>()) {
+                rects.push_back(quad->rect);
+            }
+        }
+    ));
+
+    document.update();
+    document.needsRender();
+    document.render();
+
+    return rects;
+}
+
+/* A 100x100 viewport at the window origin, clipping a vertical column of
+   rows: the first row fills it, the second lies just below it. */
+struct _Viewport {
+    Window window;
+    Document document;
+    Node viewport;
+    Node first;
+    Node second;
+
+    _Viewport() : window(), document(window) {
+        window.setSize({ 640.0f, 480.0f });
+        document.setScale(1.0f);
+        document.setDirection(NodeDirection::Horizontal);
+
+        viewport.setWidth(100.0f);
+        viewport.setHeight(100.0f);
+        viewport.setDirection(NodeDirection::Vertical);
+        viewport.setOverflowY(NodeOverflow::Hidden);
+        document.appendChild(viewport);
+
+        for (auto row : { &first, &second }) {
+            row->setWidth(100.0f);
+            row->setHeight(100.0f);
+            viewport.appendChild(*row);
+        }
     }
+
+    /* A 20x20 painted child of the second row, placed back inside the viewport. */
+    void addReachingChild(Node& child) {
+        child.setPosition(NodePosition::Absolute);
+        child.setTop(-90.0f);
+        child.setWidth(20.0f);
+        child.setHeight(20.0f);
+        child.setBackground(ColorBrush{ .color = COLOR_WHITE });
+        second.appendChild(child);
+    }
+};
+
+/* A row clipped out of the viewport is not painted; the one inside is. */
+TEST(Document, RenderSkipsNodesClippedOutOfView) {
+    auto v = _Viewport();
+    v.first.setBackground(ColorBrush{ .color = COLOR_WHITE });
+    v.second.setBackground(ColorBrush{ .color = COLOR_WHITE });
+
+    EXPECT_THAT(_RenderQuads(v.document), ElementsAre(Vec4{ 0.0f, 0.0f, 100.0f, 100.0f }));
+}
+
+/* A child positioned back into view is painted although its row lies out of
+   it: a row is skipped only when nothing beneath it can show. (The row's own
+   background is still issued, scissored away by the viewport.) */
+TEST(Document, RenderPaintsAChildReachingBackIntoView) {
+    auto v = _Viewport();
+    auto child = Node();
+    v.second.setBackground(ColorBrush{ .color = COLOR_WHITE });
+    v.second.setOverflowX(NodeOverflow::Visible);
+    v.second.setOverflowY(NodeOverflow::Visible);
+    v.addReachingChild(child);
+
+    EXPECT_THAT(_RenderQuads(v.document), Contains(Vec4{ 0.0f, 10.0f, 20.0f, 20.0f }));
+}
+
+/* Overflow clips each axis on its own: a row out of view vertically that lets
+   content out only vertically keeps the viewport's vertical clip and adds its
+   own horizontal one, so a child reaching back into view is painted. */
+TEST(Document, RenderClipsEachOverflowAxisOnItsOwn) {
+    auto v = _Viewport();
+    auto child = Node();
+    v.second.setOverflowY(NodeOverflow::Visible);
+    v.addReachingChild(child);
+
+    auto const quads = _RenderQuads(v.document);
+
+    EXPECT_EQ(v.second.getComputedClipRect(), (Vec4{ 0.0f, 0.0f, 100.0f, 100.0f }));
+    EXPECT_THAT(quads, ElementsAre(Vec4{ 0.0f, 10.0f, 20.0f, 20.0f }));
+}
+
+/* An unclipped child escapes every ancestor clip, so it is painted even when
+   its row clips everything else away; a clipped one in its place is not. */
+TEST(Document, RenderPaintsAnUnclippedChildOfAHiddenRow) {
+    auto v = _Viewport();
+    auto unclipped = Node();
+    auto clipped = Node();
+    unclipped.setClipped(false);
+    v.addReachingChild(unclipped);
+    v.addReachingChild(clipped);
+
+    EXPECT_THAT(_RenderQuads(v.document), ElementsAre(Vec4{ 0.0f, 10.0f, 20.0f, 20.0f }));
+}
+
+/* A raised child is painted in its own pass, whatever happens to its row. */
+TEST(Document, RenderPaintsARaisedChildOfAHiddenRow) {
+    auto v = _Viewport();
+    auto child = Node();
+    v.second.setOverflowX(NodeOverflow::Visible);
+    v.second.setOverflowY(NodeOverflow::Visible);
+    child.setZIndex(1);
+    v.addReachingChild(child);
+
+    EXPECT_THAT(_RenderQuads(v.document), ElementsAre(Vec4{ 0.0f, 10.0f, 20.0f, 20.0f }));
+}
+
+/* A drop shadow cast back into view makes its node show: setting it lays the
+   document out again, so the node is painted on the next render. */
+TEST(Document, RenderPaintsAShadowCastBackIntoView) {
+    auto v = _Viewport();
+    v.second.setBackground(ColorBrush{ .color = COLOR_WHITE });
+
+    EXPECT_TRUE(_RenderQuads(v.document).empty());
+
+    v.second.setShadow(Shadow{ .offset = Vec2{ 0.0f, -50.0f } });
+
+    EXPECT_FALSE(_RenderQuads(v.document).empty());
+}
+
+/* onPaint fires only while the node's border box can show; whatever it draws
+   outside the box does not keep it painted. */
+TEST(Document, RenderFiresOnPaintOnlyWhileTheNodeCanShow) {
+    auto v = _Viewport();
+    auto paints = 0;
+    auto sub = Sub<class Painter const&, Vec4 const&>(v.second.onPaint, [&paints](class Painter const&, Vec4 const&) { paints += 1; });
+
+    _RenderQuads(v.document);
+    EXPECT_EQ(paints, 0);
+
+    v.first.setHeight(50.0f);
+    _RenderQuads(v.document);
+    EXPECT_EQ(paints, 1);
 }
 
 /* The baked shadow is keyed on the clip actually covering the layer: scrolling

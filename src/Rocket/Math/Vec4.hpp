@@ -90,12 +90,22 @@ union Vec4 {
     /** Returns the midpoint of the rectangle. */
     Vec2 getCenter() const;
 
+    /** Returns whether the rectangle covers no area (its width or height is zero or negative). */
+    bool isEmpty() const;
+
     /**
      * Returns the overlapping region with another rectangle.
      *
      * @param other The rectangle to intersect with.
      */
     Vec4 getIntersection(Vec4 const& other) const;
+
+    /**
+     * Returns the smallest rectangle containing both rectangles; an empty rectangle (see isEmpty) adds nothing.
+     *
+     * @param other The rectangle to unite with.
+     */
+    Vec4 getUnion(Vec4 const& other) const;
 
     /**
      * Returns the point where a ray from the rectangle's center through the given point crosses the rectangle's boundary.

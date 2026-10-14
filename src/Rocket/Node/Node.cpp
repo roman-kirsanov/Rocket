@@ -185,6 +185,7 @@ Node::Node()
     , _computedBorderRectInDocument()
     , _computedMarginRectInDocument()
     , _computedClipRectInDocument()
+    , _computedVisibleRectInDocument()
     , _computedZIndex()
     , _layerImage()
     , _shadowImage()
@@ -1463,7 +1464,7 @@ void Node::setShadow(std::optional<Shadow> const& shadow) {
         _shadow = shadow;
         _shadowImageShadow = std::nullopt;
         _shadowImage = nullptr;
-        _invalidateRender();
+        _invalidateLayout();
     }
 }
 
@@ -2185,17 +2186,18 @@ void Node::_resetTextState() {
 void Node::_resetLayoutState() {
     PROFILE
 
-    _computedTextRect             = {};
-    _computedBorderEdge           = {};
-    _computedBorderRect           = {};
-    _computedMarginRect           = {};
-    _computedContentRect          = {};
-    _scrollOverflow               = {};
-    _scrollPosition               = {};
-    _computedBorderRectInDocument = {};
-    _computedMarginRectInDocument = {};
-    _computedClipRectInDocument   = {};
-    _computedZIndex               = 0;
+    _computedTextRect              = {};
+    _computedBorderEdge            = {};
+    _computedBorderRect            = {};
+    _computedMarginRect            = {};
+    _computedContentRect           = {};
+    _scrollOverflow                = {};
+    _scrollPosition                = {};
+    _computedBorderRectInDocument  = {};
+    _computedMarginRectInDocument  = {};
+    _computedClipRectInDocument    = {};
+    _computedVisibleRectInDocument = {};
+    _computedZIndex                = 0;
 }
 
 void Node::_resetPaintState() {

@@ -86,6 +86,12 @@ Vec2 Vec4::getCenter() const {
     };
 }
 
+bool Vec4::isEmpty() const {
+    PROFILE
+
+    return (width <= 0.0f) || (height <= 0.0f);
+}
+
 Vec4 Vec4::getIntersection(Vec4 const& other) const {
     PROFILE
 
@@ -99,6 +105,23 @@ Vec4 Vec4::getIntersection(Vec4 const& other) const {
     } else {
         return { left, top, (right - left), (bottom - top) };
     }
+}
+
+Vec4 Vec4::getUnion(Vec4 const& other) const {
+    PROFILE
+
+    if (isEmpty()) return other;
+    if (other.isEmpty()) return *this;
+
+    auto const left = std::min(x, other.x);
+    auto const top = std::min(y, other.y);
+
+    return {
+        left,
+        top,
+        (std::max(getMaxX(), other.getMaxX()) - left),
+        (std::max(getMaxY(), other.getMaxY()) - top)
+    };
 }
 
 Vec2 Vec4::getEdgePoint(Vec2 const& point) const {

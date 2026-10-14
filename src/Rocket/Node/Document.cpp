@@ -136,6 +136,27 @@ static float _SnapBorderToPixelGrid(float value, float scale) {
     return (value > 0.0f) ? std::max((1.0f / scale), _SnapToPixelGrid(value, scale)) : 0.0f;
 }
 
+/* Narrows the span [start, start + size) to its overlap with [clipStart,
+   clipStart + clipSize), leaving it empty when they do not overlap. */
+static void _ClipSpan(float& start, float& size, float clipStart, float clipSize) {
+    auto const left = std::max(start, clipStart);
+    auto const right = std::min((start + size), (clipStart + clipSize));
+
+    start = left;
+    size = std::max(0.0f, (right - left));
+}
+
+/* How far a shadow reaches past the shape that casts it, in paint pixels. */
+static Vec2 _GetShadowPadding(Shadow const& shadow, float scale) {
+    auto const spread = (shadow.spread.value_or(Vec2{}) * scale);
+    auto const extent = ShadowFilter{ .radius = (shadow.blur.value_or(0.0f) * scale) }.getExtent();
+
+    return Vec2{
+        std::ceil(extent + std::max(spread.x, 0.0f)),
+        std::ceil(extent + std::max(spread.y, 0.0f))
+    };
+}
+
 static float _ResolveRadius(std::optional<float> const& corner, std::optional<float> const& uniform) {
     return corner.value_or(uniform.value_or(0.0f));
 }
@@ -1352,19 +1373,20 @@ void Document::_updateNode(Node& node) {
         std::max(0.0f, (node._computedBorderRectInDocument.height - borderEdge.top - borderEdge.bottom))
     };
 
-    /* An unset overflow clips, the same as Hidden: only Visible lets content out. */
+    /* An unset overflow clips, the same as Hidden: only Visible lets content
+       out. Each axis is clipped on its own, so a node outside the clip on one
+       axis keeps the other axis it lets content out on. */
+    auto& clipRect = node._computedClipRectInDocument;
+
     if (node._overflowX != NodeOverflow::Visible) {
-        auto newClipRect = node._computedClipRectInDocument.getIntersection(innerBorderRect);
-        node._computedClipRectInDocument.x = newClipRect.x;
-        node._computedClipRectInDocument.width = newClipRect.width;
+        _ClipSpan(clipRect.x, clipRect.width, innerBorderRect.x, innerBorderRect.width);
     }
 
     if (node._overflowY != NodeOverflow::Visible) {
-        auto newClipRect = node._computedClipRectInDocument.getIntersection(innerBorderRect);
-        node._computedClipRectInDocument.y = newClipRect.y;
-        node._computedClipRectInDocument.height = newClipRect.height;
+        _ClipSpan(clipRect.y, clipRect.height, innerBorderRect.y, innerBorderRect.height);
     }
 
+    auto visibleRect = Vec4{};
     auto scrollMaxX = 0.0f;
     auto scrollMaxY = 0.0f;
     auto contentMinX = 0.0f;
@@ -1374,6 +1396,8 @@ void Document::_updateNode(Node& node) {
 
     for (auto child = node._firstChild; child != nullptr; child = child->_nextSibling) {
         _updateNode(*child);
+
+        visibleRect = visibleRect.getUnion(child->_computedVisibleRectInDocument);
 
         if (child->_position == NodePosition::Fixed) {
             continue; // fixed children don't contribute to the content box or scrollable area
@@ -1407,6 +1431,8 @@ void Document::_updateNode(Node& node) {
         (contentMaxX - contentMinX),
         (contentMaxY - contentMinY)
     };
+
+    _updateVisibleRect(node, visibleRect);
 
     node._scrollOverflow = {
         _SnapToPixelGrid(std::max(0.0f, (scrollMaxX - (node._computedBorderRect.width  - node._computedBorderEdge.right  - padding.right))), _scale),
@@ -1632,11 +1658,54 @@ void Document::_updateAll() {
     _isUpdating = false;
 }
 
+void Document::_updateVisibleRect(Node& node, Vec4 const& childrenVisibleRect) {
+    PROFILE
+
+    if (node._visible == false) {
+        node._computedVisibleRectInDocument = {};
+        return;
+    }
+
+    /* Everything the node itself paints is scissored to its parent's clip,
+       or to the document when it is not clipped. */
+    auto const scissorRect = (
+        ((node._clipped == true) && (node._parent != nullptr))
+            ? node._parent->_computedClipRectInDocument
+            : Vec4{ {}, getSize() }
+    );
+
+    /* Background, border, foreground, inner shadow and onPaint use the border
+       box. Text, its selection and its caret can reach past the text's own box
+       (a single-line text paints into the slot its box gives it, an empty one
+       still shows a caret), so text counts as all of its scissor. */
+    auto paintRect = (
+        (node._display == NodeDisplay::Text)
+            ? scissorRect
+            : node._computedBorderRectInDocument
+    );
+
+    /* A drop shadow is cast from the node and its content, grown by the blur
+       and spread and moved by the offset, as _renderNodeShadow draws it. */
+    if (node._shadow.has_value() && (node._shadow->inset.value_or(false) == false)) {
+        auto const padding = (_GetShadowPadding(*node._shadow, _scale) / _scale);
+        auto const castRect = node._computedBorderRectInDocument.getUnion(
+            node._computedContentRect.toTranslated(node._computedBorderRectInDocument.origin)
+        );
+
+        paintRect = paintRect.getUnion(Vec4{
+            (castRect.origin - padding + node._shadow->offset.value_or(Vec2{})),
+            (castRect.size + (padding * 2.0f))
+        });
+    }
+
+    node._computedVisibleRectInDocument = paintRect.getIntersection(scissorRect).getUnion(childrenVisibleRect);
+}
+
 void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
     PROFILE
 
-    if (node._visible == false) return;
     if (node._computedZIndex != zIndex) return;
+    if (node._computedVisibleRectInDocument.isEmpty()) return; /* hidden, or nothing in this subtree can show */
 
     auto const info = _beginNodeRender(node, offset);
     if (info.empty == true) return;
@@ -1879,7 +1948,7 @@ void Document::_renderNodeInnerShadow(Node& node, _RenderInfo const& info) {
 
     auto const shape = _GetPaddingShape(info.borderShape, (node._computedBorderEdge * _scale));
 
-    if ((shape.rect.width <= 0.0f) || (shape.rect.height <= 0.0f)) return;
+    if (shape.rect.isEmpty()) return;
 
     _renderNodeShadow(node, info, shape, ColorBrush{ .color = COLOR_BLACK });
 }
@@ -1904,10 +1973,7 @@ void Document::_renderNodeShadow(Node& node, _RenderInfo const& info, QuadShape 
         .spread = (shadow.spread.has_value() ? std::optional<Vec2>{ spread } : std::optional<Vec2>{}),
         .inset = inset
     };
-    auto const padding = Vec2{
-        std::ceil(filter.getExtent() + std::max(spread.x, 0.0f)),
-        std::ceil(filter.getExtent() + std::max(spread.y, 0.0f))
-    };
+    auto const padding = _GetShadowPadding(shadow, _scale);
     auto const shadowSize = Vec2{
         (shape.rect.width  + (padding.x * 2.0f)),
         (shape.rect.height + (padding.y * 2.0f))
