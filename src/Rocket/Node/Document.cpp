@@ -1727,7 +1727,7 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
 Document::_RenderInfo Document::_beginNodeRender(Node& node, Vec2 const& offset) {
     PROFILE
 
-    auto const scaledRadius = [this](std::optional<float> const& radius) -> std::optional<float> {
+    auto const scaledRadius = [&](std::optional<float> const& radius) -> std::optional<float> {
         return radius.has_value() ? std::optional<float>{ (*radius * _scale) } : std::nullopt;
     };
 

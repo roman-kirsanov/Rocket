@@ -24,6 +24,8 @@ void Splitter(SplitterProps const& props) {
     struct _State {
         bool isDragging;
         std::optional<float> beginValue;
+        std::optional<float> resizedValue;
+        std::function<void(float)> onResize;
         class Node* targetBox;
         SplitterDirection direction;
         SplitterTarget target;
@@ -38,12 +40,13 @@ void Splitter(SplitterProps const& props) {
     state.target = props.target.value_or(SplitterTarget::Prev);
     state.direction = props.direction.value_or(SplitterDirection::Horizontal);
     state.nodeOnEvent = props.nodeProps.onEvent;
+    state.onResize = props.onResize;
 
     auto node = props.nodeProps;
     node.ref = &ref;
     node.zIndex = node.zIndex.value_or(1);
     node.selfAlignment = node.selfAlignment.value_or(NodeAlignment::Stretch);
-    node.onEvent = [&state, &ref](NodeEvent const& event) {
+    node.onEvent = [&](NodeEvent const& event) {
         if (state.nodeOnEvent) {
             state.nodeOnEvent(event);
         }
@@ -82,13 +85,20 @@ void Splitter(SplitterProps const& props) {
                     );
 
                     if (state.direction == SplitterDirection::Horizontal) {
-                        state.targetBox->setWidth(std::max(0.0f, state.beginValue.value() + translate.x));
+                        state.resizedValue = std::max(0.0f, state.beginValue.value() + translate.x);
+                        state.targetBox->setWidth(*state.resizedValue);
                     } else if (state.direction == SplitterDirection::Vertical) {
-                        state.targetBox->setHeight(std::max(0.0f, state.beginValue.value() + translate.y));
+                        state.resizedValue = std::max(0.0f, state.beginValue.value() + translate.y);
+                        state.targetBox->setHeight(*state.resizedValue);
                     }
                 }
             }
         } else if (event.is<MouseEndDragNodeEvent>()) {
+            if (state.resizedValue.has_value() && state.onResize) {
+                state.onResize(*state.resizedValue);
+            }
+
+            state.resizedValue = std::nullopt;
             state.beginValue = std::nullopt;
             state.isDragging = false;
             state.targetBox = nullptr;

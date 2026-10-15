@@ -8,6 +8,7 @@
 #pragma once
 
 #include <optional>
+#include <functional>
 #include <string>
 #include <Rocket/UI/Node.hpp>
 
@@ -37,6 +38,8 @@ struct SplitterProps {
     std::optional<Vec4> activeColor;
     /** Splitter color */
     std::optional<Vec4> color;
+    /** Called with the target's new width (Horizontal) or height (Vertical) when a drag that resized it ends. */
+    std::function<void(float)> onResize;
     /** Props forwarded to the underlying Node. */
     NodeProps nodeProps;
 };
@@ -44,7 +47,8 @@ struct SplitterProps {
 /**
  * Renders a draggable divider that resizes its target sibling by setting that
  * node's width (Horizontal) or height (Vertical) during the drag, clamped at
- * zero. Shows a resize cursor and a highlight while hovered or dragging.
+ * zero. Shows a resize cursor and a highlight while hovered or dragging, and
+ * reports the final size through onResize when the drag ends.
  *
  * @param props Desired splitter configuration for this render.
  */

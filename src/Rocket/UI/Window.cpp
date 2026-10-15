@@ -25,7 +25,7 @@ void Window(WindowProps const& props, std::function<void()> const& children) {
         _State() {
             PROFILE
 
-            eventSub.on(window.onEvent, [this](WindowEvent const& event) {
+            eventSub.on(window.onEvent, [&](WindowEvent const& event) {
                 if (onEvent) {
                     onEvent(event);
                 }

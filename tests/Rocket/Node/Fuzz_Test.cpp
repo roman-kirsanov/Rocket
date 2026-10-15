@@ -294,7 +294,7 @@ struct Fuzzer {
 
     /** Lets event listeners mutate the tree, update and move focus while events are being dispatched. */
     void enableListenerMutations() {
-        listenerSub.on(document.onEvent, [this](NodeEvent const&) {
+        listenerSub.on(document.onEvent, [&](NodeEvent const&) {
             if (listenerDepth >= 3) return;
             listenerDepth += 1;
 

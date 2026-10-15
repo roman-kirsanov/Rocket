@@ -179,7 +179,7 @@ inline void Sub<Arguments...>::on(Pub<Arguments...> const& pub, std::function<vo
 
     pub._subs.insert({
         subKey, {
-        [pubKey, this]() {
+        [&, pubKey]() {
             _pubs.erase(pubKey);
         },
         fn

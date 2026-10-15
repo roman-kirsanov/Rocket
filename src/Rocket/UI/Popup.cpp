@@ -62,7 +62,7 @@ void Popup(PopupProps const& props, std::function<void()> const& children) {
 
     /* A press anywhere outside the popup's parent (the anchor) closes it.
        The handler is fixed on mount, so it reads the callback from state. */
-    UseSubscription(document.onCaptureEvent, [&state, &nodeRef](NodeEvent const& event) {
+    UseSubscription(document.onCaptureEvent, [&](NodeEvent const& event) {
         if (event.is<MouseDownNodeEvent>()) {
             auto parentBox = (
                 (nodeRef != nullptr)

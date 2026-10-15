@@ -71,7 +71,7 @@ TEST(Object, OnDestroyPublishesOnce) {
     auto count = 0;
     Sub<> sub;
     auto* dog = new Dog();
-    sub.on(dog->onDestroy, [&count]() { count += 1; });
+    sub.on(dog->onDestroy, [&]() { count += 1; });
     ASSERT_TRUE(count == 0);
     delete dog;
     ASSERT_TRUE(count == 1);
@@ -99,7 +99,7 @@ TEST(Object, UnsubscribedHandlerNotCalled) {
     auto count = 0;
     Sub<> sub;
     auto* dog = new Dog();
-    sub.on(dog->onDestroy, [&count]() { count += 1; });
+    sub.on(dog->onDestroy, [&]() { count += 1; });
     sub.off(dog->onDestroy);
     delete dog;
     ASSERT_TRUE(count == 0);
@@ -112,8 +112,8 @@ TEST(Object, MultipleSubscribersAllNotified) {
     Sub<> subFirst;
     Sub<> subSecond;
     auto* dog = new Dog();
-    subFirst.on(dog->onDestroy, [&first]() { first += 1; });
-    subSecond.on(dog->onDestroy, [&second]() { second += 1; });
+    subFirst.on(dog->onDestroy, [&]() { first += 1; });
+    subSecond.on(dog->onDestroy, [&]() { second += 1; });
     delete dog;
     ASSERT_TRUE(first == 1);
     ASSERT_TRUE(second == 1);

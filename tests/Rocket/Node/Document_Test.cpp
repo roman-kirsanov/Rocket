@@ -263,7 +263,7 @@ TEST(Document, Hover) {
     document.update();
 
     auto events = std::vector<std::string>();
-    auto sub = Sub<NodeEvent const&>(a.onEvent, [&events](NodeEvent const& event) {
+    auto sub = Sub<NodeEvent const&>(a.onEvent, [&](NodeEvent const& event) {
         events.push_back(eventName(event));
     });
 
@@ -297,7 +297,7 @@ TEST(Document, Click) {
     document.update();
 
     auto events = std::vector<std::string>();
-    auto sub = Sub<NodeEvent const&>(a.onEvent, [&events](NodeEvent const& event) {
+    auto sub = Sub<NodeEvent const&>(a.onEvent, [&](NodeEvent const& event) {
         events.push_back(eventName(event));
     });
 
@@ -792,7 +792,7 @@ TEST(Document, RenderScrollOffsetsChildPaints) {
 
     auto childRects = std::vector<Vec4>();
     ON_CALL(sink, paint(_, _, _)).WillByDefault(Invoke(
-        [&childRects](Shape const& shape, Brush const&, PaintOptions const&) {
+        [&](Shape const& shape, Brush const&, PaintOptions const&) {
             if (auto quad = shape.as<QuadShape>()) {
                 if (quad->rect.width == 100.0f && quad->rect.height == 500.0f) {
                     childRects.push_back(quad->rect);
@@ -846,7 +846,7 @@ TEST(Document, RenderBorderRadiusScaledIntoShapes) {
     auto quads = std::vector<QuadShape>();
     auto outlines = std::vector<QuadOutlineShape>();
     ON_CALL(sink, paint(_, _, _)).WillByDefault(Invoke(
-        [&quads, &outlines](Shape const& shape, Brush const&, PaintOptions const&) {
+        [&](Shape const& shape, Brush const&, PaintOptions const&) {
             if (auto quad = shape.as<QuadShape>()) {
                 quads.push_back(*quad);
             }
@@ -1673,7 +1673,7 @@ TEST(Document, EditingSingleLineByDefaultEnterAndTabInsertNothing) {
 
     auto enterKeyDowns = 0;
     auto sub = Sub<NodeEvent const&>();
-    sub.on(box.onEvent, [&enterKeyDowns](NodeEvent const& event) {
+    sub.on(box.onEvent, [&](NodeEvent const& event) {
         if (auto e = event.as<KeyDownNodeEvent>()) {
             if (e->getScancode() == Rocket::Scancode::Enter) enterKeyDowns += 1;
         }
@@ -1859,7 +1859,7 @@ TEST(Document, RenderShadowRebakesOnlyOnChange) {
     auto scope = SinkScope(sink);
 
     auto imagePasses = 0;
-    ON_CALL(sink, beginPaint(_)).WillByDefault(Invoke([&imagePasses](PaintTarget const& target) {
+    ON_CALL(sink, beginPaint(_)).WillByDefault(Invoke([&](PaintTarget const& target) {
         if (target.as<ImagePaintTarget>() != nullptr) imagePasses += 1;
     }));
 
@@ -1901,7 +1901,7 @@ TEST(Document, RenderShadowRebakesOnBorderRadiusChange) {
     auto scope = SinkScope(sink);
 
     auto imagePasses = 0;
-    ON_CALL(sink, beginPaint(_)).WillByDefault(Invoke([&imagePasses](PaintTarget const& target) {
+    ON_CALL(sink, beginPaint(_)).WillByDefault(Invoke([&](PaintTarget const& target) {
         if (target.as<ImagePaintTarget>() != nullptr) imagePasses += 1;
     }));
 
@@ -1980,7 +1980,7 @@ TEST(Document, RenderInsetShadowPaintsInsideNodeWithoutLayer) {
         depth += 1;
         if (target.as<ImagePaintTarget>() != nullptr) imagePasses += 1;
     }));
-    ON_CALL(sink, endPaint()).WillByDefault(Invoke([&depth]() { depth -= 1; }));
+    ON_CALL(sink, endPaint()).WillByDefault(Invoke([&]() { depth -= 1; }));
     ON_CALL(sink, paint(_, _, _)).WillByDefault(Invoke(
         [&](Shape const& shape, Brush const& brush, PaintOptions const& options) {
             if (options.filter.has_value() && (options.filter->as<ShadowFilter>() != nullptr)) {
@@ -2094,8 +2094,8 @@ TEST(Document, RenderShadowCompositeScissoredToScrollViewport) {
 
     auto depth = 0;
     auto composites = std::vector<Composite>();
-    ON_CALL(sink, beginPaint(_)).WillByDefault(Invoke([&depth](PaintTarget const&) { depth += 1; }));
-    ON_CALL(sink, endPaint()).WillByDefault(Invoke([&depth]() { depth -= 1; }));
+    ON_CALL(sink, beginPaint(_)).WillByDefault(Invoke([&](PaintTarget const&) { depth += 1; }));
+    ON_CALL(sink, endPaint()).WillByDefault(Invoke([&]() { depth -= 1; }));
     ON_CALL(sink, paint(_, _, _)).WillByDefault(Invoke(
         [&](Shape const& shape, Brush const& brush, PaintOptions const& options) {
             auto const quad = shape.as<QuadShape>();
@@ -2147,7 +2147,7 @@ static std::vector<Vec4> _RenderQuads(Document& document) {
     auto rects = std::vector<Vec4>();
 
     ON_CALL(sink, paint(_, _, _)).WillByDefault(Invoke(
-        [&rects](Shape const& shape, Brush const&, PaintOptions const&) {
+        [&](Shape const& shape, Brush const&, PaintOptions const&) {
             if (auto const quad = shape.as<QuadShape>()) {
                 rects.push_back(quad->rect);
             }
@@ -2280,7 +2280,7 @@ TEST(Document, RenderPaintsAShadowCastBackIntoView) {
 TEST(Document, RenderFiresOnPaintOnlyWhileTheNodeCanShow) {
     auto v = _Viewport();
     auto paints = 0;
-    auto sub = Sub<class Painter const&, Vec4 const&>(v.second.onPaint, [&paints](class Painter const&, Vec4 const&) { paints += 1; });
+    auto sub = Sub<class Painter const&, Vec4 const&>(v.second.onPaint, [&](class Painter const&, Vec4 const&) { paints += 1; });
 
     _RenderQuads(v.document);
     EXPECT_EQ(paints, 0);
@@ -2326,7 +2326,7 @@ TEST(Document, RenderShadowRebakesOnViewportClipChange) {
 
     auto bakes = 0;
     ON_CALL(sink, paint(_, _, _)).WillByDefault(Invoke(
-        [&bakes](Shape const&, Brush const&, PaintOptions const& options) {
+        [&](Shape const&, Brush const&, PaintOptions const& options) {
             if (options.filter.has_value() && (options.filter->as<ShadowFilter>() != nullptr)) {
                 bakes += 1;
             }
@@ -2392,8 +2392,8 @@ TEST(Document, RenderShadowCompositeNotClippedToOwnRect) {
 
     auto depth = 0;
     auto composites = std::vector<Composite>();
-    ON_CALL(sink, beginPaint(_)).WillByDefault(Invoke([&depth](PaintTarget const&) { depth += 1; }));
-    ON_CALL(sink, endPaint()).WillByDefault(Invoke([&depth]() { depth -= 1; }));
+    ON_CALL(sink, beginPaint(_)).WillByDefault(Invoke([&](PaintTarget const&) { depth += 1; }));
+    ON_CALL(sink, endPaint()).WillByDefault(Invoke([&]() { depth -= 1; }));
     ON_CALL(sink, paint(_, _, _)).WillByDefault(Invoke(
         [&](Shape const& shape, Brush const& brush, PaintOptions const& options) {
             auto const quad = shape.as<QuadShape>();
@@ -2489,7 +2489,7 @@ TEST(Document, UpdateAndRenderAreIdempotentWhenNothingChanged) {
     auto scope = SinkScope(sink);
 
     auto paintPasses = 0;
-    ON_CALL(sink, beginPaint(_)).WillByDefault(Invoke([&paintPasses](PaintTarget const&) {
+    ON_CALL(sink, beginPaint(_)).WillByDefault(Invoke([&](PaintTarget const&) {
         paintPasses += 1;
     }));
 
@@ -3764,7 +3764,7 @@ TEST(Document, NeedsUpdateForcesLayoutPass) {
     auto scope = SinkScope(sink);
 
     auto paintPasses = 0;
-    ON_CALL(sink, beginPaint(_)).WillByDefault(Invoke([&paintPasses](PaintTarget const&) {
+    ON_CALL(sink, beginPaint(_)).WillByDefault(Invoke([&](PaintTarget const&) {
         paintPasses += 1;
     }));
 
@@ -3798,7 +3798,7 @@ TEST(Document, NeedsRenderForcesRepaint) {
     auto scope = SinkScope(sink);
 
     auto paintPasses = 0;
-    ON_CALL(sink, beginPaint(_)).WillByDefault(Invoke([&paintPasses](PaintTarget const&) {
+    ON_CALL(sink, beginPaint(_)).WillByDefault(Invoke([&](PaintTarget const&) {
         paintPasses += 1;
     }));
 
@@ -3841,7 +3841,7 @@ TEST(Document, RenderPublishesOnPaintBeforeChildren) {
     auto scope = SinkScope(sink);
 
     auto order = std::vector<std::string>();
-    ON_CALL(sink, paint(_, _, _)).WillByDefault(Invoke([&order](Shape const&, Brush const& brush, PaintOptions const&) {
+    ON_CALL(sink, paint(_, _, _)).WillByDefault(Invoke([&](Shape const&, Brush const& brush, PaintOptions const&) {
         if (auto color = brush.as<ColorBrush>()) {
             order.push_back((color->color == COLOR_WHITE) ? "background" : (color->color == COLOR_BLACK) ? "child" : "custom");
         }

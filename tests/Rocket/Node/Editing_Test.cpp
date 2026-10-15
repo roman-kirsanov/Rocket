@@ -89,7 +89,7 @@ struct _Editor {
         text.setContent(content);
         box.appendChild(text);
 
-        sub.on(box.onEvent, [this](NodeEvent const& event) {
+        sub.on(box.onEvent, [&](NodeEvent const& event) {
             if (auto input = event.as<InputNodeEvent>()) {
                 inputs.push_back(input->getContent());
                 sequence.push_back("input");

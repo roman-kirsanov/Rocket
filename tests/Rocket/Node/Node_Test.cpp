@@ -760,9 +760,9 @@ TEST(Node, TriggerEvent) {
     auto bubbleCount = 0;
     auto captureCount = 0;
     auto parentCount = 0;
-    Sub<NodeEvent const&> bubbleSub(node.onEvent, [&bubbleCount](NodeEvent const&) { bubbleCount += 1; });
-    Sub<NodeEvent const&> captureSub(node.onCaptureEvent, [&captureCount](NodeEvent const&) { captureCount += 1; });
-    Sub<NodeEvent const&> parentSub(parent.onEvent, [&parentCount](NodeEvent const&) { parentCount += 1; });
+    Sub<NodeEvent const&> bubbleSub(node.onEvent, [&](NodeEvent const&) { bubbleCount += 1; });
+    Sub<NodeEvent const&> captureSub(node.onCaptureEvent, [&](NodeEvent const&) { captureCount += 1; });
+    Sub<NodeEvent const&> parentSub(parent.onEvent, [&](NodeEvent const&) { parentCount += 1; });
 
     TestEvent event(node);
     node.triggerEvent(event);
@@ -798,7 +798,7 @@ TEST(Node, EventSubclass) {
     ASSERT_TRUE(!event.getModifiers().control);
 
     auto count = 0;
-    Sub<NodeEvent const&> sub(node.onEvent, [&count](NodeEvent const& e) {
+    Sub<NodeEvent const&> sub(node.onEvent, [&](NodeEvent const& e) {
         ASSERT_TRUE(e.is<MouseEnterNodeEvent>());
         count += 1;
     });
@@ -815,12 +815,12 @@ TEST(Node, DispatchEventOrder) {
     mid.appendChild(leaf);
 
     std::vector<std::string> order;
-    Sub<NodeEvent const&> rootCapture(root.onCaptureEvent, [&order](NodeEvent const&) { order.push_back("root:capture"); });
-    Sub<NodeEvent const&> midCapture(mid.onCaptureEvent, [&order](NodeEvent const&) { order.push_back("mid:capture"); });
-    Sub<NodeEvent const&> leafCapture(leaf.onCaptureEvent, [&order](NodeEvent const&) { order.push_back("leaf:capture"); });
-    Sub<NodeEvent const&> rootBubble(root.onEvent, [&order](NodeEvent const&) { order.push_back("root:bubble"); });
-    Sub<NodeEvent const&> midBubble(mid.onEvent, [&order](NodeEvent const&) { order.push_back("mid:bubble"); });
-    Sub<NodeEvent const&> leafBubble(leaf.onEvent, [&order](NodeEvent const&) { order.push_back("leaf:bubble"); });
+    Sub<NodeEvent const&> rootCapture(root.onCaptureEvent, [&](NodeEvent const&) { order.push_back("root:capture"); });
+    Sub<NodeEvent const&> midCapture(mid.onCaptureEvent, [&](NodeEvent const&) { order.push_back("mid:capture"); });
+    Sub<NodeEvent const&> leafCapture(leaf.onCaptureEvent, [&](NodeEvent const&) { order.push_back("leaf:capture"); });
+    Sub<NodeEvent const&> rootBubble(root.onEvent, [&](NodeEvent const&) { order.push_back("root:bubble"); });
+    Sub<NodeEvent const&> midBubble(mid.onEvent, [&](NodeEvent const&) { order.push_back("mid:bubble"); });
+    Sub<NodeEvent const&> leafBubble(leaf.onEvent, [&](NodeEvent const&) { order.push_back("leaf:bubble"); });
 
     TestEvent event(leaf);
     leaf.dispatchEvent(event);
@@ -839,12 +839,12 @@ TEST(Node, StopPropagationBubble) {
     mid.appendChild(leaf);
 
     std::vector<std::string> order;
-    Sub<NodeEvent const&> leafBubble(leaf.onEvent, [&order](NodeEvent const& e) {
+    Sub<NodeEvent const&> leafBubble(leaf.onEvent, [&](NodeEvent const& e) {
         order.push_back("leaf:bubble");
         e.stopPropagation();
     });
-    Sub<NodeEvent const&> midBubble(mid.onEvent, [&order](NodeEvent const&) { order.push_back("mid:bubble"); });
-    Sub<NodeEvent const&> rootBubble(root.onEvent, [&order](NodeEvent const&) { order.push_back("root:bubble"); });
+    Sub<NodeEvent const&> midBubble(mid.onEvent, [&](NodeEvent const&) { order.push_back("mid:bubble"); });
+    Sub<NodeEvent const&> rootBubble(root.onEvent, [&](NodeEvent const&) { order.push_back("root:bubble"); });
 
     TestEvent event(leaf);
     leaf.dispatchEvent(event);
@@ -864,15 +864,15 @@ TEST(Node, StopPropagationCapture) {
     mid.appendChild(leaf);
 
     std::vector<std::string> order;
-    Sub<NodeEvent const&> rootCapture(root.onCaptureEvent, [&order](NodeEvent const& e) {
+    Sub<NodeEvent const&> rootCapture(root.onCaptureEvent, [&](NodeEvent const& e) {
         order.push_back("root:capture");
         e.stopPropagation();
     });
-    Sub<NodeEvent const&> midCapture(mid.onCaptureEvent, [&order](NodeEvent const&) { order.push_back("mid:capture"); });
-    Sub<NodeEvent const&> leafCapture(leaf.onCaptureEvent, [&order](NodeEvent const&) { order.push_back("leaf:capture"); });
-    Sub<NodeEvent const&> rootBubble(root.onEvent, [&order](NodeEvent const&) { order.push_back("root:bubble"); });
-    Sub<NodeEvent const&> midBubble(mid.onEvent, [&order](NodeEvent const&) { order.push_back("mid:bubble"); });
-    Sub<NodeEvent const&> leafBubble(leaf.onEvent, [&order](NodeEvent const&) { order.push_back("leaf:bubble"); });
+    Sub<NodeEvent const&> midCapture(mid.onCaptureEvent, [&](NodeEvent const&) { order.push_back("mid:capture"); });
+    Sub<NodeEvent const&> leafCapture(leaf.onCaptureEvent, [&](NodeEvent const&) { order.push_back("leaf:capture"); });
+    Sub<NodeEvent const&> rootBubble(root.onEvent, [&](NodeEvent const&) { order.push_back("root:bubble"); });
+    Sub<NodeEvent const&> midBubble(mid.onEvent, [&](NodeEvent const&) { order.push_back("mid:bubble"); });
+    Sub<NodeEvent const&> leafBubble(leaf.onEvent, [&](NodeEvent const&) { order.push_back("leaf:bubble"); });
 
     TestEvent event(leaf);
     leaf.dispatchEvent(event);
@@ -891,11 +891,11 @@ TEST(Node, BroadcastEvent) {
     left.appendChild(leftChild);
 
     std::vector<std::string> order;
-    Sub<NodeEvent const&> rootBubble(root.onEvent, [&order](NodeEvent const&) { order.push_back("root"); });
-    Sub<NodeEvent const&> leftBubble(left.onEvent, [&order](NodeEvent const&) { order.push_back("left"); });
-    Sub<NodeEvent const&> leftChildBubble(leftChild.onEvent, [&order](NodeEvent const&) { order.push_back("leftChild"); });
-    Sub<NodeEvent const&> rightBubble(right.onEvent, [&order](NodeEvent const&) { order.push_back("right"); });
-    Sub<NodeEvent const&> rootCapture(root.onCaptureEvent, [&order](NodeEvent const&) { order.push_back("root:capture"); });
+    Sub<NodeEvent const&> rootBubble(root.onEvent, [&](NodeEvent const&) { order.push_back("root"); });
+    Sub<NodeEvent const&> leftBubble(left.onEvent, [&](NodeEvent const&) { order.push_back("left"); });
+    Sub<NodeEvent const&> leftChildBubble(leftChild.onEvent, [&](NodeEvent const&) { order.push_back("leftChild"); });
+    Sub<NodeEvent const&> rightBubble(right.onEvent, [&](NodeEvent const&) { order.push_back("right"); });
+    Sub<NodeEvent const&> rootCapture(root.onCaptureEvent, [&](NodeEvent const&) { order.push_back("root:capture"); });
 
     TestEvent event(root);
     root.broadcastEvent(event);

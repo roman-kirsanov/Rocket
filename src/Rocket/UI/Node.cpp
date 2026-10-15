@@ -102,13 +102,13 @@ void Node(NodeProps const& props, std::function<void()> const& children) {
 
             context.node = &node;
 
-            eventSub.on(node.onEvent, [this](NodeEvent const& event) {
+            eventSub.on(node.onEvent, [&](NodeEvent const& event) {
                 if (onEvent) {
                     onEvent(event);
                 }
             });
 
-            captureEventSub.on(node.onCaptureEvent, [this](NodeEvent const& event) {
+            captureEventSub.on(node.onCaptureEvent, [&](NodeEvent const& event) {
                 if (onCaptureEvent) {
                     onCaptureEvent(event);
                 }

@@ -547,8 +547,9 @@ pointer, so the walk touches one record per level and nothing else.
 - **Handlers outlive renders.** Never capture `props`, or any other local
   of the render (a helper lambda, a loop variable by reference), in a
   lambda stored on a node, passed to a child as a callback, or given to a
-  subscription; copy what you need into the state struct each render and
-  capture `state` and `reconciler` explicitly. The failure is a crash on a
+  subscription; copy what you need into the state struct each render, or
+  into the lambda by value, and capture `state` and `reconciler` by
+  reference through `[&]`. The failure is a crash on a
   later click, not at render time, and it can stay hidden while the dead
   stack memory happens to still hold the old values.
 - **First render has no node.** `nodeRef` is null until `Node` has mounted;
@@ -562,6 +563,8 @@ pointer, so the walk touches one record per level and nothing else.
   Spell the type only when it cannot be deduced.
 - Literal suffixes always: `0.0f`, `9999.0f`, `1.5f`.
 - `disabled == false`, not `!disabled`.
+- Lambdas capture by reference through `[&]` and name only what they copy:
+  `[&, disabled]`, never `[&state, disabled]`. `this` counts as a reference.
 - Braces on every `if`, even one-liners, with a blank line before an `if`
   that follows assignments.
 - Nested ternaries are parenthesised and laid out one case per line, the

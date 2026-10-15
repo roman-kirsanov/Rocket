@@ -46,7 +46,7 @@ void Document(DocumentProps const& props, std::function<void()> const& children)
 
         _State(Reconciler& reconciler, class Window& window)
             : document(window)
-            , onAfterUpdate(reconciler.onAfterUpdate, [this]{ document.update(); }) {
+            , onAfterUpdate(reconciler.onAfterUpdate, [&]{ document.update(); }) {
             PROFILE
         }
 
