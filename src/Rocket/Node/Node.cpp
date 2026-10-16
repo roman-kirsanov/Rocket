@@ -2019,8 +2019,12 @@ void Node::_createTextNode() {
     if (_textNode == nullptr) {
         _textNode = ::YGNodeNew();
         ::YGNodeSetContext((::YGNode*)_textNode, this);
-        ::YGNodeSetNodeType((::YGNode*)_textNode, ::YGNodeTypeText);
         ::YGNodeSetMeasureFunc((::YGNode*)_textNode, _measureFunc);
+
+        /* The measure already returns whole points. Yoga's text rounding forces
+           ceil on a size it finds fractional, and every layout re-rounds the
+           cached size, so float noise far down a document grows it each time. */
+        ::YGNodeSetNodeType((::YGNode*)_textNode, ::YGNodeTypeDefault);
         ::YGNodeStyleSetFlexGrow((::YGNode*)_textNode, 0.0f);
         ::YGNodeStyleSetFlexShrink((::YGNode*)_textNode, 0.0f);
 
