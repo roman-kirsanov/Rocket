@@ -4,10 +4,6 @@ set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 
 file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*_Test.cpp)
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    # TODO: Run the audio tests once the SDL3 backend implements audio (md/SDL3_BACKEND.md).
-    list(FILTER TEST_SOURCES EXCLUDE REGEX "/Audio/Audio_Test\\.cpp$")
-endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../lib/googletest ${CMAKE_CURRENT_BINARY_DIR}/googletest EXCLUDE_FROM_ALL)
 

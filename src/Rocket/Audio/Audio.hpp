@@ -21,9 +21,6 @@ class Sound;
  * Non-copyable and non-movable. The whole file is decoded into memory at
  * construction time. Played through Sound instances that reference the clip;
  * sounds created over this audio must be destroyed first.
- *
- * Note: not implemented on the SDL3 backend yet: there an audio decodes
- * nothing (no frames, zero duration) and a sound never plays.
  */
 class Audio {
 public:
@@ -33,7 +30,7 @@ public:
      * Constructs an audio clip by loading and decoding an audio file.
      * Throws std::runtime_error if the file cannot be loaded or decoded.
      *
-     * @param path Path to the audio file (WAV, MP3, M4A, AIFF, ...).
+     * @param path Path to the audio file (WAV, MP3, AIFF, ...; M4A on macOS only).
      */
     Audio(std::string const& path);
 
@@ -41,7 +38,7 @@ public:
      * Constructs an audio clip by decoding raw audio file bytes.
      * Throws std::runtime_error if the bytes cannot be decoded.
      *
-     * @param data Raw audio file bytes (WAV, MP3, M4A, AIFF, ...).
+     * @param data Raw audio file bytes (WAV, MP3, AIFF, ...; M4A on macOS only).
      * @param size Data size in bytes.
      */
     Audio(std::uint8_t const* data, std::size_t size);

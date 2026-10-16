@@ -107,9 +107,9 @@ if(APPLE)
 elseif(WIN32)
 
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    # The SDL3 backend (md/SDL3_BACKEND.md). SDL and SDL_image are built from
-    # their submodules and linked statically; SDL_image decodes PNG and JPEG
-    # with its built-in stb_image, so no other image library is needed.
+    # The SDL3 backend. SDL, SDL_image and SDL_mixer are built from their
+    # submodules and linked statically; SDL_image decodes PNG and JPEG with its
+    # built-in stb_image, so no other image library is needed.
     set(SDL_SHARED OFF CACHE BOOL "" FORCE)
     set(SDL_STATIC ON CACHE BOOL "" FORCE)
     set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
@@ -125,10 +125,25 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(SDLIMAGE_TIF OFF CACHE BOOL "" FORCE)
     set(SDLIMAGE_WEBP OFF CACHE BOOL "" FORCE)
     set(SDLIMAGE_SVG OFF CACHE BOOL "" FORCE)
+    # SDL_mixer plays the audio and decodes it with the decoders it carries
+    # (WAV, AIFF, VOC, AU, MP3, FLAC, Ogg Vorbis); those needing a system
+    # library are left out.
+    set(SDLMIXER_VENDORED OFF CACHE BOOL "" FORCE)
+    set(SDLMIXER_SAMPLES OFF CACHE BOOL "" FORCE)
+    set(SDLMIXER_INSTALL ON CACHE BOOL "" FORCE)
+    set(SDLMIXER_FLAC_LIBFLAC OFF CACHE BOOL "" FORCE)
+    set(SDLMIXER_MP3_MPG123 OFF CACHE BOOL "" FORCE)
+    set(SDLMIXER_VORBIS_VORBISFILE OFF CACHE BOOL "" FORCE)
+    set(SDLMIXER_OPUS OFF CACHE BOOL "" FORCE)
+    set(SDLMIXER_WAVPACK OFF CACHE BOOL "" FORCE)
+    set(SDLMIXER_MOD OFF CACHE BOOL "" FORCE)
+    set(SDLMIXER_GME OFF CACHE BOOL "" FORCE)
+    set(SDLMIXER_MIDI OFF CACHE BOOL "" FORCE)
     set(BUILD_SHARED_LIBS OFF)
 
     add_subdirectory(lib/sdl EXCLUDE_FROM_ALL)
     add_subdirectory(lib/sdl_image EXCLUDE_FROM_ALL)
+    add_subdirectory(lib/sdl_mixer EXCLUDE_FROM_ALL)
 
     find_program(ROCKET_GLSLC glslc REQUIRED)
 
@@ -236,6 +251,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         PRIVATE
             SDL3::SDL3-static
             SDL3_image::SDL3_image-static
+            SDL3_mixer::SDL3_mixer-static
     )
 endif()
 
