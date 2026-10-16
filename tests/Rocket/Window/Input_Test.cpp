@@ -20,6 +20,18 @@ TEST(Input, KnownKeysMapToExpectedNames) {
     ASSERT_TRUE(GetScancodeName(Scancode::KeyZ) == "Z");
 }
 
+/* The keys of PC keyboards are named after the web's KeyboardEvent.code. */
+TEST(Input, PCKeysMapToExpectedNames) {
+    ASSERT_TRUE(GetScancodeName(Scancode::Insert) == "Insert");
+    ASSERT_TRUE(GetScancodeName(Scancode::PrintScreen) == "PrintScreen");
+    ASSERT_TRUE(GetScancodeName(Scancode::ScrollLock) == "ScrollLock");
+    ASSERT_TRUE(GetScancodeName(Scancode::Pause) == "Pause");
+    ASSERT_TRUE(GetScancodeName(Scancode::NumLock) == "NumLock");
+    ASSERT_TRUE(GetScancodeName(Scancode::ContextMenu) == "ContextMenu");
+    ASSERT_TRUE(GetScancodeName(Scancode::MetaRight) == "MetaRight");
+    ASSERT_TRUE(GetScancodeName(Scancode::IntlBackslash) == "IntlBackslash");
+}
+
 /* Different keys yield different names. */
 TEST(Input, DifferentKeysYieldDifferentNames) {
     ASSERT_TRUE(GetScancodeName(Scancode::KeyA) != GetScancodeName(Scancode::KeyB));
@@ -54,6 +66,14 @@ TEST(Input, DefaultKeycode) {
     ASSERT_TRUE(GetDefaultKeycode(Scancode::ShiftRight) == Keycode::Shift);
     ASSERT_TRUE(GetDefaultKeycode(Scancode::F12) == "F12");
     ASSERT_TRUE(GetDefaultKeycode(Scancode::Unknown) == Keycode::Unknown);
+    ASSERT_TRUE(GetDefaultKeycode(Scancode::Insert) == Keycode::Insert);
+    ASSERT_TRUE(GetDefaultKeycode(Scancode::PrintScreen) == "PrintScreen");
+    ASSERT_TRUE(GetDefaultKeycode(Scancode::ScrollLock) == "ScrollLock");
+    ASSERT_TRUE(GetDefaultKeycode(Scancode::Pause) == "Pause");
+    ASSERT_TRUE(GetDefaultKeycode(Scancode::NumLock) == "NumLock");
+    ASSERT_TRUE(GetDefaultKeycode(Scancode::ContextMenu) == "ContextMenu");
+    ASSERT_TRUE(GetDefaultKeycode(Scancode::MetaRight) == Keycode::Meta);
+    ASSERT_TRUE(GetDefaultKeycode(Scancode::IntlBackslash) == "\\");
 }
 
 /* Shortcut keycodes follow what the OS does for its shortcuts: the keycode,

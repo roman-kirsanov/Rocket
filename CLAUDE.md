@@ -2,6 +2,10 @@
 
 Declarative native UI for modern C++.
 
+## Project conventions
+
+- **Component** - md/UI/COMPONENT.md
+
 ## Responses
 
 - Keep responses concise and to the point - unless the user asks otherwise

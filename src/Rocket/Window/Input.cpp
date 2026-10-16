@@ -136,7 +136,15 @@ std::string const& GetScancodeName(Scancode scancode) {
         { Scancode::Numpad6, "Numpad6" },
         { Scancode::Numpad7, "Numpad7" },
         { Scancode::Numpad8, "Numpad8" },
-        { Scancode::Numpad9, "Numpad9" }
+        { Scancode::Numpad9, "Numpad9" },
+        { Scancode::Insert, "Insert" },
+        { Scancode::PrintScreen, "PrintScreen" },
+        { Scancode::ScrollLock, "ScrollLock" },
+        { Scancode::Pause, "Pause" },
+        { Scancode::NumLock, "NumLock" },
+        { Scancode::ContextMenu, "ContextMenu" },
+        { Scancode::MetaRight, "MetaRight" },
+        { Scancode::IntlBackslash, "IntlBackslash" }
     };
 
     auto it = _namemap.find(scancode);
@@ -262,7 +270,15 @@ std::string GetDefaultKeycode(Scancode scancode) {
         { Scancode::Numpad6, Keycode::Digit6 },
         { Scancode::Numpad7, Keycode::Digit7 },
         { Scancode::Numpad8, Keycode::Digit8 },
-        { Scancode::Numpad9, Keycode::Digit9 }
+        { Scancode::Numpad9, Keycode::Digit9 },
+        { Scancode::Insert, Keycode::Insert },
+        { Scancode::PrintScreen, Keycode::PrintScreen },
+        { Scancode::ScrollLock, Keycode::ScrollLock },
+        { Scancode::Pause, Keycode::Pause },
+        { Scancode::NumLock, Keycode::NumLock },
+        { Scancode::ContextMenu, Keycode::ContextMenu },
+        { Scancode::MetaRight, Keycode::Meta },
+        { Scancode::IntlBackslash, Keycode::Backslash }
     };
 
     auto it = _keycodes.find(scancode);

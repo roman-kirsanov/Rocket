@@ -327,6 +327,10 @@ void Document::_handleEvent(WindowEvent const& event) {
         _needsUpdate = true;
         _updateAll();
         _renderAll();
+    } else if (event.is<ShowWindowEvent>()) {
+        /* frames painted while the window was hidden may be gone (an unmapped
+           Wayland surface takes none), so a shown window is painted anew */
+        _needsRender = true;
     } else if (event.is<PaintWindowEvent>()) {
         _updateAll();
         _renderAll();

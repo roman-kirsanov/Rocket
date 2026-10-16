@@ -15,8 +15,13 @@
 #include <filesystem>
 #include <algorithm>
 #include <functional>
+#ifdef __APPLE__
 #include <CoreGraphics/CoreGraphics.h>
 #include <ImageIO/ImageIO.h>
+#else
+#include <SDL3/SDL.h>
+#include <SDL3_image/SDL_image.h>
+#endif
 #include <Rocket/Paint/Painter.hpp>
 #include <Rocket/Paint/Image.hpp>
 
@@ -28,12 +33,14 @@ namespace Rocket {
 // (re)generate the goldens; failing cases save a `<name>.actual.png` under the
 // build directory (snapshots/) for visual inspection, keeping the source tree clean.
 //
-// PNG IO goes through ImageIO. The stored bytes are the painter's premultiplied
-// RGBA output, written and read *verbatim*: images are declared to ImageIO as
-// straight-alpha (kCGImageAlphaLast) so no premultiplication conversion is ever
-// applied, and goldens are read from the decoded image's data provider rather
-// than through a CGBitmapContext (which only supports premultiplied drawing and
-// would corrupt low-alpha pixels).
+// PNG IO goes through ImageIO on macOS and SDL_image elsewhere. The stored
+// bytes are the painter's premultiplied RGBA output, written and read
+// *verbatim*: on macOS images are declared to ImageIO as straight-alpha
+// (kCGImageAlphaLast) so no premultiplication conversion is ever applied, and
+// goldens are read from the decoded image's data provider rather than through
+// a CGBitmapContext (which only supports premultiplied drawing and would
+// corrupt low-alpha pixels); SDL_image stores and loads RGBA32 surfaces as
+// they are, and SDL_ConvertSurface only reorders channels.
 
 // Golden images are stored per module under tests/_Snapshots/<Module>/; each
 // consumer defines its module name before including this header:
@@ -69,6 +76,7 @@ inline int _snapshotCasesPassed = 0;
  * @param pixels Tightly-packed RGBA8 pixel bytes, row-major.
  */
 inline bool _SaveSnapshotPixels(std::string const& path, int width, int height, std::vector<std::uint8_t> const& pixels) {
+#ifdef __APPLE__
     auto provider = ::CGDataProviderCreateWithData(nullptr, pixels.data(), pixels.size(), nullptr);
     auto colorSpace = ::CGColorSpaceCreateDeviceRGB();
     auto image = ::CGImageCreate(
@@ -111,6 +119,25 @@ inline bool _SaveSnapshotPixels(std::string const& path, int width, int height, 
     }
 
     return true;
+#else
+    auto surface = ::SDL_CreateSurfaceFrom(width, height, SDL_PIXELFORMAT_RGBA32, const_cast<std::uint8_t*>(pixels.data()), (width * 4));
+
+    if (surface == nullptr) {
+        std::printf("  failed to wrap pixels for %s\n", path.c_str());
+        return false;
+    }
+
+    auto const saved = ::IMG_SavePNG(surface, path.c_str());
+
+    ::SDL_DestroySurface(surface);
+
+    if (saved == false) {
+        std::printf("  failed to save %s: %s\n", path.c_str(), ::SDL_GetError());
+        return false;
+    }
+
+    return true;
+#endif
 }
 
 /**
@@ -123,6 +150,7 @@ inline bool _SaveSnapshotPixels(std::string const& path, int width, int height, 
  * @param pixels Receives the tightly-packed RGBA8 pixel bytes.
  */
 inline bool _LoadSnapshotPixels(std::string const& path, int& width, int& height, std::vector<std::uint8_t>& pixels) {
+#ifdef __APPLE__
     auto url = ::CFURLCreateFromFileSystemRepresentation(nullptr, (UInt8 const*)path.c_str(), (CFIndex)path.size(), false);
     auto source = (url != nullptr) ? ::CGImageSourceCreateWithURL(url, nullptr) : nullptr;
 
@@ -179,6 +207,39 @@ inline bool _LoadSnapshotPixels(std::string const& path, int& width, int& height
     ::CFRelease(data);
 
     return true;
+#else
+    auto loaded = ::IMG_Load(path.c_str());
+
+    if (loaded == nullptr) {
+        std::printf("  missing golden %s\n", path.c_str());
+        return false;
+    }
+
+    auto image = ::SDL_ConvertSurface(loaded, SDL_PIXELFORMAT_RGBA32);
+    ::SDL_DestroySurface(loaded);
+
+    if (image == nullptr) {
+        std::printf("  failed to decode golden %s\n", path.c_str());
+        return false;
+    }
+
+    width  = image->w;
+    height = image->h;
+
+    pixels.resize((std::size_t)width * height * 4);
+
+    for (auto y = 0; y < height; y++) {
+        std::memcpy(
+            pixels.data() + ((std::size_t)y * width * 4),
+            static_cast<std::uint8_t const*>(image->pixels) + ((std::size_t)y * image->pitch),
+            ((std::size_t)width * 4)
+        );
+    }
+
+    ::SDL_DestroySurface(image);
+
+    return true;
+#endif
 }
 
 /**

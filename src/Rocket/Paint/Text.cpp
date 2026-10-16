@@ -2392,7 +2392,7 @@ void Text::_applySnapshot(TextEditSnapshot const& snapshot) {
 void Text::_setCaret(std::int64_t caret) {
     PROFILE
 
-    auto const value = std::clamp(caret, 0ll, _getMaxIndex());
+    auto const value = std::clamp(caret, std::int64_t{ 0 }, _getMaxIndex());
 
     if (_editState->caret != value) {
         _editState->caret = value;
@@ -2403,7 +2403,7 @@ void Text::_setCaret(std::int64_t caret) {
 void Text::_setAnchor(std::int64_t anchor) {
     PROFILE
 
-    auto const value = std::clamp(anchor, 0ll, _getMaxIndex());
+    auto const value = std::clamp(anchor, std::int64_t{ 0 }, _getMaxIndex());
 
     if (_editState->anchor != value) {
         _editState->anchor = value;

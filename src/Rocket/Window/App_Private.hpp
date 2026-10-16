@@ -29,8 +29,8 @@ void __Exit();
 /**
  * Platform implementation of App::Run.
  *
- * @param argc Argument count, as passed to main(); not currently used by the macOS backend.
- * @param argv Argument vector, as passed to main(); not currently used by the macOS backend.
+ * @param argc Argument count, as passed to main(); not currently used by the backends.
+ * @param argv Argument vector, as passed to main(); not currently used by the backends.
  */
 void __Run(int argc, char const** argv);
 

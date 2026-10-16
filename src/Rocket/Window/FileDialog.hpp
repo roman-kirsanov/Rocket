@@ -24,7 +24,7 @@ using OpenFileDialogCallback = std::function<void(OpenFileDialogResult const&)>;
 
 /** Configuration for OpenFileDialog. */
 struct OpenFileDialogOptions {
-    /** Allow picking directories (files are always selectable). */
+    /** Allow picking directories (files are always selectable on macOS; on SDL3 the dialog then picks directories only). */
     bool directorySelection;
 
     /** Allow selecting more than one item. */
@@ -33,7 +33,7 @@ struct OpenFileDialogOptions {
     /** Dialog window title. */
     std::string title;
 
-    /** Explanatory text shown inside the dialog. */
+    /** Explanatory text shown inside the dialog (ignored on SDL3). */
     std::string message;
 
     /** Label of the confirm button (e.g. "Open"). */
@@ -41,7 +41,8 @@ struct OpenFileDialogOptions {
 
     /**
      * Allowed file types as (description, extension) pairs; empty allows any
-     * type. Only the extension is used on macOS.
+     * type. Only the extension is used on macOS; SDL3 shows the description
+     * as the filter's name.
      */
     std::vector<
         std::tuple<std::string, std::string>
@@ -71,7 +72,7 @@ struct SaveFileDialogOptions {
 /**
  * Shows a modal save-file dialog.
  *
- * Note: not implemented yet — the macOS backend is a stub and the callback
+ * Note: not implemented yet — the backends are stubs and the callback
  * is never invoked.
  *
  * @param options  The dialog configuration; currently unused (not implemented).

@@ -94,7 +94,7 @@ public:
     /** Returns the image dimensions in pixels. */
     Vec2 const& getSize() const;
 
-    /** Returns the underlying GPU texture handle as void*. */
+    /** Returns the underlying GPU texture handle as void* (id<MTLTexture> on macOS, SDL_GPUTexture* on SDL3). */
     void* getTexture() const;
 
     /**

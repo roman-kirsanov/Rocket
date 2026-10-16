@@ -1679,7 +1679,7 @@ void Node::insertChild(Node& child, std::int64_t index) {
             count++;
         }
 
-        if (std::clamp(index, 0ll, count - 1) == position) {
+        if (std::clamp<std::int64_t>(index, 0, (count - 1)) == position) {
             return;
         }
     }

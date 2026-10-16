@@ -16,7 +16,8 @@ namespace Rocket {
  * equivalent for a value substitute the closest available system cursor (on
  * macOS 15 and later, Help, Progress and Wait fall back to the plain arrow,
  * Cell to the crosshair, and Move and AllScroll to the open hand; every
- * resize and zoom value has a native cursor). None hides the cursor entirely.
+ * resize and zoom value has a native cursor; on SDL3 the substitutes are
+ * listed in md/SDL3_BACKEND.md). None hides the cursor entirely.
  */
 enum class Cursor {
     Default,

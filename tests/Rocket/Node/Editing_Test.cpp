@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -23,7 +24,8 @@ using namespace Rocket;
    public window.onEvent source, exactly as the platform layer publishes it,
    and the outcome is observed through the node content, InputNodeEvents and
    the paint calls the document issues. The expectations are those of macOS
-   text fields and browser <input> / <textarea> elements; a test that pins a
+   text fields and browser <input> / <textarea> elements, with the Control
+   bindings of other platforms' fields outside macOS; a test that pins a
    known divergence is DISABLED_ (run with --gtest_also_run_disabled_tests)
    and its comment says what the reference does. */
 
@@ -63,6 +65,17 @@ void Painter::paint(Shape const& shape, Brush const& brush, PaintOptions const& 
 static KeyModifiers _Mods(bool shift = false, bool meta = false, bool alt = false, bool control = false) {
     return KeyModifiers{ .control = control, .shift = shift, .meta = meta, .alt = alt };
 }
+
+/* The modifiers of the editing shortcuts (see _ResolveTextCommand in
+   Document.cpp): Command for commands and Option for words on macOS, Control
+   for both elsewhere. */
+#ifdef __APPLE__
+static KeyModifiers _Command(bool shift = false) { return _Mods(shift, true); }
+static KeyModifiers _Word(bool shift = false) { return _Mods(shift, false, true); }
+#else
+static KeyModifiers _Command(bool shift = false) { return _Mods(shift, false, false, true); }
+static KeyModifiers _Word(bool shift = false) { return _Mods(shift, false, false, true); }
+#endif
 
 /* An editable box with one text child on a hidden 640x480 window. */
 struct _Editor {
@@ -236,7 +249,9 @@ struct _Editor {
     }
 };
 
-/* Runs body with the given clipboard text, restoring the user's clipboard after. */
+/* Runs body with the given clipboard text, restoring the user's clipboard after.
+   The editor is made before it: on Wayland a client without keyboard focus
+   cannot keep the clipboard, and making a window tells it so, dropping the text. */
 static void _WithClipboard(std::string const& string, std::function<void()> const& body) {
     auto const original = GetClipboardString();
     SetClipboardString(string);
@@ -248,29 +263,33 @@ static void _WithClipboard(std::string const& string, std::function<void()> cons
 
 /* Cmd+Left / Cmd+Right go to the line edges. */
 TEST(Editing, CmdArrowsMoveToLineEdges) {
+#ifndef __APPLE__
+    GTEST_SKIP() << "a macOS binding";
+#endif
+
     auto e = _Editor("one two three");
     e.focus();
     e.key(Rocket::Scancode::ArrowRight);
     e.key(Rocket::Scancode::ArrowRight);
-    e.key(Rocket::Scancode::ArrowRight, _Mods(false, true));
+    e.key(Rocket::Scancode::ArrowRight, _Command());
     e.type("X");
     EXPECT_EQ(e.content(), "one two threeX");
-    e.key(Rocket::Scancode::ArrowLeft, _Mods(false, true));
+    e.key(Rocket::Scancode::ArrowLeft, _Command());
     e.type("Y");
     EXPECT_EQ(e.content(), "Yone two threeX");
 }
 
-/* Option+Left / Option+Right move by words. */
+/* Option+Left / Option+Right (Control outside macOS) move by words. */
 TEST(Editing, OptionArrowsMoveByWords) {
     auto e = _Editor("one two three");
     e.focus();
-    e.key(Rocket::Scancode::ArrowRight, _Mods(false, false, true));
+    e.key(Rocket::Scancode::ArrowRight, _Word());
     e.type("X");
     EXPECT_EQ(e.content(), "oneX two three");
-    e.key(Rocket::Scancode::ArrowRight, _Mods(false, false, true));
+    e.key(Rocket::Scancode::ArrowRight, _Word());
     e.type("X");
     EXPECT_EQ(e.content(), "oneX twoX three");
-    e.key(Rocket::Scancode::ArrowLeft, _Mods(false, false, true));
+    e.key(Rocket::Scancode::ArrowLeft, _Word());
     e.type("Y");
     EXPECT_EQ(e.content(), "oneX YtwoX three");
 }
@@ -289,12 +308,32 @@ TEST(Editing, HomeEndMoveToLineEdges) {
 
 /* Cmd+Up / Cmd+Down go to the document edges in multi-line content. */
 TEST(Editing, CmdVerticalArrowsMoveToDocumentEdges) {
+#ifndef __APPLE__
+    GTEST_SKIP() << "a macOS binding";
+#endif
+
     auto e = _Editor("ab\ncd", true, { 200.0f, 80.0f });
     e.focus();
-    e.key(Rocket::Scancode::ArrowDown, _Mods(false, true));
+    e.key(Rocket::Scancode::ArrowDown, _Command());
     e.type("X");
     EXPECT_EQ(e.content(), "ab\ncdX");
-    e.key(Rocket::Scancode::ArrowUp, _Mods(false, true));
+    e.key(Rocket::Scancode::ArrowUp, _Command());
+    e.type("Y");
+    EXPECT_EQ(e.content(), "Yab\ncdX");
+}
+
+/* Ctrl+Home / Ctrl+End go to the document edges in multi-line content, outside macOS. */
+TEST(Editing, CtrlHomeEndMoveToDocumentEdges) {
+#ifdef __APPLE__
+    GTEST_SKIP() << "a binding outside macOS";
+#endif
+
+    auto e = _Editor("ab\ncd", true, { 200.0f, 80.0f });
+    e.focus();
+    e.key(Rocket::Scancode::End, _Command());
+    e.type("X");
+    EXPECT_EQ(e.content(), "ab\ncdX");
+    e.key(Rocket::Scancode::Home, _Command());
     e.type("Y");
     EXPECT_EQ(e.content(), "Yab\ncdX");
 }
@@ -304,10 +343,14 @@ TEST(Editing, ShiftMovesSelectAndTypingReplaces) {
     auto e = _Editor("one two three");
     e.focus();
     e.key(Rocket::Scancode::End);
-    e.key(Rocket::Scancode::ArrowLeft, _Mods(true, false, true));
+    e.key(Rocket::Scancode::ArrowLeft, _Word(true));
     e.type("3");
     EXPECT_EQ(e.content(), "one two 3");
-    e.key(Rocket::Scancode::ArrowLeft, _Mods(true, true));
+#ifdef __APPLE__
+    e.key(Rocket::Scancode::ArrowLeft, _Command(true));
+#else
+    e.key(Rocket::Scancode::Home, _Mods(true));
+#endif
     e.type("z");
     EXPECT_EQ(e.content(), "z");
     e.key(Rocket::Scancode::ArrowLeft, _Mods(true));
@@ -329,23 +372,24 @@ TEST(Editing, BackspaceAndDeleteRemoveSelection) {
     EXPECT_EQ(e.content(), "c");
 }
 
-/* Option+Backspace deletes the word before the caret, Option+Delete the word after. */
+/* Option+Backspace (Control outside macOS) deletes the word before the caret,
+   Option+Delete the word after. */
 TEST(Editing, OptionBackspaceAndDeleteRemoveWords) {
     auto e = _Editor("one two three");
     e.focus();
     e.key(Rocket::Scancode::End);
-    e.key(Rocket::Scancode::Backspace, _Mods(false, false, true));
+    e.key(Rocket::Scancode::Backspace, _Word());
     EXPECT_EQ(e.content(), "one two ");
     e.key(Rocket::Scancode::Home);
-    e.key(Rocket::Scancode::Delete, _Mods(false, false, true));
+    e.key(Rocket::Scancode::Delete, _Word());
     EXPECT_EQ(e.content(), " two ");
 }
 
-/* Cmd+A selects everything; typing then replaces the whole content. */
+/* Cmd+A (Control outside macOS) selects everything; typing then replaces the whole content. */
 TEST(Editing, CmdASelectsAllAndTypingReplaces) {
     auto e = _Editor("hello");
     e.focus();
-    e.key(Rocket::Scancode::KeyA, _Mods(false, true), "a");
+    e.key(Rocket::Scancode::KeyA, _Command(), "a");
     e.type("x");
     EXPECT_EQ(e.content(), "x");
 }
@@ -363,8 +407,8 @@ TEST(Editing, NonEditingKeysAreNoOps) {
     e.key(Rocket::Scancode::Capslock);
     e.key(Rocket::Scancode::ArrowLeft);
     e.key(Rocket::Scancode::ArrowRight);
-    e.key(Rocket::Scancode::KeyS, _Mods(false, true), "s");   /* Cmd+S */
-    e.key(Rocket::Scancode::KeyB, _Mods(false, true), "b");   /* Cmd+B */
+    e.key(Rocket::Scancode::KeyS, _Command(), "s");   /* Cmd+S */
+    e.key(Rocket::Scancode::KeyB, _Command(), "b");   /* Cmd+B */
     e.key(Rocket::Scancode::KeyG, _Mods(false, false, false, true), "g"); /* Ctrl+G */
     e.key(Rocket::Scancode::Tab);
     e.key(Rocket::Scancode::Enter);
@@ -413,7 +457,7 @@ TEST(Editing, InputEventFiresOncePerChangeWithFullContent) {
 
     e.key(Rocket::Scancode::ArrowLeft);
     e.key(Rocket::Scancode::End);
-    e.key(Rocket::Scancode::KeyA, _Mods(false, true), "a");
+    e.key(Rocket::Scancode::KeyA, _Command(), "a");
     e.key(Rocket::Scancode::ArrowRight);
     e.key(Rocket::Scancode::Delete);
     EXPECT_EQ(e.inputs.size(), 2u);
@@ -448,22 +492,22 @@ TEST(Editing, InputEventBubblesToAncestors) {
 /* Cut, copy and paste round-trip Unicode through the system clipboard and
    report each content change. */
 TEST(Editing, CutCopyPasteRoundTripUnicode) {
-    _WithClipboard("sentinel", []{
-        auto const content = std::string("a\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9" "b");
-        auto e = _Editor(content);
+    auto const content = std::string("a\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9" "b");
+    auto e = _Editor(content);
+    _WithClipboard("sentinel", [&]{
         e.focus();
-        e.key(Rocket::Scancode::KeyA, _Mods(false, true), "a");
-        e.key(Rocket::Scancode::KeyC, _Mods(false, true), "c");
+        e.key(Rocket::Scancode::KeyA, _Command(), "a");
+        e.key(Rocket::Scancode::KeyC, _Command(), "c");
         EXPECT_EQ(GetClipboardString(), content);
         EXPECT_EQ(e.content(), content);
         EXPECT_TRUE(e.inputs.empty());
 
-        e.key(Rocket::Scancode::KeyX, _Mods(false, true), "x");
+        e.key(Rocket::Scancode::KeyX, _Command(), "x");
         EXPECT_EQ(e.content(), "");
         EXPECT_EQ(e.inputs, (std::vector<std::string>{ "" }));
 
-        e.key(Rocket::Scancode::KeyV, _Mods(false, true), "v");
-        e.key(Rocket::Scancode::KeyV, _Mods(false, true), "v");
+        e.key(Rocket::Scancode::KeyV, _Command(), "v");
+        e.key(Rocket::Scancode::KeyV, _Command(), "v");
         EXPECT_EQ(e.content(), content + content);
         EXPECT_EQ(e.inputs.size(), 3u);
     });
@@ -472,17 +516,17 @@ TEST(Editing, CutCopyPasteRoundTripUnicode) {
 /* Copy with nothing selected leaves the clipboard alone; paste of an empty
    clipboard changes nothing and fires no input. */
 TEST(Editing, EmptyCopyAndPasteAreNoOps) {
-    _WithClipboard("keep", []{
-        auto e = _Editor("hello");
+    auto e = _Editor("hello");
+    _WithClipboard("keep", [&]{
         e.focus();
-        e.key(Rocket::Scancode::KeyC, _Mods(false, true), "c");
+        e.key(Rocket::Scancode::KeyC, _Command(), "c");
         EXPECT_EQ(GetClipboardString(), "keep");
-        e.key(Rocket::Scancode::KeyX, _Mods(false, true), "x");
+        e.key(Rocket::Scancode::KeyX, _Command(), "x");
         EXPECT_EQ(GetClipboardString(), "keep");
         EXPECT_EQ(e.content(), "hello");
 
         SetClipboardString("");
-        e.key(Rocket::Scancode::KeyV, _Mods(false, true), "v");
+        e.key(Rocket::Scancode::KeyV, _Command(), "v");
         EXPECT_EQ(e.content(), "hello");
         EXPECT_TRUE(e.inputs.empty());
     });
@@ -490,11 +534,11 @@ TEST(Editing, EmptyCopyAndPasteAreNoOps) {
 
 /* Paste replaces the selection. */
 TEST(Editing, PasteReplacesSelection) {
-    _WithClipboard("NEW", []{
-        auto e = _Editor("one two three");
+    auto e = _Editor("one two three");
+    _WithClipboard("NEW", [&]{
         e.focus();
-        e.key(Rocket::Scancode::ArrowRight, _Mods(true, false, true));
-        e.key(Rocket::Scancode::KeyV, _Mods(false, true), "v");
+        e.key(Rocket::Scancode::ArrowRight, _Word(true));
+        e.key(Rocket::Scancode::KeyV, _Command(), "v");
         EXPECT_EQ(e.content(), "NEW two three");
     });
 }
@@ -502,17 +546,17 @@ TEST(Editing, PasteReplacesSelection) {
 /* A secure (password) field never exports its content: Cmd+C and Cmd+X
    leave the clipboard and the content alone, while paste still works. */
 TEST(Editing, SecureFieldBlocksCopyAndCutAllowsPaste) {
-    _WithClipboard("sentinel", []{
-        auto e = _Editor("hunter2");
+    auto e = _Editor("hunter2");
+    _WithClipboard("sentinel", [&]{
         e.box.setContentSecure(true);
         e.focus();
-        e.key(Rocket::Scancode::KeyA, _Mods(false, true), "a");
-        e.key(Rocket::Scancode::KeyC, _Mods(false, true), "c");
+        e.key(Rocket::Scancode::KeyA, _Command(), "a");
+        e.key(Rocket::Scancode::KeyC, _Command(), "c");
         EXPECT_EQ(GetClipboardString(), "sentinel");
-        e.key(Rocket::Scancode::KeyX, _Mods(false, true), "x");
+        e.key(Rocket::Scancode::KeyX, _Command(), "x");
         EXPECT_EQ(GetClipboardString(), "sentinel");
         EXPECT_EQ(e.content(), "hunter2");
-        e.key(Rocket::Scancode::KeyV, _Mods(false, true), "v");
+        e.key(Rocket::Scancode::KeyV, _Command(), "v");
         EXPECT_EQ(e.content(), "sentinel");
     });
 }
@@ -529,12 +573,12 @@ TEST(Editing, SecureFlagOnEitherNode) {
         EXPECT_GT(e.text.getComputedBorderRect().width, plainWidth);
     }
 
-    _WithClipboard("sentinel", []{
-        auto e = _Editor("hunter2");
+    auto e = _Editor("hunter2");
+    _WithClipboard("sentinel", [&]{
         e.text.setContentSecure(true);
         e.focus();
-        e.key(Rocket::Scancode::KeyA, _Mods(false, true), "a");
-        e.key(Rocket::Scancode::KeyC, _Mods(false, true), "c");
+        e.key(Rocket::Scancode::KeyA, _Command(), "a");
+        e.key(Rocket::Scancode::KeyC, _Command(), "c");
         EXPECT_EQ(GetClipboardString(), "sentinel");
     });
 }
@@ -721,7 +765,7 @@ TEST(Editing, CaretAndSelectionPaintLifecycle) {
     EXPECT_GT(e.caretRects()[0].x, caretAtStart.x);
     EXPECT_TRUE(e.selectionRects().empty());
 
-    e.key(Rocket::Scancode::KeyA, _Mods(false, true), "a");
+    e.key(Rocket::Scancode::KeyA, _Command(), "a");
     e.render();
     EXPECT_TRUE(e.caretRects().empty());
     EXPECT_EQ(e.selectionRects().size(), 1u);
@@ -759,7 +803,7 @@ TEST(Editing, RemovingFocusedEditableThenKeysIsSafe) {
     e.focus();
     e.document.removeChild(e.box);
     e.type("X");
-    e.key(Rocket::Scancode::KeyA, _Mods(false, true), "a");
+    e.key(Rocket::Scancode::KeyA, _Command(), "a");
     e.key(Rocket::Scancode::Backspace);
     EXPECT_EQ(e.content(), "hello");
     EXPECT_TRUE(e.inputs.empty());
@@ -863,14 +907,18 @@ TEST(Editing, MultiLineEnterArrowDownAndTab) {
 /* Cmd+Backspace deletes from the caret to the start of the line, Cmd+Delete
    to its end. */
 TEST(Editing, CmdBackspaceAndCmdDeleteDeleteToLineEdges) {
+#ifndef __APPLE__
+    GTEST_SKIP() << "a macOS binding";
+#endif
+
     auto e = _Editor("one two");
     e.focus();
     e.key(Rocket::Scancode::End);
-    e.key(Rocket::Scancode::Backspace, _Mods(false, true));
+    e.key(Rocket::Scancode::Backspace, _Command());
     EXPECT_EQ(e.content(), "");
     e.type("one two");
-    e.key(Rocket::Scancode::ArrowLeft, _Mods(false, false, true));
-    e.key(Rocket::Scancode::Delete, _Mods(false, true));
+    e.key(Rocket::Scancode::ArrowLeft, _Word());
+    e.key(Rocket::Scancode::Delete, _Command());
     EXPECT_EQ(e.content(), "one ");
 }
 
@@ -878,6 +926,10 @@ TEST(Editing, CmdBackspaceAndCmdDeleteDeleteToLineEdges) {
    Ctrl+A / Ctrl+E (line start / end), Ctrl+F / Ctrl+B (char), Ctrl+D
    (delete forward), Ctrl+H (delete backward), Ctrl+K (kill to line end). */
 TEST(Editing, ControlEmacsBindings) {
+#ifndef __APPLE__
+    GTEST_SKIP() << "a macOS binding";
+#endif
+
     auto e = _Editor("abc");
     e.focus();
     e.key(Rocket::Scancode::KeyE, _Mods(false, false, false, true));
@@ -897,22 +949,37 @@ TEST(Editing, ControlEmacsBindings) {
     EXPECT_EQ(e.content(), "Y");
 }
 
-/* Cmd+Z undoes the last edit group and Cmd+Shift+Z redoes it, each
-   reporting the content change. */
+/* Cmd+Z undoes the last edit group and Cmd+Shift+Z redoes it (Control
+   outside macOS), each reporting the content change. */
 TEST(Editing, CmdZUndoesAndCmdShiftZRedoes) {
     auto e = _Editor("");
     e.focus();
     e.type("abc def");
-    e.key(Rocket::Scancode::KeyZ, _Mods(false, true), "z");
+    e.key(Rocket::Scancode::KeyZ, _Command(), "z");
     EXPECT_EQ(e.content(), "abc");
-    e.key(Rocket::Scancode::KeyZ, _Mods(false, true), "z");
+    e.key(Rocket::Scancode::KeyZ, _Command(), "z");
     EXPECT_EQ(e.content(), "");
-    e.key(Rocket::Scancode::KeyZ, _Mods(true, true), "z");
+    e.key(Rocket::Scancode::KeyZ, _Command(true), "z");
     EXPECT_EQ(e.content(), "abc");
-    e.key(Rocket::Scancode::KeyZ, _Mods(true, true), "z");
+    e.key(Rocket::Scancode::KeyZ, _Command(true), "z");
     EXPECT_EQ(e.content(), "abc def");
     EXPECT_EQ(e.inputs.back(), "abc def");
     EXPECT_EQ(e.inputs.size(), 11u);
+}
+
+/* Ctrl+Y redoes, outside macOS, like Ctrl+Shift+Z. */
+TEST(Editing, CtrlYRedoes) {
+#ifdef __APPLE__
+    GTEST_SKIP() << "a binding outside macOS";
+#endif
+
+    auto e = _Editor("");
+    e.focus();
+    e.type("abc def");
+    e.key(Rocket::Scancode::KeyZ, _Command(), "z");
+    EXPECT_EQ(e.content(), "abc");
+    e.key(Rocket::Scancode::KeyY, _Command(), "y");
+    EXPECT_EQ(e.content(), "abc def");
 }
 
 /* Double-click selects the word under the pointer, triple-click the line
@@ -1122,11 +1189,11 @@ TEST(Editing, ShortcutsFollowTheKeycode) {
     ASSERT_EQ(e.content(), "abc");
 
     /* the key in the US Z position, labelled W on AZERTY: not undo */
-    e.window.onEvent.publish(KeyDownWindowEvent(e.window, Rocket::Scancode::KeyZ, std::string(Keycode::W), _Mods(false, true)));
+    e.window.onEvent.publish(KeyDownWindowEvent(e.window, Rocket::Scancode::KeyZ, std::string(Keycode::W), _Command()));
     EXPECT_EQ(e.content(), "abc");
 
     /* the key in the US W position, labelled Z on AZERTY: undo */
-    e.window.onEvent.publish(KeyDownWindowEvent(e.window, Rocket::Scancode::KeyW, std::string(Keycode::Z), _Mods(false, true)));
+    e.window.onEvent.publish(KeyDownWindowEvent(e.window, Rocket::Scancode::KeyW, std::string(Keycode::Z), _Command()));
     EXPECT_EQ(e.content(), "");
 }
 
@@ -1179,7 +1246,7 @@ TEST(Editing, ShortcutsWorkOnNonLatinLayouts) {
     e.type("abc");
     ASSERT_EQ(e.content(), "abc");
 
-    e.window.onEvent.publish(KeyDownWindowEvent(e.window, Rocket::Scancode::KeyZ, "я", _Mods(false, true)));
+    e.window.onEvent.publish(KeyDownWindowEvent(e.window, Rocket::Scancode::KeyZ, "я", _Command()));
     e.document.update();
     EXPECT_EQ(e.content(), "");
 }

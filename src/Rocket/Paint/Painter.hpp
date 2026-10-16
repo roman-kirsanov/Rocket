@@ -36,9 +36,9 @@ struct ImagePaintTarget {
 
 /**
  * A render target backed by a window. The painter acquires the window's
- * drawable and its own command buffer, and submits the command buffer
- * automatically on endPaint(). If the drawable cannot be acquired the
- * whole pass becomes a no-op.
+ * drawable (its swapchain texture on SDL3) and its own command buffer, and
+ * submits the command buffer automatically on endPaint(). If the drawable
+ * cannot be acquired the whole pass becomes a no-op.
  *
  * Note: the elaborated `class Window` spelling keeps the reference bound to
  * the window class even where the Window component function is in scope.
@@ -93,7 +93,9 @@ struct PaintOptions {
  * nothing is submitted (or presented) until the outermost endPaint().
  * Destroying a Painter with passes still open
  * abandons them: nothing is submitted or presented, so every open target
- * keeps its previous content. Graphics pipelines are created lazily and
+ * keeps its previous content. On SDL3 a pass on a window target is the
+ * exception: its command buffer cannot be dropped, so it is submitted and the
+ * window shows what was painted so far. Graphics pipelines are created lazily and
  * cached per texture format, so a single Painter instance can render to
  * targets with different formats without pipeline recreation.
  */

@@ -140,7 +140,15 @@ enum class Scancode {
     Numpad6,
     Numpad7,
     Numpad8,
-    Numpad9
+    Numpad9,
+    Insert,
+    PrintScreen,
+    ScrollLock,
+    Pause,
+    NumLock,
+    ContextMenu,
+    MetaRight,
+    IntlBackslash
 };
 
 /** Modifier keys held during a keyboard or mouse event. */
@@ -244,6 +252,11 @@ inline constexpr auto PageUp = std::string_view("PageUp");
 inline constexpr auto PageDown = std::string_view("PageDown");
 inline constexpr auto Help = std::string_view("Help");
 inline constexpr auto Clear = std::string_view("Clear");
+inline constexpr auto Insert = std::string_view("Insert");
+inline constexpr auto PrintScreen = std::string_view("PrintScreen");
+inline constexpr auto ScrollLock = std::string_view("ScrollLock");
+inline constexpr auto Pause = std::string_view("Pause");
+inline constexpr auto ContextMenu = std::string_view("ContextMenu");
 
 inline constexpr auto Shift = std::string_view("Shift");
 inline constexpr auto Control = std::string_view("Control");
@@ -251,6 +264,7 @@ inline constexpr auto Alt = std::string_view("Alt");
 inline constexpr auto Meta = std::string_view("Meta");
 inline constexpr auto CapsLock = std::string_view("CapsLock");
 inline constexpr auto Fn = std::string_view("Fn");
+inline constexpr auto NumLock = std::string_view("NumLock");
 
 inline constexpr auto AudioVolumeUp = std::string_view("AudioVolumeUp");
 inline constexpr auto AudioVolumeDown = std::string_view("AudioVolumeDown");

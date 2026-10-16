@@ -35,7 +35,15 @@ if [[ $@ == *--test* ]]; then
     TESTS=1
 fi
 
-cmake -S $DIR -B $OUT \
+# Rocket is written for clang: GCC rejects the anonymous structs of its math
+# types. macOS has no other compiler; on Linux it is chosen here.
+COMPILERS=""
+
+if [[ $(uname) == Linux ]]; then
+    COMPILERS="-D CMAKE_C_COMPILER=clang -D CMAKE_CXX_COMPILER=clang++"
+fi
+
+cmake -S $DIR -B $OUT $COMPILERS \
     -D CMAKE_BUILD_TYPE=$BUILD \
     -D CMAKE_EXPORT_COMPILE_COMMANDS=ON \
     -D CMAKE_C_FLAGS="$ASAN" \

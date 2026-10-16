@@ -107,7 +107,81 @@ if(APPLE)
 elseif(WIN32)
 
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    # The SDL3 backend (md/SDL3_BACKEND.md). SDL and SDL_image are built from
+    # their submodules and linked statically; SDL_image decodes PNG and JPEG
+    # with its built-in stb_image, so no other image library is needed.
+    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+    set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(SDL_INSTALL ON CACHE BOOL "" FORCE)
+    set(SDLIMAGE_INSTALL ON CACHE BOOL "" FORCE)
+    set(SDLIMAGE_VENDORED OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_SAMPLES OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_BACKEND_STB ON CACHE BOOL "" FORCE)
+    set(SDLIMAGE_PNG_LIBPNG OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_AVIF OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_JXL OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_TIF OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_WEBP OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_SVG OFF CACHE BOOL "" FORCE)
+    set(BUILD_SHARED_LIBS OFF)
 
+    add_subdirectory(lib/sdl EXCLUDE_FROM_ALL)
+    add_subdirectory(lib/sdl_image EXCLUDE_FROM_ALL)
+
+    find_program(ROCKET_GLSLC glslc REQUIRED)
+
+    set(ROCKET_SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/Rocket/Paint/SDL3)
+    set(ROCKET_SHADER_COMMON ${ROCKET_SHADER_DIR}/Painter.glsl)
+    set(ROCKET_SHADERS
+        QuadVertex.vert
+        ColorBrush.frag
+        ImageBrush.frag
+        LinearGradientBrush.frag
+        RadialGradientBrush.frag
+        BlurFilter.frag
+        ShadowFilterDilate.frag
+        ShadowFilterBlur.frag
+        ShadowFilterComposite.frag
+    )
+
+    # Each shader is compiled to SPIR-V and embedded as a byte array
+    # Rocket_SPIRV_<Name> in <Name>.spv.hpp, the way Painter.metallib is.
+    foreach(ROCKET_SHADER ${ROCKET_SHADERS})
+        get_filename_component(ROCKET_SHADER_NAME ${ROCKET_SHADER} NAME_WE)
+
+        set(ROCKET_SHADER_SPIRV  ${CMAKE_CURRENT_BINARY_DIR}/${ROCKET_SHADER_NAME}.spv)
+        set(ROCKET_SHADER_HEADER ${CMAKE_CURRENT_BINARY_DIR}/${ROCKET_SHADER_NAME}.spv.hpp)
+
+        add_custom_command(
+            OUTPUT ${ROCKET_SHADER_SPIRV}
+            COMMAND ${ROCKET_GLSLC} --target-env=vulkan1.0 -O -o ${ROCKET_SHADER_SPIRV} ${ROCKET_SHADER_DIR}/${ROCKET_SHADER}
+            DEPENDS ${ROCKET_SHADER_DIR}/${ROCKET_SHADER} ${ROCKET_SHADER_COMMON}
+            COMMENT "Compiling ${ROCKET_SHADER}"
+            VERBATIM
+        )
+
+        add_custom_command(
+            OUTPUT ${ROCKET_SHADER_HEADER}
+            COMMAND xxd -n Rocket_SPIRV_${ROCKET_SHADER_NAME} -i ${ROCKET_SHADER_SPIRV} ${ROCKET_SHADER_HEADER}
+            DEPENDS ${ROCKET_SHADER_SPIRV}
+            COMMENT "Embedding ${ROCKET_SHADER_NAME}.spv into ${ROCKET_SHADER_NAME}.spv.hpp"
+            VERBATIM
+        )
+
+        list(APPEND ROCKET_SOURCE ${ROCKET_SHADER_HEADER})
+    endforeach()
+
+    list(APPEND ROCKET_SOURCE
+        src/Rocket/Audio/Audio_SDL3.cpp
+        src/Rocket/Paint/Image_SDL3.cpp
+        src/Rocket/Paint/Painter_SDL3.cpp
+        src/Rocket/Window/App_SDL3.cpp
+        src/Rocket/Window/Clipboard_SDL3.cpp
+        src/Rocket/Window/FileDialog_SDL3.cpp
+        src/Rocket/Window/Window_SDL3.cpp
+    )
 endif()
 
 add_subdirectory(lib/freetype)
@@ -156,6 +230,12 @@ if(APPLE)
             "-framework QuartzCore"
             "-framework CoreGraphics"
             "-framework ImageIO"
+    )
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_libraries(Rocket
+        PRIVATE
+            SDL3::SDL3-static
+            SDL3_image::SDL3_image-static
     )
 endif()
 

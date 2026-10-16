@@ -947,6 +947,15 @@ inline void _ScriptDrag(Window& window, Vec2 const& from, Vec2 const& to, KeyMod
     window.onEvent.publish(MouseUpWindowEvent(window, Mouse::LeftButton, to, modifiers));
 }
 
+/** The modifiers of the editing commands: Command on macOS, Control elsewhere (see _ResolveTextCommand in Document.cpp). */
+inline KeyModifiers _CommandModifiers() {
+#ifdef __APPLE__
+    return KeyModifiers{ .meta = true };
+#else
+    return KeyModifiers{ .control = true };
+#endif
+}
+
 /** Presses and releases a key; like the OS, it commits its text as input unless it is a Command or Control shortcut. */
 inline void _ScriptKey(Window& window, Rocket::Scancode const& key, KeyModifiers const& modifiers = {}, std::string const& input = "") {
     window.onEvent.publish(KeyDownWindowEvent(window, key, GetDefaultKeycode(key), modifiers));
@@ -1729,12 +1738,12 @@ TEST(Document, EditingSingleLinePasteStripsLineBreaks) {
     _ScriptEditableSetup(document, box, text, "");
 
     SetClipboardString("a\nb\r\nc\rd");
-    _ScriptKey(window, Rocket::Scancode::KeyV, KeyModifiers{ .meta = true }, "v");
+    _ScriptKey(window, Rocket::Scancode::KeyV, _CommandModifiers(), "v");
     ASSERT_TRUE(text.getContent() == "a b c d");
 
     box.setContentMultiLine(true);
-    _ScriptKey(window, Rocket::Scancode::KeyA, KeyModifiers{ .meta = true }, "a");
-    _ScriptKey(window, Rocket::Scancode::KeyV, KeyModifiers{ .meta = true }, "v");
+    _ScriptKey(window, Rocket::Scancode::KeyA, _CommandModifiers(), "a");
+    _ScriptKey(window, Rocket::Scancode::KeyV, _CommandModifiers(), "v");
     ASSERT_TRUE(text.getContent() == "a\nb\nc\nd");
 
     SetClipboardString(original);
@@ -3558,6 +3567,34 @@ TEST(Document, ResizeAndDPIChangeRelayout) {
     window.setSize({ 1000.0f, 480.0f });
     window.onEvent.publish(DPIChangeWindowEvent(window));
     ASSERT_TRUE(a.getComputedBorderRect().width == 500.0f);
+}
+
+/* A window that is shown is painted again on its next frame, though nothing in
+   the document changed: what was painted while it was hidden may be gone. */
+TEST(Document, ShowWindowRepaints) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    auto node = Node();
+    node.setWidth(50.0f);
+    node.setHeight(50.0f);
+    document.appendChild(node);
+
+    auto sink = NiceMock<PainterSink>();
+    auto scope = SinkScope(sink);
+    auto renders = 0;
+    ON_CALL(sink, beginPaint(_)).WillByDefault(Invoke([&](PaintTarget const&) { renders += 1; }));
+
+    window.onEvent.publish(PaintWindowEvent(window));
+    ASSERT_TRUE(renders == 1);
+
+    window.onEvent.publish(PaintWindowEvent(window));
+    ASSERT_TRUE(renders == 1);
+
+    window.onEvent.publish(ShowWindowEvent(window));
+    window.onEvent.publish(PaintWindowEvent(window));
+    ASSERT_TRUE(renders == 2);
 }
 
 /* Wheel deltas arrive in window points and map into document units, both for

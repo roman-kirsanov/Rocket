@@ -9,13 +9,13 @@
 
 namespace Rocket {
 
-/** Returns the process-wide default GPU device (id<MTLDevice> on macOS). */
+/** Returns the process-wide default GPU device (id<MTLDevice> on macOS, SDL_GPUDevice* on SDL3). */
 void* __GetDefaultGPUDevice();
 
-/** Returns the process-wide default GPU command queue (id<MTLCommandQueue> on macOS). */
+/** Returns the process-wide default GPU command queue (id<MTLCommandQueue>); macOS only, as SDL_GPU has no queue object. */
 void* __GetDefaultGPUCommandQueue();
 
-/** Returns the texture format used for painter targets and images (MTLPixelFormat on macOS). */
+/** Returns the texture format used for painter targets and images (MTLPixelFormat on macOS, SDL_GPUTextureFormat on SDL3). */
 int __GetDefaultTextureFormat();
 
 } /* namespace Rocket */

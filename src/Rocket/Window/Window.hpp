@@ -55,7 +55,7 @@ public:
     /** Returns the backing scale factor (e.g. 2.0 on Retina displays). */
     float getScale() const;
 
-    /** Returns the native window handle (NSWindow* on macOS; an HWND is intended on Windows, which has no backend yet). */
+    /** Returns the native window handle (NSWindow* on macOS, SDL_Window* on the SDL3 backend). */
     void* getHandle() const;
 
     /** Returns whether the window is currently visible. */
@@ -76,7 +76,7 @@ public:
     /** Returns whether the window stays above normal windows. */
     bool getTopmost() const;
 
-    /** Returns whether the window is currently maximized (full-screen on macOS; a zoomed but not full-screen window reports false). */
+    /** Returns whether the window is currently maximized (full-screen on macOS, where a zoomed but not full-screen window reports false; maximized on SDL3). */
     bool isMaximized() const;
 
     /** Returns whether the window is currently minimized. */
@@ -91,7 +91,7 @@ public:
     /** Centers the window on its screen. */
     void center() const;
 
-    /** Marks the native content view as needing display. Note: painting is driven by the display link (PaintWindowEvent fires every vsync regardless), so on macOS this has no observable effect. */
+    /** Marks the native content view as needing display. Note: painting is driven by the display (PaintWindowEvent fires every frame regardless), so this has no observable effect. */
     void paint() const;
 
     /**
@@ -150,7 +150,8 @@ public:
     void setVisible(bool visible);
 
     /**
-     * Enables or disables the close control.
+     * Enables or disables the close control (stored only on SDL3, which cannot
+     * change the control).
      *
      * @param closable True to show a close control, false to hide it.
      */
@@ -165,14 +166,16 @@ public:
 
     /**
      * Enables or disables maximizing (on macOS: the title-bar zoom control;
-     * setMaximized is unaffected).
+     * stored only on SDL3, which cannot change the control; setMaximized is
+     * unaffected).
      *
      * @param maximizable True to allow maximizing, false to disallow it.
      */
     void setMaximizable(bool maximizable);
 
     /**
-     * Enables or disables minimizing.
+     * Enables or disables minimizing (stored only on SDL3, which cannot change
+     * the control).
      *
      * @param minimizable True to allow minimizing, false to disallow it.
      */

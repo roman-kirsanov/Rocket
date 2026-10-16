@@ -10,7 +10,10 @@
 #include <cstdlib>
 #include <string_view>
 #include <charconv>
+#include <clocale>
+#ifdef __APPLE__
 #include <xlocale.h>
+#endif
 #include <format>
 #include <Rocket/Base/Profile.hpp>
 #include <Rocket/Base/JSON.hpp>
@@ -407,12 +410,13 @@ JSONValue ParseJSON(std::string const& text) {
         }
 
         /* The token is already validated against the JSON grammar above, so
-         * strtod_l in the C locale (a null locale_t) parses all of it. The
-         * floating-point std::from_chars needs macOS 26. Values too small for
-         * a double quietly underflow to zero, but overflow to infinity is an
-         * error, as in the reference implementation. */
+         * strtod_l in the C locale parses all of it. The floating-point
+         * std::from_chars needs macOS 26. Values too small for a double
+         * quietly underflow to zero, but overflow to infinity is an error, as
+         * in the reference implementation. */
+        static auto const _cLocale = newlocale(LC_ALL_MASK, "C", nullptr);
         auto const token = std::string(text, start, position - start);
-        auto const value = strtod_l(token.c_str(), nullptr, nullptr);
+        auto const value = strtod_l(token.c_str(), nullptr, _cLocale);
         if (std::isinf(value)) {
             failAt(start, std::format("number overflow parsing '{}'", token));
         }

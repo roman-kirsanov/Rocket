@@ -21,6 +21,9 @@ class Sound;
  * Non-copyable and non-movable. The whole file is decoded into memory at
  * construction time. Played through Sound instances that reference the clip;
  * sounds created over this audio must be destroyed first.
+ *
+ * Note: not implemented on the SDL3 backend yet: there an audio decodes
+ * nothing (no frames, zero duration) and a sound never plays.
  */
 class Audio {
 public:

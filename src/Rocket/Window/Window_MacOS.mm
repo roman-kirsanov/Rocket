@@ -300,6 +300,7 @@ static std::string _SanitizeInput(NSString*);
 @implementation __NSWindow {
     BOOL _leftMouseDown;
     BOOL _rightMouseDown;
+    BOOL _middleMouseDown;
     std::optional<Rocket::Vec2> _mousePosition;
 }
 
@@ -385,7 +386,33 @@ static std::string _SanitizeInput(NSString*);
 - (void)otherMouseDown:(NSEvent*)event {
     PROFILE
 
-    /* */
+    /* buttons past the third (back, forward) are not published */
+    if (event.buttonNumber != 2) {
+        return;
+    }
+
+    NSPoint point = [event locationInWindow];
+
+    if (NSPointInRect(point, self.contentView.frame) == false) {
+        return;
+    }
+
+    auto position = Rocket::Vec2{
+        static_cast<float>(point.x),
+        static_cast<float>(self.contentView.frame.size.height - point.y)
+    };
+
+    if (self->_mousePosition != position) {
+        [self _dispatchMouseMove: point flags: event.modifierFlags];
+    }
+
+    if (self->_onMouseDown != nil) {
+        self->_onMouseDown(Rocket::Mouse::MiddleButton, {
+            static_cast<float>(point.x),
+            static_cast<float>(self.contentView.frame.size.height - point.y)
+        }, Rocket::_ModifiersConvert(event.modifierFlags), static_cast<int>(event.clickCount));
+        self->_middleMouseDown = YES;
+    }
 }
 
 - (void)mouseUp:(NSEvent*)event {
@@ -421,7 +448,24 @@ static std::string _SanitizeInput(NSString*);
 - (void)otherMouseUp:(NSEvent*)event {
     PROFILE
 
-    /* */
+    if (event.buttonNumber == 2) {
+        [self _dispatchMiddleMouseUp: event];
+    }
+}
+
+- (void)_dispatchMiddleMouseUp:(NSEvent*)event {
+    PROFILE
+
+    NSPoint point = [event locationInWindow];
+
+    if (self->_onMouseUp != nil) {
+        self->_onMouseUp(Rocket::Mouse::MiddleButton, {
+            static_cast<float>(point.x),
+            static_cast<float>(self.contentView.frame.size.height - point.y)
+        }, Rocket::_ModifiersConvert(event.modifierFlags));
+    }
+
+    self->_middleMouseDown = NO;
 }
 
 - (void)mouseMoved:(NSEvent*)event {
@@ -436,6 +480,9 @@ static std::string _SanitizeInput(NSString*);
         }
         if (self->_rightMouseDown == YES) {
             [self rightMouseUp: event];
+        }
+        if (self->_middleMouseDown == YES) {
+            [self _dispatchMiddleMouseUp: event];
         }
     }
 
@@ -732,6 +779,8 @@ static auto const _keyMap = std::map<std::int32_t, Scancode>({
     { kVK_Help, Scancode::Help },
     { kVK_Home, Scancode::Home },
     { kVK_Command, Scancode::Meta },
+    { kVK_RightCommand, Scancode::MetaRight },
+    { kVK_ISO_Section, Scancode::IntlBackslash },
     { kVK_ANSI_Minus, Scancode::Minus },
     { kVK_Mute, Scancode::Mute },
     { kVK_PageDown, Scancode::PageDown },
@@ -815,7 +864,7 @@ static bool _IsCharacterScancode(Scancode scancode) {
         case Scancode::BracketLeft: case Scancode::BracketRight: case Scancode::Backslash:
         case Scancode::Semicolon: case Scancode::Quote:
         case Scancode::Comma: case Scancode::Period: case Scancode::Slash:
-        case Scancode::Space:
+        case Scancode::Space: case Scancode::IntlBackslash:
             return true;
         default:
             return false;

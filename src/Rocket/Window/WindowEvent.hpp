@@ -99,7 +99,7 @@ public:
     using WindowEvent::WindowEvent;
 };
 
-/** The mouse moved over the window; position is in window content coordinates. Published while moving and during left-button drags; not during right-button drags on macOS. */
+/** The mouse moved over the window; position is in window content coordinates. Published while moving and during left-button drags; on macOS not during right- or middle-button drags, on SDL3 during every drag. */
 class MouseMoveWindowEvent : public WindowEvent {
 public:
     /**
@@ -208,10 +208,8 @@ private:
  * Every press is preceded by a MouseMoveWindowEvent to the same position,
  * so hover state is current before the press is handled. Platform backends
  * must uphold this, synthesizing the move when the platform does not
- * deliver one.
- *
- * Note: the middle button is not currently published by the macOS backend
- * (the middle button is unhandled).
+ * deliver one. Left, right and middle buttons are published; further buttons
+ * (back, forward) are not.
  */
 class MouseDownWindowEvent : public WindowEvent {
 public:
@@ -244,12 +242,7 @@ private:
     int _clickCount;
 };
 
-/**
- * A mouse button was released; position is in window content coordinates.
- *
- * Note: the middle button is not currently published by the macOS backend
- * (the middle button is unhandled).
- */
+/** A mouse button was released; position is in window content coordinates. */
 class MouseUpWindowEvent : public WindowEvent {
 public:
     /**
@@ -393,21 +386,13 @@ private:
     std::int32_t _selectionLength;
 };
 
-/**
- * The window gained keyboard focus.
- *
- * Note: not currently published by the macOS backend; query Window::isFocused instead.
- */
+/** The window gained keyboard focus. */
 class FocusWindowEvent : public WindowEvent {
 public:
     using WindowEvent::WindowEvent;
 };
 
-/**
- * The window lost keyboard focus.
- *
- * Note: not currently published by the macOS backend; query Window::isFocused instead.
- */
+/** The window lost keyboard focus; keys still held are released first (see KeyUpWindowEvent). */
 class BlurWindowEvent : public WindowEvent {
 public:
     using WindowEvent::WindowEvent;

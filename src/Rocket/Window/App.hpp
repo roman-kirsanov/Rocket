@@ -22,9 +22,9 @@ std::string const& GetWorkDir();
 
 /**
  * Returns the per-user directory for application settings and data
- * (macOS: ~/Library/Application Support; intended for Windows: %APPDATA%;
- * Linux: $XDG_CONFIG_HOME or ~/.config — only the macOS backend exists at
- * present), cached on first call.
+ * (macOS: ~/Library/Application Support; Linux: $XDG_CONFIG_HOME or
+ * ~/.config; intended for Windows: %APPDATA%, which has no backend yet),
+ * cached on first call.
  *
  * The directory is per-user, not per-application: append your own
  * application folder and create it before writing.
@@ -67,8 +67,8 @@ std::function<void()> SetInterval(std::function<void()> const& callback, double 
  * tick, and ExitAppEvent after the loop ends. Timeouts and intervals only
  * fire while the loop is running. Call once, from the main thread.
  *
- * @param argc Argument count, as passed to main(); not currently used by the macOS backend.
- * @param argv Argument vector, as passed to main(); not currently used by the macOS backend.
+ * @param argc Argument count, as passed to main(); not currently used by the backends.
+ * @param argv Argument vector, as passed to main(); not currently used by the backends.
  */
 void Run(int argc, char const** argv);
 
