@@ -24,6 +24,12 @@ static auto constexpr _WHEEL_SCALE = 50.0f;
 /* The frame rate the windows are painted at when the display reports none */
 static auto constexpr _DEFAULT_REFRESH_RATE = 60.0f;
 
+/* How many times a new window is offered to the GPU device, and how long to wait between
+   the tries: under load the Vulkan driver can fail to describe a new window's surface for
+   a moment (seen with NVIDIA on Wayland, as an error SDL has no name for) */
+static auto constexpr _CLAIM_ATTEMPTS = 5;
+static auto constexpr _CLAIM_RETRY_DELAY_MS = 20;
+
 /** Per-window native state: the SDL window and what SDL3 does not keep for us. */
 struct Window::_Window {
     SDL_Window* window;
@@ -625,7 +631,14 @@ void Window::__init() {
         throw std::runtime_error(error);
     }
 
-    if (SDL_ClaimWindowForGPUDevice(static_cast<SDL_GPUDevice*>(__GetDefaultGPUDevice()), _impl->window) == false) {
+    auto claimed = SDL_ClaimWindowForGPUDevice(static_cast<SDL_GPUDevice*>(__GetDefaultGPUDevice()), _impl->window);
+
+    for (auto attempt = 1; (claimed == false) && (attempt < _CLAIM_ATTEMPTS); attempt++) {
+        SDL_Delay(_CLAIM_RETRY_DELAY_MS);
+        claimed = SDL_ClaimWindowForGPUDevice(static_cast<SDL_GPUDevice*>(__GetDefaultGPUDevice()), _impl->window);
+    }
+
+    if (claimed == false) {
         auto const error = std::string(SDL_GetError());
         SDL_DestroyWindow(_impl->window);
         delete _impl;
