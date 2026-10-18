@@ -280,6 +280,7 @@ private:
     void _handleKeyDownEvent(KeyDownWindowEvent const&);
     void _handleKeyUpEvent(KeyUpWindowEvent const&);
     void _handleInputEvent(InputWindowEvent const&);
+    void _handleDropFilesEvent(DropFilesWindowEvent const&);
     void _handleMousePosition(Vec2 const&, KeyModifiers const&, bool);
     void _hoverNode();
     void _pressNode();

@@ -8,6 +8,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 #include <Rocket/Base/Object.hpp>
 #include <Rocket/Math/Vec2.hpp>
 #include <Rocket/Window/Input.hpp>
@@ -434,6 +435,28 @@ public:
     std::string const& getContent() const;
 private:
     std::string _content;
+};
+
+/** Files were dropped on the node; fired on the topmost node under the drop point, or the document when there is none, and bubbles. */
+class DropFilesNodeEvent : public NodeEvent {
+public:
+    /**
+     * A drop of the given files at the given position.
+     *
+     * @param node     The node that is the target of the event.
+     * @param paths    The absolute paths of the dropped files, in the order they were dragged.
+     * @param position The drop position in document coordinates.
+     */
+    DropFilesNodeEvent(Node& node, std::vector<std::string> const& paths, Vec2 const& position);
+
+    /** Returns the absolute paths of the dropped files. */
+    std::vector<std::string> const& getPaths() const;
+
+    /** Returns the drop position in document coordinates. */
+    Vec2 const& getPosition() const;
+private:
+    std::vector<std::string> _paths;
+    Vec2 _position;
 };
 
 /** Fired on the node that gains keyboard focus. */

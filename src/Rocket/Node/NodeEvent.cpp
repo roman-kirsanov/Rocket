@@ -383,4 +383,24 @@ BlurNodeEvent::BlurNodeEvent(Node& node)
     PROFILE
 }
 
+DropFilesNodeEvent::DropFilesNodeEvent(Node& node, std::vector<std::string> const& paths, Vec2 const& position)
+    : NodeEvent(node)
+    , _paths(paths)
+    , _position(position)
+{
+    PROFILE
+}
+
+std::vector<std::string> const& DropFilesNodeEvent::getPaths() const {
+    PROFILE
+
+    return _paths;
+}
+
+Vec2 const& DropFilesNodeEvent::getPosition() const {
+    PROFILE
+
+    return _position;
+}
+
 } /* namespace Rocket */

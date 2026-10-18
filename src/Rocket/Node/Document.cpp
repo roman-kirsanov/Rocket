@@ -320,6 +320,8 @@ void Document::_handleEvent(WindowEvent const& event) {
         _handleKeyUpEvent(*keyUpEvent);
     } else if (auto inputEvent = event.as<InputWindowEvent>()) {
         _handleInputEvent(*inputEvent);
+    } else if (auto dropFilesEvent = event.as<DropFilesWindowEvent>()) {
+        _handleDropFilesEvent(*dropFilesEvent);
     } else if (
         event.is<ResizeWindowEvent>() ||
         event.is<DPIChangeWindowEvent>()
@@ -451,6 +453,20 @@ void Document::_handleInputEvent(InputWindowEvent const& event) {
     if (defaultPrevented == false) {
         _insertText(event.getText());
     }
+
+    _updateAll();
+}
+
+void Document::_handleDropFilesEvent(DropFilesWindowEvent const& event) {
+    PROFILE
+
+    _flushEvents();
+
+    auto const position = _convertPoint(event.getPosition());
+    auto const found = _findNodeAtPosition(position);
+    auto targetNode = (found != nullptr ? found : this);
+
+    targetNode->dispatchEvent(DropFilesNodeEvent(*targetNode, event.getPaths(), position));
 
     _updateAll();
 }

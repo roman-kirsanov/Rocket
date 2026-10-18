@@ -8,6 +8,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 #include <cstdint>
 #include <Rocket/Math/Vec2.hpp>
 #include <Rocket/Base/Object.hpp>
@@ -384,6 +385,28 @@ private:
     std::string _text;
     std::int32_t _cursor;
     std::int32_t _selectionLength;
+};
+
+/** Files were dragged from another application and dropped on the window's content area. */
+class DropFilesWindowEvent : public WindowEvent {
+public:
+    /**
+     * A drop of the given files at the given position.
+     *
+     * @param window   The window the event originated from.
+     * @param paths    The absolute paths of the dropped files, in the order they were dragged.
+     * @param position The drop position, in window content coordinates.
+     */
+    DropFilesWindowEvent(Window& window, std::vector<std::string> const& paths, Vec2 const& position);
+
+    /** Returns the absolute paths of the dropped files. */
+    std::vector<std::string> const& getPaths() const;
+
+    /** Returns the drop position in window content coordinates. */
+    Vec2 const& getPosition() const;
+private:
+    std::vector<std::string> _paths;
+    Vec2 _position;
 };
 
 /** The window gained keyboard focus. */

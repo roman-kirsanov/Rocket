@@ -265,4 +265,24 @@ std::int32_t CompositionWindowEvent::getSelectionLength() const {
     return _selectionLength;
 }
 
+DropFilesWindowEvent::DropFilesWindowEvent(Window& window, std::vector<std::string> const& paths, Vec2 const& position)
+    : WindowEvent(window)
+    , _paths(paths)
+    , _position(position)
+{
+    PROFILE
+}
+
+std::vector<std::string> const& DropFilesWindowEvent::getPaths() const {
+    PROFILE
+
+    return _paths;
+}
+
+Vec2 const& DropFilesWindowEvent::getPosition() const {
+    PROFILE
+
+    return _position;
+}
+
 } /* namespace Rocket */

@@ -247,6 +247,7 @@ private:
     void _keyUp(Scancode, std::string const&, KeyModifiers const&);
     void _input(std::string const&);
     void _composition(std::string const&, std::int32_t, std::int32_t);
+    void _dropFiles(std::vector<std::string> const&, Vec2 const&);
     void _focus();
     void _blur();
     void _paint();

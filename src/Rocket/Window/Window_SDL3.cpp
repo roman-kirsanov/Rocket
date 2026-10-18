@@ -49,6 +49,7 @@ struct Window::_Window {
     std::optional<Vec2> hiddenSize;
     std::optional<Vec2> mousePosition;
     std::vector<Mouse> pressedButtons;
+    std::vector<std::string> droppedFiles;
 };
 
 /** What the run loop calls on a window: set up by the window itself, which alone may reach its private members. */
@@ -366,6 +367,9 @@ static bool _IsInputEvent(std::uint32_t type) {
         case SDL_EVENT_MOUSE_BUTTON_UP:
         case SDL_EVENT_MOUSE_WHEEL:
         case SDL_EVENT_PINCH_UPDATE:
+        case SDL_EVENT_DROP_BEGIN:
+        case SDL_EVENT_DROP_FILE:
+        case SDL_EVENT_DROP_COMPLETE:
             return true;
         default:
             return false;
@@ -619,7 +623,8 @@ void Window::__init() {
         .modal = false,
         .hiddenSize = std::nullopt,
         .mousePosition = std::nullopt,
-        .pressedButtons = {}
+        .pressedButtons = {},
+        .droppedFiles = {}
     };
 
     /* Created like the macOS window: hidden, titled only, not resizable. */
@@ -823,6 +828,26 @@ void Window::__init() {
                     auto const input = _SanitizeInput(event.text.text); /* control characters never reach input */
                     if (input.empty() == false) {
                         _input(input);
+                    }
+                    break;
+                }
+                case SDL_EVENT_DROP_BEGIN: {
+                    _impl->droppedFiles.clear();
+                    break;
+                }
+                case SDL_EVENT_DROP_FILE: {
+                    if (event.drop.data != nullptr) {
+                        _impl->droppedFiles.push_back(std::string(event.drop.data));
+                    }
+                    break;
+                }
+                case SDL_EVENT_DROP_COMPLETE: {
+                    /* one drop of several files arrives as one file event each; they are published together */
+                    auto const paths = _impl->droppedFiles;
+                    _impl->droppedFiles.clear();
+
+                    if (paths.empty() == false) {
+                        _dropFiles(paths, Vec2{ event.drop.x, event.drop.y });
                     }
                     break;
                 }

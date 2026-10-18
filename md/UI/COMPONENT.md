@@ -485,6 +485,11 @@ and checks for `nullptr`. Neither call occupies a state slot, so unlike
   component; the caller's handler runs first via `state.nodeOnEvent`.
 - Call `event.stopPropagation()` after handling a click so an ancestor
   button does not also fire.
+- Files dragged from another application and dropped on a window arrive as
+  `DropFilesNodeEvent` (the paths and the point in document coordinates) on
+  the topmost node under the drop point, or on the document when there is
+  none, and bubble like mouse events. A drop zone handles it in its own
+  node's `onEvent`; the window publishes it first as `DropFilesWindowEvent`.
 - For document-wide events (press outside, key shortcuts) subscribe once
   with `UseSubscription(document.onCaptureEvent, [&](NodeEvent const& e){ ... })`
   on the `document` context. The handler is fixed on mount, so it must read

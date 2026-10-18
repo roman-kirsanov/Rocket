@@ -455,6 +455,15 @@ void Window::_composition(std::string const& text, std::int32_t cursor, std::int
     onEvent.publish(event);
 }
 
+void Window::_dropFiles(std::vector<std::string> const& paths, Vec2 const& position) {
+    PROFILE
+
+    auto event = DropFilesWindowEvent(*this, paths, position);
+
+    _onEvent(event);
+    onEvent.publish(event);
+}
+
 void Window::_focus() {
     PROFILE
 

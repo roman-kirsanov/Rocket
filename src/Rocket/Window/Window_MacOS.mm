@@ -1,5 +1,7 @@
 #include <map>
 #include <cmath>
+#include <string>
+#include <vector>
 #include <optional>
 #include <iostream>
 #include <cassert>
@@ -41,6 +43,7 @@ static std::string _SanitizeInput(NSString*);
 @property (copy, nonatomic) void(^onKeyDown)(NSEvent*);
 @property (copy, nonatomic) void(^onInput)(NSString*);
 @property (copy, nonatomic) void(^onComposition)(NSString*, NSInteger, NSInteger);
+@property (copy, nonatomic) void(^onDropFiles)(NSArray<NSURL*>*, NSPoint);
 
 /** The caret rectangle in view points with a top-left origin; nil keeps the text system off (see Window::setInputArea). */
 @property (strong, nonatomic) NSValue* inputArea;
@@ -221,10 +224,37 @@ static std::string _SanitizeInput(NSString*);
         self.autoresizingMask = (NSViewWidthSizable | NSViewHeightSizable);
         self.layerContentsPlacement = NSViewLayerContentsPlacementTopLeft;
         self.layerContentsRedrawPolicy = NSViewLayerContentsRedrawDuringViewResize;
+        [self registerForDraggedTypes: @[NSPasteboardTypeFileURL]];
         [self _updateLayerSize];
     }
 
     return self;
+}
+
+- (NSArray<NSURL*>*)_draggedFiles:(id<NSDraggingInfo>)sender {
+    return [[sender draggingPasteboard]
+        readObjectsForClasses: @[NSURL.class]
+                      options: @{ NSPasteboardURLReadingFileURLsOnlyKey: @YES }];
+}
+
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
+    return ([self _draggedFiles: sender].count > 0 ? NSDragOperationCopy : NSDragOperationNone);
+}
+
+- (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)sender {
+    return [self draggingEntered: sender];
+}
+
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {
+    NSArray<NSURL*>* files = [self _draggedFiles: sender];
+
+    if (files.count == 0 || self.onDropFiles == nil) {
+        return NO;
+    }
+
+    self.onDropFiles(files, [sender draggingLocation]);
+
+    return YES;
 }
 
 - (void)viewDidMoveToWindow {
@@ -1044,6 +1074,7 @@ void Window::__init() {
     __NSWindow* window = [[__NSWindow alloc] init];
     __NSMetalView* view = [[__NSMetalView alloc] init];
     __weak __NSWindow* weakWindow = window;
+    __weak __NSMetalView* weakView = view;
 
     window.onShow = ^() { _show(); };
     window.onHide = ^() { _hide(); };
@@ -1074,6 +1105,21 @@ void Window::__init() {
     };
     view.onComposition = ^(NSString* text, NSInteger cursor, NSInteger selectionLength) {
         _composition(std::string([text UTF8String] != NULL ? [text UTF8String] : ""), static_cast<std::int32_t>(cursor), static_cast<std::int32_t>(selectionLength));
+    };
+
+    view.onDropFiles = ^(NSArray<NSURL*>* files, NSPoint point) {
+        auto paths = std::vector<std::string>();
+
+        for (NSURL* file in files) {
+            if (file.path != nil) {
+                paths.push_back(std::string([file.path UTF8String]));
+            }
+        }
+
+        _dropFiles(paths, Vec2{
+            static_cast<float>(point.x),
+            static_cast<float>(weakView.frame.size.height - point.y)
+        });
     };
 
     _impl->window = window;

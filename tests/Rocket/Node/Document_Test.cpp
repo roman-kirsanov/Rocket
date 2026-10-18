@@ -481,6 +481,128 @@ TEST(Document, WheelOverDocument) {
     ASSERT_TRUE(tall.getComputedBorderRect().y == -30.0f);
 }
 
+/* Files dropped on the window go to the topmost node under the drop point,
+   with the paths in drag order and the point in document coordinates. */
+TEST(Document, DropFiles) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    document.setDirection(NodeDirection::Horizontal);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    document.appendChild(a);
+
+    document.update();
+
+    auto paths = std::vector<std::string>();
+    auto position = Vec2();
+    Node* target = nullptr;
+    auto sub = Sub<NodeEvent const&>(a.onEvent, [&](NodeEvent const& event) {
+        if (auto drop = event.as<DropFilesNodeEvent>()) {
+            paths = drop->getPaths();
+            position = drop->getPosition();
+            target = &drop->getNode();
+        }
+    });
+
+    window.onEvent.publish(DropFilesWindowEvent(window, { "/tmp/a.png", "/tmp/b.png" }, { 10.0f, 20.0f }));
+
+    ASSERT_TRUE(target == &a);
+    ASSERT_TRUE(paths == std::vector<std::string>({ "/tmp/a.png", "/tmp/b.png" }));
+    ASSERT_TRUE(position == Vec2(10.0f, 20.0f));
+}
+
+/* A drop bubbles: an ancestor sees a drop on its child. */
+TEST(Document, DropFilesBubbles) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    document.setDirection(NodeDirection::Horizontal);
+
+    auto parent = Node();
+    parent.setWidth(200.0f);
+    parent.setHeight(100.0f);
+    document.appendChild(parent);
+
+    auto child = Node();
+    child.setWidth(50.0f);
+    child.setHeight(50.0f);
+    parent.appendChild(child);
+
+    document.update();
+
+    Node* target = nullptr;
+    auto sub = Sub<NodeEvent const&>(parent.onEvent, [&](NodeEvent const& event) {
+        if (event.is<DropFilesNodeEvent>()) {
+            target = &event.getNode();
+        }
+    });
+
+    window.onEvent.publish(DropFilesWindowEvent(window, { "/tmp/a.png" }, { 10.0f, 10.0f }));
+
+    ASSERT_TRUE(target == &child);
+}
+
+/* A drop where no child is goes to the document itself. */
+TEST(Document, DropFilesOverDocument) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    document.setDirection(NodeDirection::Horizontal);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    document.appendChild(a);
+
+    document.update();
+
+    Node* target = nullptr;
+    auto sub = Sub<NodeEvent const&>(document.onEvent, [&](NodeEvent const& event) {
+        if (event.is<DropFilesNodeEvent>()) {
+            target = &event.getNode();
+        }
+    });
+
+    window.onEvent.publish(DropFilesWindowEvent(window, { "/tmp/a.png" }, { 500.0f, 300.0f }));
+
+    ASSERT_TRUE(target == &document);
+}
+
+/* The drop point maps from window points into content space by
+   (window scale / document scale), like the mouse. */
+TEST(Document, DropFilesScale) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    document.setDirection(NodeDirection::Horizontal);
+    document.setScale(document.getScale() * 2.0f);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    document.appendChild(a);
+
+    document.update();
+
+    auto position = Vec2();
+    auto sub = Sub<NodeEvent const&>(a.onEvent, [&](NodeEvent const& event) {
+        if (auto drop = event.as<DropFilesNodeEvent>()) {
+            position = drop->getPosition();
+        }
+    });
+
+    window.onEvent.publish(DropFilesWindowEvent(window, { "/tmp/a.png" }, { 20.0f, 40.0f }));
+
+    ASSERT_TRUE(position == Vec2(10.0f, 20.0f));
+}
+
 /* A node with no overflow set clips its children like Hidden: a child that
    sticks out is not hit outside the parent, and stops being hit-clipped once
    the parent is Visible. */
