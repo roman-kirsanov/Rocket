@@ -314,4 +314,26 @@ std::string GetDefaultKeycode(Scancode scancode);
  */
 std::string GetShortcutKeycode(Scancode scancode, std::string const& keycode);
 
+/**
+ * The name to show the user for a key, as labelled on their keyboard: for a
+ * key that types a character it is that character in uppercase, picked the
+ * way GetShortcutKeycode picks it (AZERTY's KeyZ is "W", German's
+ * Semicolon is "Ö", the digit row is always its digit, a key typing a
+ * non-Latin letter is its Latin letter); for any other key, and for Space,
+ * it is GetScancodeName. Use it in prompts and on rebinding screens; use
+ * GetScancodeName where the name must not depend on the layout.
+ *
+ * @param scancode The physical key.
+ * @param keycode  The key's keycode on the layout to name it for.
+ */
+std::string GetScancodeLabel(Scancode scancode, std::string const& keycode);
+
+/**
+ * GetScancodeLabel for the user's current keyboard layout. Call it on the
+ * main thread.
+ *
+ * @param scancode The physical key.
+ */
+std::string GetScancodeLabel(Scancode scancode);
+
 } /* namespace Rocket */

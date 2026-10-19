@@ -14,13 +14,14 @@
 #include <Rocket/Base/Profile.hpp>
 #include <Rocket/Base/String.hpp>
 #include <Rocket/Paint/Painter_Private.hpp>
+#include <Rocket/Window/Input_Private.hpp>
 #include <Rocket/Window/Window_MacOS.hpp>
 
 namespace Rocket {
 
 static Scancode _KeyConvert(std::int32_t);
 static KeyModifiers _ModifiersConvert(NSEventModifierFlags);
-static std::string _GetKeycode(NSEvent*, Scancode);
+static std::string _GetKeycode(NSString*, Scancode);
 static std::string _SanitizeInput(NSString*);
 
 } /* namespace Rocket */
@@ -601,7 +602,7 @@ static std::string _SanitizeInput(NSString*);
 
     if (self->_onKeyDown != nil) {
         auto const scancode = Rocket::_KeyConvert(event.keyCode);
-        auto const keycode = Rocket::_GetKeycode(event, scancode);
+        auto const keycode = Rocket::_GetKeycode(event.charactersIgnoringModifiers, scancode);
 
         self->_onKeyDown(
             scancode,
@@ -617,7 +618,7 @@ static std::string _SanitizeInput(NSString*);
 
     if (self->_onKeyUp != nil) {
         auto const scancode = Rocket::_KeyConvert(event.keyCode);
-        auto const keycode = Rocket::_GetKeycode(event, scancode);
+        auto const keycode = Rocket::_GetKeycode(event.charactersIgnoringModifiers, scancode);
 
         self->_onKeyUp(
             scancode,
@@ -878,47 +879,24 @@ static Scancode _KeyConvert(std::int32_t code) {
     }
 }
 
-static bool _IsCharacterScancode(Scancode scancode) {
-    PROFILE
-
-    switch (scancode) {
-        case Scancode::Digit0: case Scancode::Digit1: case Scancode::Digit2: case Scancode::Digit3: case Scancode::Digit4:
-        case Scancode::Digit5: case Scancode::Digit6: case Scancode::Digit7: case Scancode::Digit8: case Scancode::Digit9:
-        case Scancode::KeyA: case Scancode::KeyB: case Scancode::KeyC: case Scancode::KeyD: case Scancode::KeyE:
-        case Scancode::KeyF: case Scancode::KeyG: case Scancode::KeyH: case Scancode::KeyI: case Scancode::KeyJ:
-        case Scancode::KeyK: case Scancode::KeyL: case Scancode::KeyM: case Scancode::KeyN: case Scancode::KeyO:
-        case Scancode::KeyP: case Scancode::KeyQ: case Scancode::KeyR: case Scancode::KeyS: case Scancode::KeyT:
-        case Scancode::KeyU: case Scancode::KeyV: case Scancode::KeyW: case Scancode::KeyX: case Scancode::KeyY:
-        case Scancode::KeyZ:
-        case Scancode::Backquote: case Scancode::Minus: case Scancode::Equal:
-        case Scancode::BracketLeft: case Scancode::BracketRight: case Scancode::Backslash:
-        case Scancode::Semicolon: case Scancode::Quote:
-        case Scancode::Comma: case Scancode::Period: case Scancode::Slash:
-        case Scancode::Space: case Scancode::IntlBackslash:
-            return true;
-        default:
-            return false;
-    }
-}
-
 /* What the key means on the current layout: character keys take the
    character the layout gives them without modifiers (lowercased, so Shift
    does not change it); every other key, and a character key that yields no
    usable character (a dead key, a control character), keeps its name. */
-static std::string _GetKeycode(NSEvent* event, Scancode scancode) {
+static std::string _GetKeycode(NSString* characters, Scancode scancode) {
     PROFILE
 
-    if (_IsCharacterScancode(scancode) == false) {
+    if (__IsCharacterScancode(scancode) == false) {
         return GetDefaultKeycode(scancode);
     }
 
-    NSString* const characters = [event.charactersIgnoringModifiers lowercaseString];
+    NSString* const lowercase = [characters lowercaseString];
 
-    if (characters.length == 0) {
+    if (lowercase.length == 0) {
         return GetDefaultKeycode(scancode);
     }
 
-    auto const cString = [characters cStringUsingEncoding: NSUTF8StringEncoding];
+    auto const cString = [lowercase cStringUsingEncoding: NSUTF8StringEncoding];
 
     if (cString == NULL) {
         return GetDefaultKeycode(scancode);
@@ -934,6 +912,47 @@ static std::string _GetKeycode(NSEvent* event, Scancode scancode) {
     }
 
     return std::string(cString);
+}
+
+std::string __GetLayoutKeycode(Scancode scancode) {
+    PROFILE
+
+    for (auto const& [code, mapped] : _keyMap) {
+        if (mapped != scancode) {
+            continue;
+        }
+
+        auto const source = TISCopyCurrentKeyboardLayoutInputSource();
+
+        if (source == NULL) {
+            break;
+        }
+
+        auto const data = static_cast<CFDataRef>(TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData));
+        NSString* characters = nil;
+
+        if (data != NULL) {
+            auto const layout = reinterpret_cast<UCKeyboardLayout const*>(CFDataGetBytePtr(data));
+            auto deadKeyState = UInt32(0);
+            UniChar chars[4];
+            auto length = UniCharCount(0);
+
+            auto const status = UCKeyTranslate(
+                layout, static_cast<UInt16>(code), kUCKeyActionDisplay, 0, LMGetKbdType(),
+                kUCKeyTranslateNoDeadKeysMask, &deadKeyState, 4, &length, chars
+            );
+
+            if (status == noErr) {
+                characters = [NSString stringWithCharacters: chars length: length];
+            }
+        }
+
+        CFRelease(source);
+
+        return _GetKeycode(characters, scancode);
+    }
+
+    return GetDefaultKeycode(scancode);
 }
 
 static std::string _SanitizeInput(NSString* characters) {

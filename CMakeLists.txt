@@ -240,6 +240,7 @@ if(APPLE)
     target_link_libraries(Rocket
         PRIVATE
             "-framework AVFoundation"
+            "-framework Carbon"
             "-framework Cocoa"
             "-framework Metal"
             "-framework QuartzCore"

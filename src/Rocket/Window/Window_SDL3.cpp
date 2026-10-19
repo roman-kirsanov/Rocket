@@ -13,6 +13,7 @@
 #include <Rocket/Base/String.hpp>
 #include <Rocket/Paint/Painter_Private.hpp>
 #include <Rocket/Window/App_Private.hpp>
+#include <Rocket/Window/Input_Private.hpp>
 #include <Rocket/Window/Window_SDL3.hpp>
 
 namespace Rocket {
@@ -210,29 +211,6 @@ static bool _IsControlCodepoint(std::uint32_t codepoint) {
     return (codepoint < 0x20u) || ((codepoint >= 0x7Fu) && (codepoint < 0xA0u));
 }
 
-static bool _IsCharacterScancode(Scancode scancode) {
-    PROFILE
-
-    switch (scancode) {
-        case Scancode::Digit0: case Scancode::Digit1: case Scancode::Digit2: case Scancode::Digit3: case Scancode::Digit4:
-        case Scancode::Digit5: case Scancode::Digit6: case Scancode::Digit7: case Scancode::Digit8: case Scancode::Digit9:
-        case Scancode::KeyA: case Scancode::KeyB: case Scancode::KeyC: case Scancode::KeyD: case Scancode::KeyE:
-        case Scancode::KeyF: case Scancode::KeyG: case Scancode::KeyH: case Scancode::KeyI: case Scancode::KeyJ:
-        case Scancode::KeyK: case Scancode::KeyL: case Scancode::KeyM: case Scancode::KeyN: case Scancode::KeyO:
-        case Scancode::KeyP: case Scancode::KeyQ: case Scancode::KeyR: case Scancode::KeyS: case Scancode::KeyT:
-        case Scancode::KeyU: case Scancode::KeyV: case Scancode::KeyW: case Scancode::KeyX: case Scancode::KeyY:
-        case Scancode::KeyZ:
-        case Scancode::Backquote: case Scancode::Minus: case Scancode::Equal:
-        case Scancode::BracketLeft: case Scancode::BracketRight: case Scancode::Backslash:
-        case Scancode::Semicolon: case Scancode::Quote:
-        case Scancode::Comma: case Scancode::Period: case Scancode::Slash:
-        case Scancode::Space: case Scancode::IntlBackslash:
-            return true;
-        default:
-            return false;
-    }
-}
-
 /* What the key means on the current layout: character keys take the
    character the layout gives them without modifiers (lowercased, so Shift
    does not change it); every other key, and a character key that yields no
@@ -240,7 +218,7 @@ static bool _IsCharacterScancode(Scancode scancode) {
 static std::string _GetKeycode(SDL_Scancode sdlScancode, Scancode scancode) {
     PROFILE
 
-    if (_IsCharacterScancode(scancode) == false) {
+    if (__IsCharacterScancode(scancode) == false) {
         return GetDefaultKeycode(scancode);
     }
 
@@ -254,6 +232,20 @@ static std::string _GetKeycode(SDL_Scancode sdlScancode, Scancode scancode) {
     StringFromCodepoints({ CodepointToLower(key) }, keycode);
 
     return keycode;
+}
+
+std::string __GetLayoutKeycode(Scancode scancode) {
+    PROFILE
+
+    __InitVideo();
+
+    for (auto const& [sdlScancode, mapped] : _keyMap) {
+        if (mapped == scancode) {
+            return _GetKeycode(sdlScancode, scancode);
+        }
+    }
+
+    return GetDefaultKeycode(scancode);
 }
 
 static std::string _SanitizeInput(char const* text) {

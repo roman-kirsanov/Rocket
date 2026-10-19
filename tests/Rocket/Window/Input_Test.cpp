@@ -91,3 +91,31 @@ TEST(Input, ShortcutKeycode) {
     ASSERT_TRUE(GetShortcutKeycode(Scancode::ArrowLeft, "ArrowLeft") == "ArrowLeft");
     ASSERT_TRUE(GetShortcutKeycode(Scancode::Equal, "=") == "=");
 }
+
+/* Labels name a key as printed on the user's keyboard: character keys give
+   their uppercase character, picked like the shortcut keycode; other keys
+   and Space keep their scancode name. */
+TEST(Input, ScancodeLabel) {
+    ASSERT_TRUE(GetScancodeLabel(Scancode::KeyZ, "z") == "Z");                    /* US */
+    ASSERT_TRUE(GetScancodeLabel(Scancode::KeyZ, "w") == "W");                    /* AZERTY */
+    ASSERT_TRUE(GetScancodeLabel(Scancode::KeyY, "z") == "Z");                    /* German QWERTZ */
+    ASSERT_TRUE(GetScancodeLabel(Scancode::Semicolon, "ö") == "Ö");               /* German */
+    ASSERT_TRUE(GetScancodeLabel(Scancode::Digit1, "&") == "1");                  /* AZERTY digit row */
+    ASSERT_TRUE(GetScancodeLabel(Scancode::KeyZ, "я") == "Z");                    /* Russian */
+    ASSERT_TRUE(GetScancodeLabel(Scancode::Slash, "/") == "/");
+    ASSERT_TRUE(GetScancodeLabel(Scancode::Space, " ") == "Space");
+    ASSERT_TRUE(GetScancodeLabel(Scancode::ArrowLeft, "ArrowLeft") == "ArrowLeft");
+    ASSERT_TRUE(GetScancodeLabel(Scancode::Unknown, "Unidentified") == "Unknown");
+}
+
+/* The current layout gives every key a label: names for the keys that do not
+   type, one uppercase character for a letter key. */
+TEST(Input, ScancodeLabelOnCurrentLayout) {
+    ASSERT_TRUE(GetScancodeLabel(Scancode::Escape) == "Escape");
+    ASSERT_TRUE(GetScancodeLabel(Scancode::Space) == "Space");
+    ASSERT_TRUE(GetScancodeLabel(Scancode::Digit1) == "1");
+
+    auto const label = GetScancodeLabel(Scancode::KeyA);
+    ASSERT_TRUE(label.empty() == false);
+    ASSERT_TRUE(label == GetScancodeLabel(Scancode::KeyA, label));                 /* already uppercase */
+}

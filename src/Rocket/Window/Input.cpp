@@ -1,6 +1,9 @@
+#include <vector>
+#include <cstdint>
 #include <unordered_map>
 #include <Rocket/Base/Profile.hpp>
-#include <Rocket/Window/Input.hpp>
+#include <Rocket/Base/String.hpp>
+#include <Rocket/Window/Input_Private.hpp>
 
 namespace Rocket {
 
@@ -301,6 +304,55 @@ std::string GetShortcutKeycode(Scancode scancode, std::string const& keycode) {
     }
 
     return keycode;
+}
+
+bool __IsCharacterScancode(Scancode scancode) {
+    PROFILE
+
+    switch (scancode) {
+        case Scancode::Digit0: case Scancode::Digit1: case Scancode::Digit2: case Scancode::Digit3: case Scancode::Digit4:
+        case Scancode::Digit5: case Scancode::Digit6: case Scancode::Digit7: case Scancode::Digit8: case Scancode::Digit9:
+        case Scancode::KeyA: case Scancode::KeyB: case Scancode::KeyC: case Scancode::KeyD: case Scancode::KeyE:
+        case Scancode::KeyF: case Scancode::KeyG: case Scancode::KeyH: case Scancode::KeyI: case Scancode::KeyJ:
+        case Scancode::KeyK: case Scancode::KeyL: case Scancode::KeyM: case Scancode::KeyN: case Scancode::KeyO:
+        case Scancode::KeyP: case Scancode::KeyQ: case Scancode::KeyR: case Scancode::KeyS: case Scancode::KeyT:
+        case Scancode::KeyU: case Scancode::KeyV: case Scancode::KeyW: case Scancode::KeyX: case Scancode::KeyY:
+        case Scancode::KeyZ:
+        case Scancode::Backquote: case Scancode::Minus: case Scancode::Equal:
+        case Scancode::BracketLeft: case Scancode::BracketRight: case Scancode::Backslash:
+        case Scancode::Semicolon: case Scancode::Quote:
+        case Scancode::Comma: case Scancode::Period: case Scancode::Slash:
+        case Scancode::Space: case Scancode::IntlBackslash:
+            return true;
+        default:
+            return false;
+    }
+}
+
+std::string GetScancodeLabel(Scancode scancode, std::string const& keycode) {
+    PROFILE
+
+    if ((__IsCharacterScancode(scancode) == false) || (scancode == Scancode::Space)) {
+        return GetScancodeName(scancode);
+    }
+
+    static thread_local auto _codepoints = std::vector<std::uint32_t>();
+    StringToCodepoints(GetShortcutKeycode(scancode, keycode), _codepoints);
+
+    for (auto& codepoint : _codepoints) {
+        codepoint = CodepointToUpper(codepoint);
+    }
+
+    auto label = std::string();
+    StringFromCodepoints(_codepoints, label);
+
+    return label;
+}
+
+std::string GetScancodeLabel(Scancode scancode) {
+    PROFILE
+
+    return GetScancodeLabel(scancode, __GetLayoutKeycode(scancode));
 }
 
 } /* namespace Rocket */
