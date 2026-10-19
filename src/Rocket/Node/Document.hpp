@@ -80,7 +80,8 @@ public:
      *
      * The document adopts the window's scale on construction; the value set
      * here overrides it. A bigger scale yields a smaller content size (see
-     * getSize()).
+     * getSize()). Either is kept as its closest hundredth, so that a scale
+     * that drifted in float arithmetic lays out the same on every update.
      *
      * @param scale The new scale factor.
      */

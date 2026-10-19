@@ -716,6 +716,83 @@ TEST(Document, Scale) {
     ASSERT_TRUE(a.isHover() == false);
 }
 
+/* A scale is kept as its closest hundredth: one that drifted in float
+   arithmetic settles on the value it was meant to be. */
+TEST(Document, ScaleSettlesOnTheClosestHundredth) {
+    auto window = Window();
+    auto document = Document(window);
+    auto drifted = 1.0f;
+
+    for (auto step = 0; step < 10; step++) {
+        drifted += 0.1f;
+    }
+
+    ASSERT_TRUE(drifted != 2.0f);
+    document.setScale(drifted);
+    ASSERT_TRUE(document.getScale() == 2.0f);
+
+    document.setScale(1.25f);
+    ASSERT_TRUE(document.getScale() == 1.25f);
+}
+
+/* At a scale that drifted off a whole number, a node that fills the rest of a
+   row next to a fractional width keeps its width however often the row is
+   laid out again. */
+TEST(Document, KeepsTheWidthOfAFillingNodeAtADriftedScale) {
+    auto window = Window();
+    window.setSize({ 1710.0f, 1040.0f });
+
+    auto document = Document(window);
+    document.setScale(1.9999998807907104f);
+    document.setDirection(NodeDirection::Horizontal);
+    document.setAlignment(NodeAlignment::Stretch);
+    document.setPadding(4.0f);
+
+    auto side = Node();
+    side.setWidth(218.75001525878906f);
+    document.appendChild(side);
+
+    auto item = Node();
+    item.setHeight(10.0f);
+    side.appendChild(item);
+
+    auto splitter = Node();
+    splitter.setWidth(4.0f);
+    splitter.setMarginLeft(-1.0f);
+    splitter.setMarginRight(-1.0f);
+    document.appendChild(splitter);
+
+    auto row = Node();
+    row.setFlex(true);
+    row.setDirection(NodeDirection::Horizontal);
+    row.setAlignment(NodeAlignment::Stretch);
+    document.appendChild(row);
+
+    auto tree = Node();
+    tree.setWidth(322.90240478515625f);
+    row.appendChild(tree);
+
+    auto innerSplitter = Node();
+    innerSplitter.setWidth(4.0f);
+    innerSplitter.setMarginLeft(-1.0f);
+    innerSplitter.setMarginRight(-1.0f);
+    row.appendChild(innerSplitter);
+
+    auto rest = Node();
+    rest.setFlex(true);
+    row.appendChild(rest);
+
+    document.update();
+    auto const width = rest.getComputedBorderRect().width;
+
+    for (auto pass = 0; pass < 20; pass++) {
+        item.setHeight((pass % 2) == 0 ? 11.0f : 10.0f);
+        document.update();
+    }
+
+    ASSERT_TRUE(rest.getComputedBorderRect().width == width);
+}
+
 /* At a fractional scale, values applied after Yoga's own pixel-grid rounding
    (offset, transform, scroll position, border widths) are snapped so they
    land on whole device pixels. */

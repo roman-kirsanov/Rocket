@@ -134,6 +134,14 @@ static std::optional<_TextCommandMatch> _ResolveTextCommand(std::string const& k
     return std::nullopt;
 }
 
+/* Yoga rounds to the pixel grid by the scale, and a scale a hair off a clean value, as
+   steps of a tenth added in float give (ten from 1 make 1.9999999), makes it round half
+   pixels differently on each layout, so a node that fills the rest of a row shrinks a
+   pixel at a time. The document keeps the closest hundredth instead. */
+static float _SafeScale(float scale) {
+    return (std::roundf(scale * 100.0f) / 100.0f);
+}
+
 static float _SnapToPixelGrid(float value, float scale) {
     return (std::roundf(value * scale) / scale);
 }
@@ -223,7 +231,7 @@ Document::Document(Window& window)
     PROFILE
 
     _document = this;
-    _scale = window.getScale();
+    _scale = _SafeScale(window.getScale());
     _config = ::YGConfigNew();
 
     _windowSub.on(window.onEvent, [&](WindowEvent const& event) {
@@ -252,8 +260,10 @@ float Document::getScale() const {
 void Document::setScale(float scale) {
     PROFILE
 
-    if (_scale != scale) {
-        _scale = scale;
+    auto const safeScale = _SafeScale(scale);
+
+    if (_scale != safeScale) {
+        _scale = safeScale;
         _needsUpdate = true;
     }
 }
