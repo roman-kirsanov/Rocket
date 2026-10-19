@@ -357,6 +357,74 @@ TEST(Painter, ImageRepeatEnd) {
     }));
 }
 
+TEST(Painter, ImageOffset) {
+    EXPECT_TRUE(runCase("image-offset", 128, 128, [&](Painter& painter, Image&) {
+        painter.paint(QuadShape{ .rect = { 8.0f, 8.0f, 112.0f, 112.0f } }, ImageBrush{
+            .image     = &checker,
+            .positionX = ImagePosition::Center,
+            .positionY = ImagePosition::End,
+            .offsetX   = 24.0f,
+            .offsetY   = -16.0f
+        });
+    }));
+}
+
+TEST(Painter, ImageOffsetStretch) {
+    EXPECT_TRUE(runCase("image-offset-stretch", 128, 128, [&](Painter& painter, Image&) {
+        painter.paint(QuadShape{ .rect = { 16.0f, 16.0f, 96.0f, 96.0f } }, ImageBrush{
+            .image     = &checker,
+            .positionX = ImagePosition::Stretch,
+            .positionY = ImagePosition::Stretch,
+            .offsetX   = 40.0f,
+            .repeatX   = true
+        });
+    }));
+}
+
+TEST(Painter, ImageOffsetRepeat) {
+    EXPECT_TRUE(runCase("image-offset-repeat", 128, 128, [&](Painter& painter, Image&) {
+        painter.paint(QuadShape{ .rect = { 8.0f, 8.0f, 112.0f, 112.0f } }, ImageBrush{
+            .image     = &checker,
+            .positionX = ImagePosition::Start,
+            .positionY = ImagePosition::Start,
+            .offsetX   = 16.0f,
+            .offsetY   = 8.0f,
+            .repeatX   = true,
+            .repeatY   = true
+        });
+    }));
+}
+
+/* A whole number of tiles leaves the repeated image where it was. */
+TEST(Painter, ImageOffsetRepeatWholeTiles) {
+    EXPECT_TRUE(runCase("image-repeat", 128, 128, [&](Painter& painter, Image&) {
+        painter.paint(QuadShape{ .rect = { 8.0f, 8.0f, 112.0f, 112.0f } }, ImageBrush{
+            .image     = &checker,
+            .positionX = ImagePosition::Start,
+            .positionY = ImagePosition::Start,
+            .offsetX   = 96.0f,
+            .offsetY   = -64.0f,
+            .repeatX   = true,
+            .repeatY   = true
+        });
+    }));
+}
+
+/* A huge offset is wrapped by one tile before the shader sees it, so it keeps its precision. */
+TEST(Painter, ImageOffsetRepeatHuge) {
+    EXPECT_TRUE(runCase("image-offset-repeat", 128, 128, [&](Painter& painter, Image&) {
+        painter.paint(QuadShape{ .rect = { 8.0f, 8.0f, 112.0f, 112.0f } }, ImageBrush{
+            .image     = &checker,
+            .positionX = ImagePosition::Start,
+            .positionY = ImagePosition::Start,
+            .offsetX   = 32000016.0f,
+            .offsetY   = -32000024.0f,
+            .repeatX   = true,
+            .repeatY   = true
+        });
+    }));
+}
+
 TEST(Painter, ImageTint) {
     EXPECT_TRUE(runCase("image-tint", 128, 128, [&](Painter& painter, Image&) {
         painter.paint(QuadShape{ .rect = { 8.0f, 8.0f, 112.0f, 112.0f } }, ImageBrush{

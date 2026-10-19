@@ -31,6 +31,8 @@ bool ImageBrush::operator==(ImageBrush const& imageBrush) const {
         && (nPatch == imageBrush.nPatch)
         && (positionX == imageBrush.positionX)
         && (positionY == imageBrush.positionY)
+        && (offsetX == imageBrush.offsetX)
+        && (offsetY == imageBrush.offsetY)
         && (filterMag == imageBrush.filterMag)
         && (filterMin == imageBrush.filterMin)
         && (repeatX == imageBrush.repeatX)

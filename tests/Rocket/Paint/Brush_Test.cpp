@@ -42,6 +42,8 @@ TEST(Brush, ImageBrushEqualityCoversEveryField) {
         { .image = &imageA, .color = Vec4{ 1.0f, 0.0f, 0.0f, 1.0f } },
         { .image = &imageA, .positionX = ImagePosition::Start },
         { .image = &imageA, .positionY = ImagePosition::End },
+        { .image = &imageA, .offsetX = 1.0f },
+        { .image = &imageA, .offsetY = 1.0f },
         { .image = &imageA, .filterMag = ImageFilter::Linear },
         { .image = &imageA, .filterMin = ImageFilter::Linear },
         { .image = &imageA, .repeatX = true },

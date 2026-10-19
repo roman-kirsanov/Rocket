@@ -636,6 +636,8 @@ static void _PushImageBrushUniforms(_RenderPass const& renderPass, ImageBrush co
     auto const filterMag = imageBrush.filterMag.value_or(ImageFilter::Nearest);
     auto const positionX = imageBrush.positionX.value_or(ImagePosition::Stretch);
     auto const positionY = imageBrush.positionY.value_or(ImagePosition::Stretch);
+    auto const offsetX = imageBrush.offsetX.value_or(0.0f);
+    auto const offsetY = imageBrush.offsetY.value_or(0.0f);
     auto const repeatX = imageBrush.repeatX.value_or(false);
     auto const repeatY = imageBrush.repeatY.value_or(false);
     auto const flipX = imageBrush.flipX.value_or(false);
@@ -676,6 +678,11 @@ static void _PushImageBrushUniforms(_RenderPass const& renderPass, ImageBrush co
     } else if (positionY == ImagePosition::Stretch) {
         imageDst.height = bounds.height;
     }
+
+    // A repeated axis wraps the offset by one tile: the tiles look the same,
+    // and the shader keeps its float precision however large the offset grows.
+    imageDst.x += ((repeatX && (imageDst.width > 0.0f)) ? std::fmod(offsetX, imageDst.width) : offsetX);
+    imageDst.y += ((repeatY && (imageDst.height > 0.0f)) ? std::fmod(offsetY, imageDst.height) : offsetY);
 
     auto const imageUniforms = ImageBrushUniforms{
         .color  = { imageColor.red, imageColor.green, imageColor.blue, imageColor.alpha },

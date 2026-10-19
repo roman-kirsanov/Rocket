@@ -42,6 +42,10 @@ struct ImageBrush {
     std::optional<ImagePosition> positionX;
     /** Vertical alignment of the image within the shape. */
     std::optional<ImagePosition> positionY;
+    /** Horizontal shift in pixels of the positioned image; positive moves it right. On a repeated axis it is wrapped by one tile, so any offset scrolls the tiles seamlessly. */
+    std::optional<float> offsetX;
+    /** Vertical shift in pixels of the positioned image; positive moves it down. On a repeated axis it is wrapped by one tile, so any offset scrolls the tiles seamlessly. */
+    std::optional<float> offsetY;
     /** Sampling filter used when the image is magnified. */
     std::optional<ImageFilter> filterMag;
     /** Sampling filter used when the image is minified. */
