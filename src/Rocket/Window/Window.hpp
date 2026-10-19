@@ -82,6 +82,9 @@ public:
     /** Returns whether the window is currently minimized. */
     bool isMinimized() const;
 
+    /** Returns whether the window currently covers its display, borderless (native full-screen mode on macOS). */
+    bool isFullscreen() const;
+
     /** Returns whether the mouse is currently over the window's content area (tracks MouseEnter/MouseExitWindowEvent). */
     bool isHover() const;
 
@@ -196,6 +199,16 @@ public:
     void setMinimized(bool minimized);
 
     /**
+     * Makes the window cover its whole display, borderless, at the desktop
+     * resolution, or returns it to a normal window. On macOS this is the
+     * native full-screen mode, which animates and takes a Space of its own,
+     * so isFullscreen() changes once the animation has finished.
+     *
+     * @param fullscreen True to enter full-screen mode, false to leave it.
+     */
+    void setFullscreen(bool fullscreen);
+
+    /**
      * Keeps the window above normal windows (or stops doing so).
      *
      * @param topmost True to keep the window above normal windows, false to stop.
@@ -266,6 +279,7 @@ private:
     bool __getTopmost() const;
     bool __isMaximized() const;
     bool __isMinimized() const;
+    bool __isFullscreen() const;
     bool __isHover() const;
     bool __isFocused() const;
     void __center() const;
@@ -282,6 +296,7 @@ private:
     void __setMinimizable(bool);
     void __setMaximized(bool);
     void __setMinimized(bool);
+    void __setFullscreen(bool);
     void __setTopmost(bool);
     void __setFocus();
     void __runModal();

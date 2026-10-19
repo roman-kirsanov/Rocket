@@ -940,6 +940,12 @@ bool Window::__isMinimized() const {
     return ((SDL_GetWindowFlags(_impl->window) & SDL_WINDOW_MINIMIZED) != 0);
 }
 
+bool Window::__isFullscreen() const {
+    PROFILE
+
+    return ((SDL_GetWindowFlags(_impl->window) & SDL_WINDOW_FULLSCREEN) != 0);
+}
+
 bool Window::__isHover() const {
     PROFILE
 
@@ -1163,6 +1169,15 @@ void Window::__setMinimized(bool minimized) {
         } else {
             SDL_RestoreWindow(_impl->window);
         }
+    }
+}
+
+void Window::__setFullscreen(bool fullscreen) {
+    PROFILE
+
+    /* With no display mode set, SDL makes the window borderless at the desktop resolution. */
+    if (fullscreen != __isFullscreen()) {
+        SDL_SetWindowFullscreen(_impl->window, fullscreen);
     }
 }
 

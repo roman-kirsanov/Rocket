@@ -111,6 +111,7 @@ TEST(Window, NewWindowStartsHiddenUnfocusedAndWindowed) {
     ASSERT_TRUE(window.getVisible() == false);
     ASSERT_TRUE(window.isMaximized() == false);
     ASSERT_TRUE(window.isMinimized() == false);
+    ASSERT_TRUE(window.isFullscreen() == false);
     ASSERT_TRUE(window.getHandle() != nullptr);
     ASSERT_TRUE(window.getScale() > 0.0f);
 }

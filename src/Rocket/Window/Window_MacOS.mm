@@ -1225,6 +1225,12 @@ bool Window::__isMinimized() const {
     return _impl->window.miniaturized;
 }
 
+bool Window::__isFullscreen() const {
+    PROFILE
+
+    return (_impl->window.styleMask & NSWindowStyleMaskFullScreen);
+}
+
 bool Window::__isHover() const {
     PROFILE
 
@@ -1424,6 +1430,15 @@ void Window::__setMinimized(bool minimized) {
         } else {
             [_impl->window deminiaturize: nil];
         }
+    }
+}
+
+void Window::__setFullscreen(bool fullscreen) {
+    PROFILE
+
+    if (fullscreen != __isFullscreen()) {
+        _impl->window.collectionBehavior |= NSWindowCollectionBehaviorFullScreenPrimary;
+        [_impl->window toggleFullScreen: _impl->window];
     }
 }
 

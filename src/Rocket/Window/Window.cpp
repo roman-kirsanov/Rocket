@@ -131,6 +131,12 @@ bool Window::isMinimized() const {
     return __isMinimized();
 }
 
+bool Window::isFullscreen() const {
+    PROFILE
+
+    return __isFullscreen();
+}
+
 bool Window::getTopmost() const {
     PROFILE
 
@@ -234,6 +240,12 @@ void Window::setMinimized(bool minimized) {
     PROFILE
 
     __setMinimized(minimized);
+}
+
+void Window::setFullscreen(bool fullscreen) {
+    PROFILE
+
+    __setFullscreen(fullscreen);
 }
 
 void Window::setTopmost(bool topmost) {
