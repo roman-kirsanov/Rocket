@@ -47,10 +47,10 @@ static void paintText(Painter& painter, Text& text, Vec2 const& origin) {
 
     painter.paint(QuadShape{ textRect }, ImageBrush{
         .image     = image,
-        .positionX = ImagePosition::Start,
-        .positionY = ImagePosition::Start,
         .filterMag = ImageFilter::Nearest,
-        .filterMin = ImageFilter::Nearest
+        .filterMin = ImageFilter::Nearest,
+        .positionX = ImagePosition::Start,
+        .positionY = ImagePosition::Start
     });
 }
 
@@ -566,10 +566,10 @@ TEST(Text, TextClippedScroll) {
             QuadShape{ Vec4{ Vec2{ -4.0f, -2.0f }, text.getSize() } },
             ImageBrush{
                 .image     = image,
-                .positionX = ImagePosition::Start,
-                .positionY = ImagePosition::Start,
                 .filterMag = ImageFilter::Nearest,
-                .filterMin = ImageFilter::Nearest
+                .filterMin = ImageFilter::Nearest,
+                .positionX = ImagePosition::Start,
+                .positionY = ImagePosition::Start
             },
             PaintOptions{ .scissor = Vec4{ 8.0f, 8.0f, 200.0f, 40.0f } }
         );

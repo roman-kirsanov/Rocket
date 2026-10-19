@@ -1866,10 +1866,10 @@ void Document::_endNodeRender(Node& node, _RenderInfo const& info) {
         auto const shape = QuadShape{ *info.layerRect };
         auto const brush = ImageBrush{
             .image = &*node._layerImage,
-            .positionX = ImagePosition::Start,
-            .positionY = ImagePosition::Start,
             .filterMag = ImageFilter::Nearest,
-            .filterMin = ImageFilter::Nearest
+            .filterMin = ImageFilter::Nearest,
+            .positionX = ImagePosition::Start,
+            .positionY = ImagePosition::Start
         };
 
         _renderNodeOuterShadow(node, info, brush);
@@ -1944,10 +1944,10 @@ void Document::_renderNodeText(Node& node, _RenderInfo const& info) {
     auto const textShape = QuadShape{ textRect };
     auto const textBrush = ImageBrush{
         .image = text->getImage(),
-        .positionX = ImagePosition::Start,
-        .positionY = ImagePosition::Start,
         .filterMag = ImageFilter::Linear,
-        .filterMin = ImageFilter::Linear
+        .filterMin = ImageFilter::Linear,
+        .positionX = ImagePosition::Start,
+        .positionY = ImagePosition::Start
     };
     _painter.paint(textShape, textBrush, { .scissor = textClipRect });
 
@@ -2137,10 +2137,10 @@ void Document::_renderNodeShadow(Node& node, _RenderInfo const& info, QuadShape 
     auto const shadowImageShape = QuadShape{ Vec4{ (shape.rect.origin - padding + (inset ? Vec2{} : offset)), shadowSize } };
     auto const shadowImageBrush = ImageBrush{
         .image = &*node._shadowImage,
-        .positionX = ImagePosition::Start,
-        .positionY = ImagePosition::Start,
         .filterMag = ImageFilter::Nearest,
-        .filterMin = ImageFilter::Nearest
+        .filterMin = ImageFilter::Nearest,
+        .positionX = ImagePosition::Start,
+        .positionY = ImagePosition::Start
     };
     _painter.paint(shadowImageShape, shadowImageBrush, {
         .scissor = (inset ? info.scissorRect : info.compositeScissor),

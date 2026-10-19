@@ -440,9 +440,9 @@ TEST(Painter, ImageFilterNearest) {
     EXPECT_TRUE(runCase("image-filter-nearest", 128, 128, [&](Painter& painter, Image&) {
         painter.paint(QuadShape{ .rect = { 0.0f, 0.0f, 128.0f, 128.0f } }, ImageBrush{
             .image     = &checker,
+            .filterMag = ImageFilter::Nearest,
             .positionX = ImagePosition::Stretch,
-            .positionY = ImagePosition::Stretch,
-            .filterMag = ImageFilter::Nearest
+            .positionY = ImagePosition::Stretch
         });
     }));
 }
@@ -451,9 +451,9 @@ TEST(Painter, ImageFilterLinear) {
     EXPECT_TRUE(runCase("image-filter-linear", 128, 128, [&](Painter& painter, Image&) {
         painter.paint(QuadShape{ .rect = { 0.0f, 0.0f, 128.0f, 128.0f } }, ImageBrush{
             .image     = &checker,
+            .filterMag = ImageFilter::Linear,
             .positionX = ImagePosition::Stretch,
-            .positionY = ImagePosition::Stretch,
-            .filterMag = ImageFilter::Linear
+            .positionY = ImagePosition::Stretch
         });
     }));
 }
@@ -910,10 +910,10 @@ TEST(Painter, ComboNestedLayer) {
         /* composite the layer back at half opacity */
         painter.paint(QuadShape{ .rect = { 32.0f, 32.0f, 64.0f, 64.0f } }, ImageBrush{
             .image     = &layer,
-            .positionX = ImagePosition::Start,
-            .positionY = ImagePosition::Start,
             .filterMag = ImageFilter::Nearest,
-            .filterMin = ImageFilter::Nearest
+            .filterMin = ImageFilter::Nearest,
+            .positionX = ImagePosition::Start,
+            .positionY = ImagePosition::Start
         }, PaintOptions{ .opacity = 0.5f });
     }));
 }

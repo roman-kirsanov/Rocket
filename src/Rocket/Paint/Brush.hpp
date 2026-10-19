@@ -26,8 +26,8 @@ struct ColorBrush {
 };
 
 /**
- * A brush that fills with an image, with optional slicing, tinting,
- * positioning, sampling filters, tiling, flipping, and fit behavior.
+ * A brush that fills with an image, with optional slicing, tinting, sampling
+ * filters, positioning, offsetting, tiling, flipping, and fit behavior.
  */
 struct ImageBrush {
     /** Source image; a null image makes the brush degenerate and paint() no-ops. */
@@ -38,6 +38,10 @@ struct ImageBrush {
     std::optional<Vec4> nPatch;
     /** RGBA color that replaces image pixel RGB; its alpha is multiplied with the image pixel alpha. Ignored entirely (no tint) when its alpha is 0. */
     std::optional<Vec4> color;
+    /** Sampling filter used when the image is magnified. */
+    std::optional<ImageFilter> filterMag;
+    /** Sampling filter used when the image is minified. */
+    std::optional<ImageFilter> filterMin;
     /** Horizontal alignment of the image within the shape. */
     std::optional<ImagePosition> positionX;
     /** Vertical alignment of the image within the shape. */
@@ -46,10 +50,6 @@ struct ImageBrush {
     std::optional<float> offsetX;
     /** Vertical shift in pixels of the positioned image; positive moves it down. On a repeated axis it is wrapped by one tile, so any offset scrolls the tiles seamlessly. */
     std::optional<float> offsetY;
-    /** Sampling filter used when the image is magnified. */
-    std::optional<ImageFilter> filterMag;
-    /** Sampling filter used when the image is minified. */
-    std::optional<ImageFilter> filterMin;
     /** Tile the image horizontally when true. */
     std::optional<bool> repeatX;
     /** Tile the image vertically when true. */
