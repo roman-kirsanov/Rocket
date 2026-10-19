@@ -266,11 +266,11 @@ private:
         std::vector<Node*>
     > _renderList;
 
-    std::vector<Node*> _scrollbarNodes;
-
     std::vector<
         std::unique_ptr<NodeEvent>
     > _eventQueue;
+
+    std::vector<Node*> _scrollbarNodes;
 
     void _handleEvent(WindowEvent const&);
     void _handleMouseMoveEvent(MouseMoveWindowEvent const&);

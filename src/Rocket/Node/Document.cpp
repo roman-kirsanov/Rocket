@@ -217,8 +217,8 @@ Document::Document(Window& window)
     , _needsRender(true)
     , _needsCursor(true)
     , _renderList()
-    , _scrollbarNodes()
     , _eventQueue()
+    , _scrollbarNodes()
 {
     PROFILE
 
@@ -2006,8 +2006,6 @@ void Document::_renderNodeScrollbars(Node& node, _RenderInfo const& info) {
     auto const thickness = (_scrollbarThickness * _scale);
     auto const inset = (_scrollbarInset * _scale);
     auto const corner = (showX && showY) ? (thickness + inset) : 0.0f;
-
-    /* The thumb is as long against its track as the visible part is against the whole content. */
     auto const thumb = [&](float track, float visible, float overflow, float position) {
         auto const length = std::min(track, std::max((_scrollbarMinLength * _scale), (track * (visible / (visible + overflow)))));
         return Vec2{ ((track - length) * (position / overflow)), length };
@@ -2171,12 +2169,11 @@ void Document::_renderAll() {
 
     if (_scrollbarNodes.empty() == false) {
         auto const now = GetTime();
-
-        _needsRender = true;
-
         std::erase_if(_scrollbarNodes, [&](Node* node) {
             return ((now - node->_scrollbarTime) > (_scrollbarHoldTime + _scrollbarFadeTime));
         });
+
+        _needsRender = true;
     }
 
     if (_needsRender == false) return;
