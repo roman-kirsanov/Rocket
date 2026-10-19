@@ -52,6 +52,12 @@ struct NodeProps {
     /** Vertical overflow behaviour (hidden / visible / scroll). */
     std::optional<NodeOverflow> overflowY;
 
+    /** Horizontal overlay scrollbar (visible / hidden); unset behaves as NodeScrollbar::Visible. */
+    std::optional<NodeScrollbar> scrollbarX;
+
+    /** Vertical overlay scrollbar (visible / hidden); unset behaves as NodeScrollbar::Visible. */
+    std::optional<NodeScrollbar> scrollbarY;
+
     /** Positioning mode: Relative (in flow), Absolute, or Fixed. */
     std::optional<NodePosition> position;
 

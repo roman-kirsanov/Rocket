@@ -44,6 +44,12 @@ struct DocumentProps {
         /** Vertical overflow behaviour (hidden / visible / scroll). */
         std::optional<NodeOverflow> overflowY;
 
+        /** Horizontal overlay scrollbar (visible / hidden); unset behaves as NodeScrollbar::Visible. */
+        std::optional<NodeScrollbar> scrollbarX;
+
+        /** Vertical overlay scrollbar (visible / hidden); unset behaves as NodeScrollbar::Visible. */
+        std::optional<NodeScrollbar> scrollbarY;
+
         /** Main-axis direction for children (Horizontal / Vertical, or their Reverse variants). */
         std::optional<NodeDirection> direction;
 

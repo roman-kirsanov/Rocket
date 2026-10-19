@@ -266,6 +266,8 @@ private:
         std::vector<Node*>
     > _renderList;
 
+    std::vector<Node*> _scrollbarNodes;
+
     std::vector<
         std::unique_ptr<NodeEvent>
     > _eventQueue;
@@ -302,6 +304,7 @@ private:
     Node* _getTextInputNode() const;
     std::optional<_InputState> _ensureInputState();
     void _restartCaretBlink();
+    void _showNodeScrollbars(Node&);
     Vec2 _convertPoint(Vec2 const&) const;
     void _queueEvent(std::unique_ptr<NodeEvent>);
     void _flushEvents();
@@ -320,6 +323,7 @@ private:
     void _renderNodeText(Node&, _RenderInfo const&);
     void _renderNodePaint(Node&, _RenderInfo const&);
     void _renderNodeForeground(Node&, _RenderInfo const&);
+    void _renderNodeScrollbars(Node&, _RenderInfo const&);
     void _renderNodeShadow(Node&, _RenderInfo const&, QuadShape const&, Brush const&);
     void _renderNodeOuterShadow(Node&, _RenderInfo const&, ImageBrush const&);
     void _renderNodeInnerShadow(Node&, _RenderInfo const&);

@@ -544,3 +544,32 @@ TEST(UINode, InputAreaPropSyncsToNode) {
     reconciler.update();
     ASSERT_TRUE(node->getInputArea().has_value() == false);
 }
+
+TEST(UINode, ScrollbarPropsSyncToNode) {
+    Window window;
+    window.setSize({ 640.0f, 480.0f });
+
+    class Document document(window);
+
+    class Node* node = nullptr;
+    auto scrollbarX = std::optional<NodeScrollbar>(NodeScrollbar::Hidden);
+    auto scrollbarY = std::optional<NodeScrollbar>();
+
+    auto reconciler = Reconciler();
+    reconciler.setUpdateFn([&] {
+        Context(document, [&] {
+            Node({ .ref = &node, .scrollbarX = scrollbarX, .scrollbarY = scrollbarY });
+        });
+    });
+
+    reconciler.update();
+    ASSERT_TRUE(node != nullptr);
+    ASSERT_TRUE(node->getScrollbarX() == NodeScrollbar::Hidden);
+    ASSERT_TRUE(node->getScrollbarY().has_value() == false);
+
+    scrollbarX = std::nullopt;
+    scrollbarY = NodeScrollbar::Hidden;
+    reconciler.update();
+    ASSERT_TRUE(node->getScrollbarX().has_value() == false);
+    ASSERT_TRUE(node->getScrollbarY() == NodeScrollbar::Hidden);
+}

@@ -522,6 +522,8 @@ TEST(Node, StyleDefaults) {
     ASSERT_TRUE(!node.getAlignment().has_value());
     ASSERT_TRUE(!node.getJustify().has_value());
     ASSERT_TRUE(!node.getWrap().has_value());
+    ASSERT_TRUE(!node.getScrollbarX().has_value());
+    ASSERT_TRUE(!node.getScrollbarY().has_value());
     ASSERT_TRUE(!node.getPosition().has_value());
     ASSERT_TRUE(!node.getWidth().has_value());
     ASSERT_TRUE(!node.getHeight().has_value());
@@ -666,6 +668,18 @@ TEST(Node, ScalarAndFlagRoundTrip) {
     ASSERT_TRUE(*node.getDisplay() == NodeDisplay::Text);
     node.setDisplay(std::nullopt);
     ASSERT_TRUE(!node.getDisplay().has_value());
+
+    node.setScrollbarX(NodeScrollbar::Hidden);
+    ASSERT_TRUE(node.getScrollbarX() == NodeScrollbar::Hidden);
+    ASSERT_TRUE(!node.getScrollbarY().has_value());
+    node.setScrollbarX(std::nullopt);
+    ASSERT_TRUE(!node.getScrollbarX().has_value());
+
+    node.setScrollbarY(NodeScrollbar::Hidden);
+    ASSERT_TRUE(node.getScrollbarY() == NodeScrollbar::Hidden);
+    ASSERT_TRUE(!node.getScrollbarX().has_value());
+    node.setScrollbarY(std::nullopt);
+    ASSERT_TRUE(!node.getScrollbarY().has_value());
 }
 
 /* A nested text node's style must win over its ancestor's.

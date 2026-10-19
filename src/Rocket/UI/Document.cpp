@@ -22,6 +22,8 @@ void Document(DocumentProps const& props, std::function<void()> const& children)
         Effect<std::optional<float>> shouldUpdateScale;
         Effect<std::optional<NodeOverflow>> shouldUpdateOverflowX;
         Effect<std::optional<NodeOverflow>> shouldUpdateOverflowY;
+        Effect<std::optional<NodeScrollbar>> shouldUpdateScrollbarX;
+        Effect<std::optional<NodeScrollbar>> shouldUpdateScrollbarY;
         Effect<std::optional<NodeDirection>> shouldUpdateDirection;
         Effect<std::optional<NodeAlignment>> shouldUpdateAlignment;
         Effect<std::optional<NodeJustify>> shouldUpdateJustify;
@@ -78,6 +80,8 @@ void Document(DocumentProps const& props, std::function<void()> const& children)
     if (state.shouldUpdateScale(props.scale) && props.scale.has_value()) state.document.setScale(props.scale.value());
     if (state.shouldUpdateOverflowX(props.nodeProps.overflowX)) state.document.setOverflowX(props.nodeProps.overflowX);
     if (state.shouldUpdateOverflowY(props.nodeProps.overflowY)) state.document.setOverflowY(props.nodeProps.overflowY);
+    if (state.shouldUpdateScrollbarX(props.nodeProps.scrollbarX)) state.document.setScrollbarX(props.nodeProps.scrollbarX);
+    if (state.shouldUpdateScrollbarY(props.nodeProps.scrollbarY)) state.document.setScrollbarY(props.nodeProps.scrollbarY);
     if (state.shouldUpdateDirection(props.nodeProps.direction)) state.document.setDirection(props.nodeProps.direction);
     if (state.shouldUpdateAlignment(props.nodeProps.alignment)) state.document.setAlignment(props.nodeProps.alignment);
     if (state.shouldUpdateJustify(props.nodeProps.justify)) state.document.setJustify(props.nodeProps.justify);

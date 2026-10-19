@@ -97,6 +97,8 @@ Node::Node()
     , _display(std::nullopt)
     , _overflowX(std::nullopt)
     , _overflowY(std::nullopt)
+    , _scrollbarX(std::nullopt)
+    , _scrollbarY(std::nullopt)
     , _position(std::nullopt)
     , _direction(std::nullopt)
     , _alignment(std::nullopt)
@@ -195,6 +197,7 @@ Node::Node()
     , _shadowImageScale()
     , _scrollOverflow()
     , _scrollPosition()
+    , _scrollbarTime(0)
     , _layoutNode(nullptr)
     , _textNode(nullptr)
 {
@@ -374,6 +377,18 @@ std::optional<NodeOverflow> const& Node::getOverflowY() const {
     PROFILE
 
     return _overflowY;
+}
+
+std::optional<NodeScrollbar> const& Node::getScrollbarX() const {
+    PROFILE
+
+    return _scrollbarX;
+}
+
+std::optional<NodeScrollbar> const& Node::getScrollbarY() const {
+    PROFILE
+
+    return _scrollbarY;
 }
 
 std::optional<NodePosition> const& Node::getPosition() const {
@@ -885,6 +900,24 @@ void Node::setOverflowY(std::optional<NodeOverflow> const& overflowY) {
     if (_overflowY != overflowY) {
         _overflowY = overflowY;
         _invalidateLayout();
+    }
+}
+
+void Node::setScrollbarX(std::optional<NodeScrollbar> const& scrollbarX) {
+    PROFILE
+
+    if (_scrollbarX != scrollbarX) {
+        _scrollbarX = scrollbarX;
+        _invalidateRender();
+    }
+}
+
+void Node::setScrollbarY(std::optional<NodeScrollbar> const& scrollbarY) {
+    PROFILE
+
+    if (_scrollbarY != scrollbarY) {
+        _scrollbarY = scrollbarY;
+        _invalidateRender();
     }
 }
 
@@ -1882,6 +1915,7 @@ void Node::_detach() {
 
         std::erase(_document->_pressState.pressPath, this);
         std::erase(_document->_focusState.focusedPath, this);
+        std::erase(_document->_scrollbarNodes, this);
 
         if (_document->_hoverState.hoverNode == this) _document->_hoverState.hoverNode = nullptr;
         if (_document->_pressState.pressNode == this) _document->_pressState.pressNode = nullptr;
@@ -2197,6 +2231,7 @@ void Node::_resetLayoutState() {
     _computedContentRect           = {};
     _scrollOverflow                = {};
     _scrollPosition                = {};
+    _scrollbarTime                 = 0;
     _computedBorderRectInDocument  = {};
     _computedMarginRectInDocument  = {};
     _computedClipRectInDocument    = {};

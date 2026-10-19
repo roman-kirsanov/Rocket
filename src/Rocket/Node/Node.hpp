@@ -97,6 +97,14 @@ enum class NodeOverflow {
     Scroll
 };
 
+/** Whether a scrolling node shows an overlay scrollbar while it is being scrolled. A node with no scrollbar set behaves as Visible. */
+enum class NodeScrollbar {
+    /** The scrollbar appears over the content while the node scrolls, then fades out. */
+    Visible,
+    /** The scrollbar never appears. */
+    Hidden
+};
+
 /**
  * A post-layout 2D transform applied on top of the node's computed position,
  * following the web's transform semantics: it moves the node visually without
@@ -251,6 +259,12 @@ public:
 
     /** Returns the vertical overflow mode if set, otherwise std::nullopt. */
     std::optional<NodeOverflow> const& getOverflowY() const;
+
+    /** Returns the horizontal scrollbar mode if set, otherwise std::nullopt. */
+    std::optional<NodeScrollbar> const& getScrollbarX() const;
+
+    /** Returns the vertical scrollbar mode if set, otherwise std::nullopt. */
+    std::optional<NodeScrollbar> const& getScrollbarY() const;
 
     /** Returns the positioning mode if set, otherwise std::nullopt. */
     std::optional<NodePosition> const& getPosition() const;
@@ -514,6 +528,12 @@ public:
 
     /** Sets the vertical overflow mode. Passing std::nullopt resets to the default (Hidden). */
     void setOverflowY(std::optional<NodeOverflow> const&);
+
+    /** Sets the horizontal scrollbar mode. Passing std::nullopt resets to the default (Visible). */
+    void setScrollbarX(std::optional<NodeScrollbar> const&);
+
+    /** Sets the vertical scrollbar mode. Passing std::nullopt resets to the default (Visible). */
+    void setScrollbarY(std::optional<NodeScrollbar> const&);
 
     /**
      * Sets the positioning mode.
@@ -868,6 +888,8 @@ private:
     std::optional<NodeDisplay> _display;
     std::optional<NodeOverflow> _overflowX;
     std::optional<NodeOverflow> _overflowY;
+    std::optional<NodeScrollbar> _scrollbarX;
+    std::optional<NodeScrollbar> _scrollbarY;
     std::optional<NodePosition> _position;
     std::optional<NodeDirection> _direction;
     std::optional<NodeAlignment> _alignment;
@@ -966,6 +988,7 @@ private:
     std::optional<float> _shadowImageScale;
     Vec2 _scrollOverflow;
     Vec2 _scrollPosition;
+    std::int64_t _scrollbarTime;
 
     void* _layoutNode;
     void* _textNode;

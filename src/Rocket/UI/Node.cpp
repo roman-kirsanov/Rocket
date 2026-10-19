@@ -28,6 +28,8 @@ void Node(NodeProps const& props, std::function<void()> const& children) {
         Effect<std::optional<NodeDisplay>> shouldUpdateDisplay;
         Effect<std::optional<NodeOverflow>> shouldUpdateOverflowX;
         Effect<std::optional<NodeOverflow>> shouldUpdateOverflowY;
+        Effect<std::optional<NodeScrollbar>> shouldUpdateScrollbarX;
+        Effect<std::optional<NodeScrollbar>> shouldUpdateScrollbarY;
         Effect<std::optional<NodePosition>> shouldUpdatePosition;
         Effect<std::optional<NodeDirection>> shouldUpdateDirection;
         Effect<std::optional<NodeAlignment>> shouldUpdateAlignment;
@@ -153,6 +155,8 @@ void Node(NodeProps const& props, std::function<void()> const& children) {
     if (state.shouldUpdateDisplay(props.display)) state.node.setDisplay(props.display);
     if (state.shouldUpdateOverflowX(props.overflowX)) state.node.setOverflowX(props.overflowX);
     if (state.shouldUpdateOverflowY(props.overflowY)) state.node.setOverflowY(props.overflowY);
+    if (state.shouldUpdateScrollbarX(props.scrollbarX)) state.node.setScrollbarX(props.scrollbarX);
+    if (state.shouldUpdateScrollbarY(props.scrollbarY)) state.node.setScrollbarY(props.scrollbarY);
     if (state.shouldUpdatePosition(props.position)) state.node.setPosition(props.position);
     if (state.shouldUpdateDirection(props.direction)) state.node.setDirection(props.direction);
     if (state.shouldUpdateAlignment(props.alignment)) state.node.setAlignment(props.alignment);

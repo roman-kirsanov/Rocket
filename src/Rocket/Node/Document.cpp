@@ -25,6 +25,12 @@ namespace Rocket {
 
 static auto constexpr _selectionColor = Vec4{ 0.4f, 0.6f, 1.0f, 0.4f };
 static auto constexpr _caretBlinkPeriod = 530ll;
+static auto constexpr _scrollbarHoldTime = 1000ll;
+static auto constexpr _scrollbarFadeTime = 300ll;
+static auto constexpr _scrollbarThickness = 7.0f;
+static auto constexpr _scrollbarInset = 2.0f;
+static auto constexpr _scrollbarMinLength = 20.0f;
+static auto constexpr _scrollbarColor = Vec4{ 0.5f, 0.5f, 0.5f, 0.5f };
 
 enum class _TextCommand {
     MoveLeft,
@@ -211,6 +217,7 @@ Document::Document(Window& window)
     , _needsRender(true)
     , _needsCursor(true)
     , _renderList()
+    , _scrollbarNodes()
     , _eventQueue()
 {
     PROFILE
@@ -697,11 +704,19 @@ void Document::_scrollNode(_ScrollNodeVariant const& variant, Vec2 const& wheel)
     if (xOverflowNode != nullptr) {
         xOverflowNode->_scrollPosition.x = _SnapToPixelGrid(std::clamp((xOverflowNode->_scrollPosition.x + deltaX), 0.0f, xOverflowNode->_scrollOverflow.x), _scale);
         _needsUpdate = true;
+
+        if (deltaX != 0.0f) {
+            _showNodeScrollbars(*xOverflowNode);
+        }
     }
 
     if (yOverflowNode != nullptr) {
         yOverflowNode->_scrollPosition.y = _SnapToPixelGrid(std::clamp((yOverflowNode->_scrollPosition.y + deltaY), 0.0f, yOverflowNode->_scrollOverflow.y), _scale);
         _needsUpdate = true;
+
+        if (deltaY != 0.0f) {
+            _showNodeScrollbars(*yOverflowNode);
+        }
     }
 }
 
@@ -1243,6 +1258,18 @@ Vec2 Document::_convertPoint(Vec2 const& point) const {
     return (point * (_window.getScale() / _scale));
 }
 
+void Document::_showNodeScrollbars(Node& node) {
+    PROFILE
+
+    node._scrollbarTime = GetTime();
+
+    if (std::ranges::find(_scrollbarNodes, &node) == _scrollbarNodes.end()) {
+        _scrollbarNodes.push_back(&node);
+    }
+
+    _needsRender = true;
+}
+
 void Document::_queueEvent(std::unique_ptr<NodeEvent> event) {
     PROFILE
 
@@ -1741,6 +1768,7 @@ void Document::_renderNode(Node& node, Vec2 const& offset, int zIndex) {
     }
 
     _renderNodeForeground(node, info);
+    _renderNodeScrollbars(node, info);
     _endNodeRender(node, info);
 }
 
@@ -1951,6 +1979,59 @@ void Document::_renderNodeForeground(Node& node, _RenderInfo const& info) {
     }
 }
 
+void Document::_renderNodeScrollbars(Node& node, _RenderInfo const& info) {
+    PROFILE
+
+    if (node._scrollbarTime == 0) return;
+
+    auto const elapsed = (GetTime() - node._scrollbarTime);
+    auto const opacity = std::clamp((1.0f - (static_cast<float>(elapsed - _scrollbarHoldTime) / static_cast<float>(_scrollbarFadeTime))), 0.0f, 1.0f);
+
+    if (opacity <= 0.0f) return;
+
+    auto const showX = (
+        (node._overflowX == NodeOverflow::Scroll) &&
+        (node._scrollOverflow.x > 0.0f) &&
+        (node._scrollbarX.value_or(NodeScrollbar::Visible) == NodeScrollbar::Visible)
+    );
+    auto const showY = (
+        (node._overflowY == NodeOverflow::Scroll) &&
+        (node._scrollOverflow.y > 0.0f) &&
+        (node._scrollbarY.value_or(NodeScrollbar::Visible) == NodeScrollbar::Visible)
+    );
+
+    if ((showX == false) && (showY == false)) return;
+
+    auto const viewport = _GetPaddingShape(info.borderShape, (node._computedBorderEdge * _scale)).rect;
+    auto const thickness = (_scrollbarThickness * _scale);
+    auto const inset = (_scrollbarInset * _scale);
+    auto const corner = (showX && showY) ? (thickness + inset) : 0.0f;
+
+    /* The thumb is as long against its track as the visible part is against the whole content. */
+    auto const thumb = [&](float track, float visible, float overflow, float position) {
+        auto const length = std::min(track, std::max((_scrollbarMinLength * _scale), (track * (visible / (visible + overflow)))));
+        return Vec2{ ((track - length) * (position / overflow)), length };
+    };
+
+    auto const paint = [&](Vec4 const& rect) {
+        _painter.paint(QuadShape{ .rect = rect, .borderRadius = (thickness / 2.0f) }, ColorBrush{ .color = _scrollbarColor }, { .scissor = info.clipRect, .opacity = opacity });
+    };
+
+    if (showY) {
+        auto const track = (viewport.height - (inset * 2.0f) - corner);
+        auto const span = thumb(track, (viewport.height / _scale), node._scrollOverflow.y, node._scrollPosition.y);
+
+        paint({ (viewport.getMaxX() - inset - thickness), (viewport.y + inset + span.x), thickness, span.y });
+    }
+
+    if (showX) {
+        auto const track = (viewport.width - (inset * 2.0f) - corner);
+        auto const span = thumb(track, (viewport.width / _scale), node._scrollOverflow.x, node._scrollPosition.x);
+
+        paint({ (viewport.x + inset + span.x), (viewport.getMaxY() - inset - thickness), span.y, thickness });
+    }
+}
+
 void Document::_renderNodeOuterShadow(Node& node, _RenderInfo const& info, ImageBrush const& brush) {
     PROFILE
 
@@ -2086,6 +2167,16 @@ void Document::_renderAll() {
             _caretState.visible = visible;
             _needsRender = true;
         }
+    }
+
+    if (_scrollbarNodes.empty() == false) {
+        auto const now = GetTime();
+
+        _needsRender = true;
+
+        std::erase_if(_scrollbarNodes, [&](Node* node) {
+            return ((now - node->_scrollbarTime) > (_scrollbarHoldTime + _scrollbarFadeTime));
+        });
     }
 
     if (_needsRender == false) return;
