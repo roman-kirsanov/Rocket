@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2026 Roman Kirsanov
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 #include <map>
 #include <cmath>
 #include <string>
@@ -29,14 +36,8 @@ static std::string _SanitizeInput(NSString*);
 /* The content view is the first responder and an NSTextInputClient, so key
    presses go through the input context: dead keys compose ("´" then "e" is
    "é"), the press-and-hold accent picker and input methods commit through
-   insertText:. Committed text is published as input and marked (in-progress)
-   text as composition, both after the key event that produced them; text
-   that arrives without a key (emoji picker, dictation) is published at once.
-   The text system only runs while an input area is set (see
-   Window::setInputArea); otherwise keys are plain key events. While an input
-   method composes, it owns the keys: they are not dispatched as key events.
-   Editing commands the context suggests (doCommandBySelector:) are ignored;
-   the document maps them from the key event itself. */
+   insertText:. The text system only runs while an input area is set (see
+   Window::setInputArea); otherwise keys are plain key events. */
 @interface __NSMetalView : NSView<NSTextInputClient>
 
 @property (strong, nonatomic) NSCursor* activeCursor;
@@ -69,7 +70,6 @@ static std::string _SanitizeInput(NSString*);
     PROFILE
 
     if (self.inputArea == nil) {
-        /* no text field: keys are plain key events */
         if (self.onKeyDown != nil) {
             self.onKeyDown(event);
         }
@@ -557,7 +557,6 @@ static std::string _SanitizeInput(NSString*);
 
     auto deltaX = static_cast<float>(event.scrollingDeltaX);
     auto deltaY = static_cast<float>(event.scrollingDeltaY);
-    // auto isPrecise = event.hasPreciseScrollingDeltas;
 
     if (self->_onMouseWheel != nil) {
         self->_onMouseWheel({ deltaX, deltaY }, Rocket::_ModifiersConvert(event.modifierFlags));
@@ -580,14 +579,10 @@ static std::string _SanitizeInput(NSString*);
 
 - (void)rightMouseDragged:(NSEvent*)event {
     PROFILE
-
-    /* */
 }
 
 - (void)otherMouseDragged:(NSEvent*)event {
     PROFILE
-
-    /* */
 }
 
 - (void)keyDown:(NSEvent*)event {
@@ -1117,7 +1112,7 @@ void Window::__init() {
     view.onDisplay = ^() { _paint(); };
     view.onKeyDown = ^(NSEvent* event) { [weakWindow dispatchKeyDown: event]; };
     view.onInput = ^(NSString* text) {
-        auto const input = _SanitizeInput(text); /* control characters never reach input */
+        auto const input = _SanitizeInput(text);
         if (input.empty() == false) {
             _input(input);
         }
@@ -1271,7 +1266,7 @@ void Window::__setInputArea(std::optional<Vec4> const& caretRect) {
         [view.inputContext invalidateCharacterCoordinates];
     } else if (view.inputArea != nil) {
         view.inputArea = nil;
-        [view.inputContext discardMarkedText]; /* drop a composition in progress */
+        [view.inputContext discardMarkedText];
         [view unmarkText];
     }
 }

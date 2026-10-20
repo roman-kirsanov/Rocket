@@ -16,7 +16,6 @@ QUAD_VARYINGS(in)
 
 layout(location = 0) out vec4 outColor;
 
-// Separable gaussian blur of the field along one axis.
 void main() {
     float sigma = max(uFilter.sigma, 0.0001);
     vec2  step  = (uFilter.direction * uFilter.texel);

@@ -16,8 +16,6 @@ QUAD_VARYINGS(in)
 
 layout(location = 0) out vec4 outColor;
 
-// Separable dilation (positive spread) or erosion (negative spread) of the
-// field along one axis; see Painter.metal.
 void main() {
     vec2  step   = (uFilter.direction * uFilter.texel);
     float extent = abs(uFilter.spread);

@@ -89,8 +89,8 @@ float Sound::_Sound::segmentLength() const {
 void Sound::_Sound::releaseExtras() {
     PROFILE
 
-    flag = nil;      /* ARC releases */
-    remainder = nil; /* ARC releases */
+    flag = nil;
+    remainder = nil;
 }
 
 void Sound::_Sound::scheduleFrom(bool loop, float from) {
@@ -379,7 +379,7 @@ void Sound::__setPitch(float pitch) {
 void Sound::__setDecay(float decay) {
     PROFILE
 
-    _impl->shaped = nil; /* ARC releases the previous envelope */
+    _impl->shaped = nil;
 
     if (decay <= 0.0f) {
         return;

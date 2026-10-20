@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2026 Roman Kirsanov
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 #include <mutex>
 #include <atomic>
 #include <string>
@@ -5,12 +12,14 @@
 #include <cassert>
 #include <SDL3/SDL.h>
 #include <Rocket/Base/Profile.hpp>
+#include <Rocket/Window/App_Private.hpp>
+#include <Rocket/Window/App_SDL3.hpp>
 #include <Rocket/Window/FileDialog_Private.hpp>
-#include <Rocket/Window/Window_SDL3.hpp>
+#include <Rocket/Window/Window.hpp>
 
 namespace Rocket {
 
-/** What SDL's dialog callback hands back; the callback may run on another thread. */
+/** SDL's dialog callback may run on another thread. */
 struct _OpenFileDialogState {
     std::mutex mutex;
     std::atomic<bool> done = false;
@@ -39,7 +48,7 @@ static void SDLCALL _OnOpenFileDialog(void* userdata, char const* const* filelis
 void __OpenFileDialog(OpenFileDialogOptions const& options, OpenFileDialogCallback const& callback) {
     PROFILE
 
-    __InitVideo();
+    App::__InitVideo();
 
     auto state = _OpenFileDialogState{};
 
@@ -77,7 +86,7 @@ void __OpenFileDialog(OpenFileDialogOptions const& options, OpenFileDialogCallba
     /* SDL's dialog runs asynchronously and Rocket's synchronously: tick the run
        loop, without App updates, until the dialog is dismissed */
     while (state.done == false) {
-        __Tick(false);
+        App::__Tick(false);
     }
 
     auto paths = std::vector<std::string>();

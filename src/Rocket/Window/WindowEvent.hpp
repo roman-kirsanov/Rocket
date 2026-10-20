@@ -100,7 +100,7 @@ public:
     using WindowEvent::WindowEvent;
 };
 
-/** The mouse moved over the window; position is in window content coordinates. Published while moving and during left-button drags; on macOS not during right- or middle-button drags, on SDL3 during every drag. */
+/** The mouse moved over the window; position is in window content coordinates. Published while moving and during left-button drags; on macOS not during right- or middle-button drags, on SDL3 and Win32 during every drag. */
 class MouseMoveWindowEvent : public WindowEvent {
 public:
     /**

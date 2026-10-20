@@ -617,5 +617,4 @@ pointer, so the walk touches one record per level and nothing else.
    the `_StoryRadio` / `_StoryToggle` / `_StoryInput` controls from
    `Storybook/_Helpers.hpp`, plus an entry in the `_stories` list in
    `Storybook.cpp`. Add the `.cpp` to `ROCKET_SOURCE`.
-9. Build with `./make.sh --test`, then `./make.sh --example` and run
-   `.build/Debug/example/Storybook/Storybook` to look at it.
+9. Build with `./make.sh --test` (`.\make.ps1 --test` on Windows).

@@ -65,7 +65,6 @@ static SDL_GPUCommandBuffer* _AcquireCommandBuffer() {
     return commandBuffer;
 }
 
-/** Uploads tightly-packed premultiplied RGBA8 pixels into a texture region via a transfer buffer. */
 static void _UploadPixels(SDL_GPUTexture* texture, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, std::uint8_t const* pixels) {
     PROFILE
 
@@ -102,7 +101,6 @@ static void _UploadPixels(SDL_GPUTexture* texture, std::uint32_t x, std::uint32_
     ::SDL_ReleaseGPUTransferBuffer(_Device(), staging); /* released once the upload is done */
 }
 
-/** Downloads a texture's pixels as tightly-packed RGBA8; waits for the GPU to finish. */
 static void _DownloadPixels(SDL_GPUTexture* texture, std::uint32_t width, std::uint32_t height, std::vector<std::uint8_t>& pixels) {
     PROFILE
 

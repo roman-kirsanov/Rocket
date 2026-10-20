@@ -18,7 +18,6 @@
     using FLOAT3X3 = simd_float3x3;
 #endif
 
-/** Per-pass state shared by every draw: resolution, projection, transform, and opacity. */
 struct StateUniforms {
     FLOAT2   resolution;
     FLOAT3X3 projection;
@@ -26,7 +25,6 @@ struct StateUniforms {
     FLOAT1   opacity;
 };
 
-/** Geometry of the shape being drawn, shared by the vertex and fragment stages. */
 struct ShapeUniforms {
     FLOAT2 vertices[4];
     FLOAT4 bounds;
@@ -35,12 +33,10 @@ struct ShapeUniforms {
     INT1   type;    // 0=quad, 1=ellipse, 2=quad outline, 3=ellipse outline
 };
 
-/** Uniforms for the ColorBrush fragment shader. */
 struct ColorBrushUniforms {
     FLOAT4 color;
 };
 
-/** Uniforms for the ImageBrush fragment shader. */
 struct ImageBrushUniforms {
     FLOAT4 color;
     FLOAT2 size;
@@ -51,7 +47,6 @@ struct ImageBrushUniforms {
     FLOAT4 destin;
 };
 
-/** Uniforms for the GradientBrush fragment shaders (linear and radial). Colors are premultiplied. */
 struct GradientBrushUniforms {
     FLOAT2 startPoint;
     FLOAT4 startColor;
@@ -62,7 +57,6 @@ struct GradientBrushUniforms {
     FLOAT1 stopPosition[10];
 };
 
-/** Uniforms for the BlurFilter two-pass gaussian blur fragment shader. */
 struct BlurFilterUniforms {
     FLOAT2 texelSize;
     FLOAT2 direction;
@@ -70,7 +64,6 @@ struct BlurFilterUniforms {
     INT1   taps;
 };
 
-/** Uniforms for the ShadowFilter composite pass. */
 struct ShadowFilterUniforms {
     FLOAT4 color;
     FLOAT1 opacity;

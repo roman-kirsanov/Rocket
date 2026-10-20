@@ -50,8 +50,6 @@ void main() {
     if (uBrush.repeat.x == 1.0) dstPos.x -= (dstSize.x * floor(dstPos.x / dstSize.x));
     if (uBrush.repeat.y == 1.0) dstPos.y -= (dstSize.y * floor(dstPos.y / dstSize.y));
 
-    // Without repeat, fragments outside the positioned image rect contribute
-    // nothing (they are dropped below, after the sample).
     bool outside = ((uBrush.repeat.x != 1.0) && ((dstPos.x < 0.0) || (dstPos.x >= dstSize.x)))
                 || ((uBrush.repeat.y != 1.0) && ((dstPos.y < 0.0) || (dstPos.y >= dstSize.y)));
 

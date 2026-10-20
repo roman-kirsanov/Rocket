@@ -16,7 +16,6 @@
 
 namespace Rocket {
 
-/** Rescales tightly-packed RGBA8 pixels on the CPU (nearest or bilinear). */
 static void _ScalePixels(std::vector<std::uint8_t> const& src, std::uint32_t srcWidth, std::uint32_t srcHeight, std::vector<std::uint8_t>& dst, std::uint32_t dstWidth, std::uint32_t dstHeight, bool linear) {
     PROFILE
 

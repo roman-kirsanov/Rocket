@@ -315,6 +315,22 @@ std::string GetDefaultKeycode(Scancode scancode);
 std::string GetShortcutKeycode(Scancode scancode, std::string const& keycode);
 
 /**
+ * The modifiers editing shortcuts (Copy, Paste, Undo, Select All) are made
+ * with on this platform, as Document matches them: Command (meta) on macOS,
+ * Control elsewhere. Use it to send such a shortcut.
+ */
+KeyModifiers GetShortcutModifiers();
+
+/**
+ * Whether the modifiers hold the key editing shortcuts are made with on this
+ * platform (see GetShortcutModifiers); other modifiers may be held with it.
+ * Use it to recognize such a shortcut.
+ *
+ * @param modifiers The modifiers of a key event.
+ */
+bool HasShortcutModifier(KeyModifiers const& modifiers);
+
+/**
  * The name to show the user for a key, as labelled on their keyboard: for a
  * key that types a character it is that character in uppercase, picked the
  * way GetShortcutKeycode picks it (AZERTY's KeyZ is "W", German's

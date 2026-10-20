@@ -21,8 +21,8 @@
 #include <Rocket/Paint/Painter.hpp>
 #include <Rocket/Paint/Image.hpp>
 #include <Rocket/Paint/Painter_Private.hpp>
+#include <Rocket/Window/App_SDL3.hpp>
 #include <Rocket/Window/Window.hpp>
-#include <Rocket/Window/Window_SDL3.hpp>
 #include "QuadVertex.spv.hpp"
 #include "ColorBrush.spv.hpp"
 #include "ImageBrush.spv.hpp"
@@ -35,11 +35,10 @@
 
 namespace Rocket {
 
-/* The uniform blocks of SDL3/Painter.glsl in std140 layout: vec2 aligns to 8
+/* The uniform blocks of GLSL/Painter.glsl in std140 layout: vec2 aligns to 8
    bytes, vec4, mat3 columns and array elements to 16, so the padding is spelled
    out and the offsets are checked below. */
 
-/** Per-pass state shared by every draw: resolution, projection, transform, and opacity. */
 struct _StateUniforms {
     float resolution[2];
     float _pad0[2];
@@ -49,7 +48,6 @@ struct _StateUniforms {
     float _pad1[3];
 };
 
-/** Geometry of the shape being drawn, shared by the vertex and fragment stages. */
 struct _ShapeUniforms {
     float vertices[4][4]; // .xy used; vec4 for the std140 array stride
     float bounds[4];
@@ -59,12 +57,10 @@ struct _ShapeUniforms {
     std::int32_t _pad0[3];
 };
 
-/** Uniforms for the ColorBrush fragment shader. */
 struct _ColorBrushUniforms {
     float color[4];
 };
 
-/** Uniforms for the ImageBrush fragment shader. */
 struct _ImageBrushUniforms {
     float color[4];
     float size[2];
@@ -76,7 +72,7 @@ struct _ImageBrushUniforms {
     float destin[4];
 };
 
-/** Uniforms for the gradient fragment shaders (linear and radial). Colors are premultiplied. */
+/** Colors are premultiplied. */
 struct _GradientBrushUniforms {
     float startPoint[2];
     float _pad0[2];
@@ -90,7 +86,6 @@ struct _GradientBrushUniforms {
     float stopPositions[3][4]; // position i is stopPositions[i / 4][i % 4]
 };
 
-/** Uniforms for the BlurFilter two-pass gaussian blur fragment shader. */
 struct _BlurFilterUniforms {
     float texelSize[2];
     float direction[2];
@@ -99,7 +94,6 @@ struct _BlurFilterUniforms {
     std::int32_t _pad0[2];
 };
 
-/** Uniforms for the ShadowFilter composite pass. */
 struct _ShadowFilterUniforms {
     float color[4];
     float opacity;
@@ -114,7 +108,6 @@ struct _ShadowFilterUniforms {
     std::int32_t _pad1;
 };
 
-/** Uniforms for the ShadowFilter separable dilate and blur passes. */
 struct _ShadowFilterFieldUniforms {
     float texel[2];
     float direction[2];          // (1, 0) horizontal pass, (0, 1) vertical pass
@@ -141,7 +134,6 @@ static_assert(offsetof(_ShadowFilterUniforms, texel) == 24);
 static_assert(offsetof(_ShadowFilterUniforms, invert) == 56);
 static_assert(offsetof(_ShadowFilterFieldUniforms, invert) == 32);
 
-/** The fragment shaders, one SPIR-V module each. */
 enum class _Fragment {
     ColorBrush,
     ImageBrush,
@@ -251,7 +243,6 @@ static SDL_GPUColorTargetBlendState _GetBlend(Blend blend) {
 
     switch (blend) {
         case Blend::Over:
-            // dst = src + dst * (1 - srcA)
             state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
             state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
             state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
@@ -272,7 +263,6 @@ static SDL_GPUColorTargetBlendState _GetBlend(Blend blend) {
             state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
             break;
         case Blend::Screen:
-            // dst = src + dst * (1 - src)
             state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
             state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_COLOR;
             state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
@@ -373,7 +363,6 @@ static std::optional<Vec4> _FilterBounds(Vec4 const& bounds, Mat3 const& transfo
     return rect;
 }
 
-/* a target-space rect in the downscaled scratch copy, snapped outward to whole texels */
 static Vec4 _ToFilterSpace(Vec4 const& rect, Vec2 const& scale) {
     PROFILE
 
@@ -944,7 +933,7 @@ void* __GetDefaultGPUDevice() {
     PROFILE
 
     static auto const _device = [] {
-        __InitVideo();
+        App::__InitVideo();
 
         auto device = ::SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, false, nullptr);
 
@@ -1071,7 +1060,6 @@ void Painter::__beginPaint(PaintTarget const& target) {
         }
     }
 
-    /* the outermost pass acquires the command buffer every nested pass shares */
     auto const acquireCommandBuffer = [&]() {
         if (_impl->commandBuffer != nullptr) {
             return false;

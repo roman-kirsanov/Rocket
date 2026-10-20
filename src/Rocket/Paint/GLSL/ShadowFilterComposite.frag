@@ -26,7 +26,6 @@ QUAD_VARYINGS(in)
 
 layout(location = 0) out vec4 outColor;
 
-// Vertical gaussian blur of the field, tinted and composited onto the target.
 void main() {
     float sigma = max(uFilter.sigma, 0.0001);
     float sum   = 0.0;
@@ -49,7 +48,7 @@ void main() {
     float aFinal = (wsum > 0.0) ? (sum / wsum) : 0.0;
 
     if (uFilter.inset != 0) {
-        aFinal *= _shadowField(texture0, vScreenUV, uFilter.fromSilhouette, 0).y; // clip the inset shadow to the silhouette
+        aFinal *= _shadowField(texture0, vScreenUV, uFilter.fromSilhouette, 0).y;
     }
 
     float outA = aFinal * uFilter.color.a * uFilter.opacity;

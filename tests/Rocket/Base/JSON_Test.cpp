@@ -7,6 +7,8 @@
 
 #include <cmath>
 #include <limits>
+#include <string>
+#include <clocale>
 #include <cstring>
 #include <Rocket/Base/JSON.hpp>
 #include <gtest/gtest.h>
@@ -17,6 +19,17 @@ namespace {
 
 double Number(std::string const& text) {
     return std::any_cast<double>(ParseJSON(text));
+}
+
+/* Switches the C locale to the first installed one whose decimal separator is
+ * a comma (the names differ between POSIX and Windows); false if none is. */
+bool SetCommaLocale() {
+    for (auto const name : { "de_DE.UTF-8", "ru_RU.UTF-8", "fr_FR.UTF-8", "de-DE", "ru-RU" }) {
+        if (std::setlocale(LC_ALL, name) != nullptr && std::localeconv()->decimal_point[0] == ',') {
+            return true;
+        }
+    }
+    return false;
 }
 
 std::string String(std::string const& text) {
@@ -99,6 +112,22 @@ TEST(JSON, ParsesNumbers) {
     ASSERT_TRUE(Number("0.1") == 0.1);
     ASSERT_TRUE(Number("9007199254740993") == 9007199254740992.0);
     ASSERT_TRUE(Number("1.7976931348623157e308") == std::numeric_limits<double>::max());
+}
+
+/* A number parses the same whatever the C locale, also one that writes the
+ * decimal separator as a comma. */
+TEST(JSON, ParsesNumbersInAnyLocale) {
+    auto const previous = std::string(std::setlocale(LC_ALL, nullptr));
+    auto const comma = SetCommaLocale();
+
+    auto const value = Number("1.5");
+    std::setlocale(LC_ALL, previous.c_str());
+
+    if (comma == false) {
+        GTEST_SKIP() << "no locale with a decimal comma is installed";
+    }
+
+    ASSERT_TRUE(value == 1.5);
 }
 
 /* Like the reference implementation, overflow is an error but underflow

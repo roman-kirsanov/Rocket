@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2026 Roman Kirsanov
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 #pragma once
 
 #include <SDL3/SDL.h>
@@ -5,19 +12,10 @@
 
 namespace Rocket {
 
-/** Initializes SDL's video subsystem, with the hints the backend relies on; safe to call any number of times. */
-void __InitVideo();
+/** Input goes to the innermost modal window only. */
+void __HandleEvent(SDL_Event const& event);
 
-/**
- * Runs one tick of the run loop: waits for events until the next frame is due,
- * handles every pending event, and paints the windows once a frame.
- *
- * App::Run ticks with `update` set; the loops that block inside a tick of their
- * own (a modal window, a file dialog) tick without it, so App timeouts,
- * intervals and UpdateAppEvent do not run while they block, as on macOS.
- *
- * @param update True to run App::_Update in this tick.
- */
-void __Tick(bool update);
+/** Paints only shown, unminimized, unoccluded windows. */
+void __PaintWindows();
 
 } /* namespace Rocket */

@@ -18,7 +18,7 @@
 #ifdef __APPLE__
 #include <CoreGraphics/CoreGraphics.h>
 #include <ImageIO/ImageIO.h>
-#else
+#elif !defined(_WIN32)
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
 #endif
@@ -27,20 +27,35 @@
 
 namespace Rocket {
 
+#ifdef _WIN32
+// WIC's PNG IO, in Snapshot_Win32.cpp: <windows.h> stays out of the tests.
+bool _SaveSnapshotPng(std::string const& path, int width, int height, std::vector<std::uint8_t> const& pixels);
+bool _LoadSnapshotPng(std::string const& path, int& width, int& height, std::vector<std::uint8_t>& pixels);
+
+// Whether the painter draws with the CPU (WARP, where there is no GPU), in Snapshot_Win32.cpp.
+bool _IsSoftwareRenderer();
+#else
+// The other backends always draw with a GPU.
+inline bool _IsSoftwareRenderer() {
+    return false;
+}
+#endif
+
 // Internal helpers for GPU snapshot (golden image) tests. Each case renders
 // into an offscreen Image and is compared per-pixel against a golden PNG in
 // src/Rocket/Paint/Snapshots/. Run with ROCKET_UPDATE_SNAPSHOTS set to
 // (re)generate the goldens; failing cases save a `<name>.actual.png` under the
 // build directory (snapshots/) for visual inspection, keeping the source tree clean.
 //
-// PNG IO goes through ImageIO on macOS and SDL_image elsewhere. The stored
-// bytes are the painter's premultiplied RGBA output, written and read
-// *verbatim*: on macOS images are declared to ImageIO as straight-alpha
-// (kCGImageAlphaLast) so no premultiplication conversion is ever applied, and
-// goldens are read from the decoded image's data provider rather than through
-// a CGBitmapContext (which only supports premultiplied drawing and would
-// corrupt low-alpha pixels); SDL_image stores and loads RGBA32 surfaces as
-// they are, and SDL_ConvertSurface only reorders channels.
+// PNG IO goes through ImageIO on macOS, WIC on Windows and SDL_image
+// elsewhere. The stored bytes are the painter's premultiplied RGBA output,
+// written and read *verbatim*: on macOS images are declared to ImageIO as
+// straight-alpha (kCGImageAlphaLast) so no premultiplication conversion is
+// ever applied, and goldens are read from the decoded image's data provider
+// rather than through a CGBitmapContext (which only supports premultiplied
+// drawing and would corrupt low-alpha pixels); WIC encodes and decodes them as
+// straight 32bppRGBA, which a PNG stores as it is; SDL_image stores and loads
+// RGBA32 surfaces as they are, and SDL_ConvertSurface only reorders channels.
 
 // Golden images are stored per module under tests/_Snapshots/<Module>/; each
 // consumer defines its module name before including this header:
@@ -119,6 +134,8 @@ inline bool _SaveSnapshotPixels(std::string const& path, int width, int height, 
     }
 
     return true;
+#elif defined(_WIN32)
+    return _SaveSnapshotPng(path, width, height, pixels);
 #else
     auto surface = ::SDL_CreateSurfaceFrom(width, height, SDL_PIXELFORMAT_RGBA32, const_cast<std::uint8_t*>(pixels.data()), (width * 4));
 
@@ -207,6 +224,8 @@ inline bool _LoadSnapshotPixels(std::string const& path, int& width, int& height
     ::CFRelease(data);
 
     return true;
+#elif defined(_WIN32)
+    return _LoadSnapshotPng(path, width, height, pixels);
 #else
     auto loaded = ::IMG_Load(path.c_str());
 

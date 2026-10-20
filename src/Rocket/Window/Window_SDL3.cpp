@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2026 Roman Kirsanov
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 #include <map>
 #include <cmath>
 #include <string>
@@ -13,6 +20,7 @@
 #include <Rocket/Base/String.hpp>
 #include <Rocket/Paint/Painter_Private.hpp>
 #include <Rocket/Window/App_Private.hpp>
+#include <Rocket/Window/App_SDL3.hpp>
 #include <Rocket/Window/Input_Private.hpp>
 #include <Rocket/Window/Window_SDL3.hpp>
 
@@ -22,16 +30,12 @@ namespace Rocket {
    macOS backend publishes points, and this many points make one notch */
 static auto constexpr _WHEEL_SCALE = 50.0f;
 
-/* The frame rate the windows are painted at when the display reports none */
-static auto constexpr _DEFAULT_REFRESH_RATE = 60.0f;
-
 /* How many times a new window is offered to the GPU device, and how long to wait between
    the tries: under load the Vulkan driver can fail to describe a new window's surface for
    a moment (seen with NVIDIA on Wayland, as an error SDL has no name for) */
 static auto constexpr _CLAIM_ATTEMPTS = 5;
 static auto constexpr _CLAIM_RETRY_DELAY_MS = 20;
 
-/** Per-window native state: the SDL window and what SDL3 does not keep for us. */
 struct Window::_Window {
     SDL_Window* window;
     Vec2 size;
@@ -61,7 +65,6 @@ struct _WindowHandlers {
 
 static auto _handlers = std::map<SDL_WindowID, _WindowHandlers>();
 static auto _modalWindows = std::vector<SDL_WindowID>();
-static auto _nextFrame = std::uint64_t(0);
 
 static std::map<SDL_Scancode, Scancode> const _keyMap = {
     { SDL_SCANCODE_0, Scancode::Digit0 },
@@ -237,7 +240,7 @@ static std::string _GetKeycode(SDL_Scancode sdlScancode, Scancode scancode) {
 std::string __GetLayoutKeycode(Scancode scancode) {
     PROFILE
 
-    __InitVideo();
+    App::__InitVideo();
 
     for (auto const& [sdlScancode, mapped] : _keyMap) {
         if (mapped == scancode) {
@@ -379,13 +382,8 @@ static void _SyncWindow(SDL_Window* window) {
     }
 }
 
-static void _HandleEvent(SDL_Event const& event) {
+void __HandleEvent(SDL_Event const& event) {
     PROFILE
-
-    if (event.type == SDL_EVENT_QUIT) {
-        App::_Close();
-        return;
-    }
 
     auto const window = SDL_GetWindowFromEvent(&event);
 
@@ -408,7 +406,7 @@ static void _HandleEvent(SDL_Event const& event) {
     }
 }
 
-static void _PaintWindows() {
+void __PaintWindows() {
     PROFILE
 
     auto ids = std::vector<SDL_WindowID>();
@@ -438,143 +436,6 @@ static void _PaintWindows() {
     }
 }
 
-static std::uint64_t _GetFramePeriod() {
-    PROFILE
-
-    auto const mode = SDL_GetCurrentDisplayMode(SDL_GetPrimaryDisplay());
-    auto const refreshRate = ((mode != nullptr) && (mode->refresh_rate > 0.0f)) ? mode->refresh_rate : _DEFAULT_REFRESH_RATE;
-
-    return static_cast<std::uint64_t>(1000000000.0 / static_cast<double>(refreshRate));
-}
-
-void __InitVideo() {
-    PROFILE
-
-    static auto _initialized = false;
-
-    if (_initialized) {
-        return;
-    }
-
-    /* A window never closes by itself, so the last one asking to close must not quit the app. */
-    SDL_SetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE, "0");
-    /* The document draws the composition itself (see Window::setInputArea). */
-    SDL_SetHint(SDL_HINT_IME_IMPLEMENTED_UI, "composition");
-
-    if (SDL_InitSubSystem(SDL_INIT_VIDEO) == false) {
-        throw std::runtime_error(SDL_GetError());
-    }
-
-    _initialized = true;
-}
-
-/* Moves and wheel turns arrive at the mouse's own rate, often far above the
-   frame rate, and every one of them can cost a layout. macOS coalesces them to
-   the display, and so does the run loop: they are held until the frame is due
-   or another event comes, consecutive moves of a window collapse into the last
-   one and consecutive turns into their sum. */
-static bool _IsCoalescedEvent(SDL_Event const& event) {
-    PROFILE
-
-    return (event.type == SDL_EVENT_MOUSE_MOTION)
-        || (event.type == SDL_EVENT_MOUSE_WHEEL);
-}
-
-static void _CoalesceEvent(std::vector<SDL_Event>& held, SDL_Event const& event) {
-    PROFILE
-
-    if (held.empty() == false) {
-        auto& last = held.back();
-
-        if (
-            (event.type == SDL_EVENT_MOUSE_MOTION) &&
-            (last.type == SDL_EVENT_MOUSE_MOTION) &&
-            (last.motion.windowID == event.motion.windowID) &&
-            (last.motion.state == event.motion.state)
-        ) {
-            last = event;
-            return;
-        }
-
-        if (
-            (event.type == SDL_EVENT_MOUSE_WHEEL) &&
-            (last.type == SDL_EVENT_MOUSE_WHEEL) &&
-            (last.wheel.windowID == event.wheel.windowID)
-        ) {
-            last.wheel.x += event.wheel.x;
-            last.wheel.y += event.wheel.y;
-            last.wheel.mouse_x = event.wheel.mouse_x;
-            last.wheel.mouse_y = event.wheel.mouse_y;
-            return;
-        }
-    }
-
-    held.push_back(event);
-}
-
-/* Held events carry no strings, so they outlive SDL's next poll, which frees
-   the strings of the events before it: every other event is handled at once. */
-static void _HandleHeldEvents(std::vector<SDL_Event>& held) {
-    PROFILE
-
-    /* taken out first: a handler may run a nested loop (a modal window), which holds its own */
-    auto const events = std::move(held);
-    held.clear();
-
-    for (auto const& event : events) {
-        _HandleEvent(event);
-    }
-}
-
-void __Tick(bool update) {
-    PROFILE
-
-    __InitVideo();
-
-    static thread_local auto _held = std::vector<SDL_Event>();
-
-    auto event = SDL_Event{};
-
-    /* wait for the frame, or for the first event that cannot be held */
-    for (;;) {
-        auto const now = SDL_GetTicksNS();
-        auto const wait = (_nextFrame > now) ? (_nextFrame - now) : 0;
-
-        if (SDL_WaitEventTimeout(&event, static_cast<Sint32>((wait + 999999) / 1000000)) == false) {
-            break;
-        }
-
-        if (_IsCoalescedEvent(event)) {
-            _CoalesceEvent(_held, event);
-            continue;
-        }
-
-        _HandleHeldEvents(_held);
-        _HandleEvent(event);
-        break;
-    }
-
-    while (SDL_PollEvent(&event)) {
-        if (_IsCoalescedEvent(event)) {
-            _CoalesceEvent(_held, event);
-        } else {
-            _HandleHeldEvents(_held);
-            _HandleEvent(event);
-        }
-    }
-
-    _HandleHeldEvents(_held);
-
-    if (update) {
-        App::_Update();
-    }
-
-    if (SDL_GetTicksNS() >= _nextFrame) {
-        _nextFrame = (SDL_GetTicksNS() + _GetFramePeriod());
-        _PaintWindows();
-    }
-}
-
 void Window::__done() {
     PROFILE
 
@@ -596,7 +457,7 @@ void Window::__done() {
 void Window::__init() {
     PROFILE
 
-    __InitVideo();
+    App::__InitVideo();
 
     _impl = new Window::_Window{
         .window = nullptr,
@@ -817,7 +678,7 @@ void Window::__init() {
                     break;
                 }
                 case SDL_EVENT_TEXT_INPUT: {
-                    auto const input = _SanitizeInput(event.text.text); /* control characters never reach input */
+                    auto const input = _SanitizeInput(event.text.text);
                     if (input.empty() == false) {
                         _input(input);
                     }
@@ -970,7 +831,7 @@ void Window::__center() const {
 void Window::__paint() const {
     PROFILE
 
-    /* The run loop paints every window once a frame anyway (see __Tick). */
+    /* The run loop paints every window once a frame anyway (see App::__Tick). */
 }
 
 void Window::__setTitle(std::string const& title) {
@@ -996,7 +857,7 @@ void Window::__setInputArea(std::optional<Vec4> const& caretRect) {
             SDL_StartTextInput(_impl->window);
         }
     } else if (SDL_TextInputActive(_impl->window)) {
-        SDL_ClearComposition(_impl->window); /* drop a composition in progress */
+        SDL_ClearComposition(_impl->window);
         SDL_StopTextInput(_impl->window);
 
         if (_impl->composing) {
@@ -1217,7 +1078,7 @@ void Window::__runModal() {
     /* A nested run loop: windows keep painting, but App::_Update does not
        run, so timeouts, intervals and UpdateAppEvent wait, as on macOS. */
     while (_impl->modal) {
-        __Tick(false);
+        App::__Tick(false);
     }
 
     std::erase(_modalWindows, id);

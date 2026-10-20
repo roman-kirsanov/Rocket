@@ -30,7 +30,7 @@ public:
      * Constructs an audio clip by loading and decoding an audio file.
      * Throws std::runtime_error if the file cannot be loaded or decoded.
      *
-     * @param path Path to the audio file (WAV, MP3, AIFF, ...; M4A on macOS only).
+     * @param path Path to the audio file (WAV, MP3, AIFF, FLAC; M4A on macOS and Windows; Ogg Vorbis on macOS and Linux).
      */
     Audio(std::string const& path);
 
@@ -38,7 +38,7 @@ public:
      * Constructs an audio clip by decoding raw audio file bytes.
      * Throws std::runtime_error if the bytes cannot be decoded.
      *
-     * @param data Raw audio file bytes (WAV, MP3, AIFF, ...; M4A on macOS only).
+     * @param data Raw audio file bytes (WAV, MP3, AIFF, FLAC; M4A on macOS and Windows; Ogg Vorbis on macOS and Linux).
      * @param size Data size in bytes.
      */
     Audio(std::uint8_t const* data, std::size_t size);

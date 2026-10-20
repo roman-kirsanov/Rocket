@@ -78,16 +78,16 @@ float _npatchAxis(float p, float srcSize, float dstSize, float srcA, float srcB,
 float _roundBoxDistance(vec2 localPos, vec2 size, vec4 corners) {
     vec2 edges = max(-localPos, (localPos - size));
     float distance = (length(max(edges, 0.0)) + min(max(edges.x, edges.y), 0.0));
-    if ((localPos.x < corners.x) && (localPos.y < corners.x)) { // top-left
+    if ((localPos.x < corners.x) && (localPos.y < corners.x)) {
         distance = max(distance, (length(localPos - vec2(corners.x, corners.x)) - corners.x));
     }
-    if ((localPos.x > (size.x - corners.y)) && (localPos.y < corners.y)) { // top-right
+    if ((localPos.x > (size.x - corners.y)) && (localPos.y < corners.y)) {
         distance = max(distance, (length(localPos - vec2((size.x - corners.y), corners.y)) - corners.y));
     }
-    if ((localPos.x > (size.x - corners.z)) && (localPos.y > (size.y - corners.z))) { // bottom-right
+    if ((localPos.x > (size.x - corners.z)) && (localPos.y > (size.y - corners.z))) {
         distance = max(distance, (length(localPos - vec2((size.x - corners.z), (size.y - corners.z))) - corners.z));
     }
-    if ((localPos.x < corners.w) && (localPos.y > (size.y - corners.w))) { // bottom-left
+    if ((localPos.x < corners.w) && (localPos.y > (size.y - corners.w))) {
         distance = max(distance, (length(localPos - vec2(corners.w, (size.y - corners.w))) - corners.w));
     }
     return distance;
@@ -99,7 +99,6 @@ float _edgeCoverage(float d) {
     return clamp((0.5 - (d / max(_Fwidth(d), 0.0001))), 0.0, 1.0);
 }
 
-// A sharp box is covered per axis: the product of the two one-axis coverages.
 float _quadCoverage(vec2 localPos, vec2 size, vec4 corners) {
     if (any(greaterThan(corners, vec4(0.0)))) {
         return _edgeCoverage(_roundBoxDistance(localPos, size, corners));
@@ -108,23 +107,22 @@ float _quadCoverage(vec2 localPos, vec2 size, vec4 corners) {
     return (_edgeCoverage(edges.x) * _edgeCoverage(edges.y));
 }
 
-// Anti-aliased coverage of the shape at a fragment, in shape-local space.
 float _coverage(vec2 localPos, vec4 bounds, vec4 borders, vec4 corners, int type) {
-    if (type == 1) { // ellipse
+    if (type == 1) {
         vec2 c = (bounds.zw * 0.5);
         return _edgeCoverage(length((localPos - c) / c) - 1.0);
-    } else if (type == 2) { // quad outline (per-edge)
-        vec4  b        = borders; // left, top, right, bottom
+    } else if (type == 2) {
+        vec4  b        = borders;
         float outerCov = _quadCoverage(localPos, bounds.zw, corners);
-        if (any(greaterThan(corners, vec4(0.0)))) { // rounded: outer box minus inset inner box
+        if (any(greaterThan(corners, vec4(0.0)))) {
             float innerCov  = 0.0;
             vec2  innerSize = (bounds.zw - vec2((b.x + b.z), (b.y + b.w)));
             if (all(greaterThan(innerSize, vec2(0.0)))) {
                 vec4 innerCorners = max(vec4(
-                    (corners.x - max(b.x, b.y)),  // TL - max(left, top)
-                    (corners.y - max(b.z, b.y)),  // TR - max(right, top)
-                    (corners.z - max(b.z, b.w)),  // BR - max(right, bottom)
-                    (corners.w - max(b.x, b.w))   // BL - max(left, bottom)
+                    (corners.x - max(b.x, b.y)),
+                    (corners.y - max(b.z, b.y)),
+                    (corners.z - max(b.z, b.w)),
+                    (corners.w - max(b.x, b.w))
                 ), vec4(0.0));
                 innerCov = _edgeCoverage(_roundBoxDistance((localPos - b.xy), innerSize, innerCorners));
             }
@@ -135,16 +133,16 @@ float _coverage(vec2 localPos, vec4 bounds, vec4 borders, vec4 corners, int type
         float dT  = (b.y > 0.0) ? (localPos.y - b.y)              : big;
         float dR  = (b.z > 0.0) ? ((bounds.z - b.z) - localPos.x) : big;
         float dB  = (b.w > 0.0) ? ((bounds.w - b.w) - localPos.y) : big;
-        float holeCov = (_edgeCoverage(-min(dL, dR)) * _edgeCoverage(-min(dT, dB))); // 1 inside the hole
+        float holeCov = (_edgeCoverage(-min(dL, dR)) * _edgeCoverage(-min(dT, dB)));
         return (outerCov * (1.0 - holeCov));
-    } else if (type == 3) { // ellipse outline
+    } else if (type == 3) {
         vec2  c  = (bounds.zw * 0.5);
         vec2  ci = max((c - borders.x), vec2(0.0001));
         float outerCov = _edgeCoverage(length((localPos - c) / c)  - 1.0);
         float innerCov = _edgeCoverage(length((localPos - c) / ci) - 1.0);
         return (outerCov * (1.0 - innerCov));
     }
-    return _quadCoverage(localPos, bounds.zw, corners); // filled quad
+    return _quadCoverage(localPos, bounds.zw, corners);
 }
 
 float _gaussianWeight(int i, float sigma) {
@@ -162,7 +160,6 @@ vec2 _shadowField(sampler2D source, vec2 uv, int fromSilhouette, int invert) {
 
 #endif
 
-// Interpolated outputs of QuadVertex.vert.
 #define QUAD_VARYINGS(direction)                                \
     layout(location = 0) direction vec2 vLocalPos;              \
     layout(location = 1) direction vec2 vLocalUV;               \

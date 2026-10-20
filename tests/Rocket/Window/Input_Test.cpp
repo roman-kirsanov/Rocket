@@ -92,6 +92,25 @@ TEST(Input, ShortcutKeycode) {
     ASSERT_TRUE(GetShortcutKeycode(Scancode::Equal, "=") == "=");
 }
 
+/* Editing shortcuts are made with Command on macOS and with Control elsewhere,
+   whatever else is held with it. */
+TEST(Input, ShortcutModifiers) {
+    auto const modifiers = GetShortcutModifiers();
+    auto withShift = modifiers;
+    withShift.shift = true;
+
+#ifdef __APPLE__
+    ASSERT_TRUE(modifiers == KeyModifiers{ .meta = true });
+#else
+    ASSERT_TRUE(modifiers == KeyModifiers{ .control = true });
+#endif
+
+    ASSERT_TRUE(HasShortcutModifier(modifiers));
+    ASSERT_TRUE(HasShortcutModifier(withShift));
+    ASSERT_FALSE(HasShortcutModifier(KeyModifiers{}));
+    ASSERT_FALSE(HasShortcutModifier(KeyModifiers{ .alt = true }));
+}
+
 /* Labels name a key as printed on the user's keyboard: character keys give
    their uppercase character, picked like the shortcut keycode; other keys
    and Space keep their scancode name. */

@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2026 Roman Kirsanov
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 #pragma once
 
 #include <tuple>
@@ -24,7 +31,7 @@ using OpenFileDialogCallback = std::function<void(OpenFileDialogResult const&)>;
 
 /** Configuration for OpenFileDialog. */
 struct OpenFileDialogOptions {
-    /** Allow picking directories (files are always selectable on macOS; on SDL3 the dialog then picks directories only). */
+    /** Allow picking directories (files are always selectable on macOS; on SDL3 and Win32 the dialog then picks directories only). */
     bool directorySelection;
 
     /** Allow selecting more than one item. */
@@ -33,7 +40,7 @@ struct OpenFileDialogOptions {
     /** Dialog window title. */
     std::string title;
 
-    /** Explanatory text shown inside the dialog (ignored on SDL3). */
+    /** Explanatory text shown inside the dialog (ignored on SDL3 and Win32). */
     std::string message;
 
     /** Label of the confirm button (e.g. "Open"). */
@@ -41,8 +48,8 @@ struct OpenFileDialogOptions {
 
     /**
      * Allowed file types as (description, extension) pairs; empty allows any
-     * type. Only the extension is used on macOS; SDL3 shows the description
-     * as the filter's name.
+     * type. Only the extension is used on macOS; SDL3 and Win32 show the
+     * description as the filter's name.
      */
     std::vector<
         std::tuple<std::string, std::string>

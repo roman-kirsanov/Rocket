@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2026 Roman Kirsanov
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 #include <vector>
 #include <cstdint>
 #include <unordered_map>
@@ -306,27 +313,14 @@ std::string GetShortcutKeycode(Scancode scancode, std::string const& keycode) {
     return keycode;
 }
 
-bool __IsCharacterScancode(Scancode scancode) {
+KeyModifiers GetShortcutModifiers() {
     PROFILE
 
-    switch (scancode) {
-        case Scancode::Digit0: case Scancode::Digit1: case Scancode::Digit2: case Scancode::Digit3: case Scancode::Digit4:
-        case Scancode::Digit5: case Scancode::Digit6: case Scancode::Digit7: case Scancode::Digit8: case Scancode::Digit9:
-        case Scancode::KeyA: case Scancode::KeyB: case Scancode::KeyC: case Scancode::KeyD: case Scancode::KeyE:
-        case Scancode::KeyF: case Scancode::KeyG: case Scancode::KeyH: case Scancode::KeyI: case Scancode::KeyJ:
-        case Scancode::KeyK: case Scancode::KeyL: case Scancode::KeyM: case Scancode::KeyN: case Scancode::KeyO:
-        case Scancode::KeyP: case Scancode::KeyQ: case Scancode::KeyR: case Scancode::KeyS: case Scancode::KeyT:
-        case Scancode::KeyU: case Scancode::KeyV: case Scancode::KeyW: case Scancode::KeyX: case Scancode::KeyY:
-        case Scancode::KeyZ:
-        case Scancode::Backquote: case Scancode::Minus: case Scancode::Equal:
-        case Scancode::BracketLeft: case Scancode::BracketRight: case Scancode::Backslash:
-        case Scancode::Semicolon: case Scancode::Quote:
-        case Scancode::Comma: case Scancode::Period: case Scancode::Slash:
-        case Scancode::Space: case Scancode::IntlBackslash:
-            return true;
-        default:
-            return false;
-    }
+#ifdef __APPLE__
+    return KeyModifiers{ .meta = true };
+#else
+    return KeyModifiers{ .control = true };
+#endif
 }
 
 std::string GetScancodeLabel(Scancode scancode, std::string const& keycode) {
@@ -353,6 +347,39 @@ std::string GetScancodeLabel(Scancode scancode) {
     PROFILE
 
     return GetScancodeLabel(scancode, __GetLayoutKeycode(scancode));
+}
+
+bool HasShortcutModifier(KeyModifiers const& modifiers) {
+    PROFILE
+
+#ifdef __APPLE__
+    return modifiers.meta;
+#else
+    return modifiers.control;
+#endif
+}
+
+bool __IsCharacterScancode(Scancode scancode) {
+    PROFILE
+
+    switch (scancode) {
+        case Scancode::Digit0: case Scancode::Digit1: case Scancode::Digit2: case Scancode::Digit3: case Scancode::Digit4:
+        case Scancode::Digit5: case Scancode::Digit6: case Scancode::Digit7: case Scancode::Digit8: case Scancode::Digit9:
+        case Scancode::KeyA: case Scancode::KeyB: case Scancode::KeyC: case Scancode::KeyD: case Scancode::KeyE:
+        case Scancode::KeyF: case Scancode::KeyG: case Scancode::KeyH: case Scancode::KeyI: case Scancode::KeyJ:
+        case Scancode::KeyK: case Scancode::KeyL: case Scancode::KeyM: case Scancode::KeyN: case Scancode::KeyO:
+        case Scancode::KeyP: case Scancode::KeyQ: case Scancode::KeyR: case Scancode::KeyS: case Scancode::KeyT:
+        case Scancode::KeyU: case Scancode::KeyV: case Scancode::KeyW: case Scancode::KeyX: case Scancode::KeyY:
+        case Scancode::KeyZ:
+        case Scancode::Backquote: case Scancode::Minus: case Scancode::Equal:
+        case Scancode::BracketLeft: case Scancode::BracketRight: case Scancode::Backslash:
+        case Scancode::Semicolon: case Scancode::Quote:
+        case Scancode::Comma: case Scancode::Period: case Scancode::Slash:
+        case Scancode::Space: case Scancode::IntlBackslash:
+            return true;
+        default:
+            return false;
+    }
 }
 
 } /* namespace Rocket */

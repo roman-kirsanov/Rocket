@@ -389,10 +389,10 @@ FontGlyph const& Font::getGlyph(std::uint32_t codepoint, float size) const {
                     for (auto x = 0; x < width; x++) {
                         auto src = bitmapRaw + y * pitch + x * 4;
                         auto dst = tempBitmap.data() + (y * width + x) * 4;
-                        dst[0] = src[2]; // R
-                        dst[1] = src[1]; // G
-                        dst[2] = src[0]; // B
-                        dst[3] = src[3]; // A
+                        dst[0] = src[2];
+                        dst[1] = src[1];
+                        dst[2] = src[0];
+                        dst[3] = src[3];
                     }
                 }
                 bitmap = tempBitmap.data();

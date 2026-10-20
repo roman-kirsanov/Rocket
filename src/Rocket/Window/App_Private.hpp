@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2026 Roman Kirsanov
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 #pragma once
 
 #include <Rocket/Window/App.hpp>
@@ -5,34 +12,28 @@
 namespace Rocket {
 namespace App {
 
-/** Advances the frame timer, runs due timeouts and intervals, and publishes UpdateAppEvent; called once per run-loop tick. */
 void _Update();
 
-/** Publishes CloseAppEvent; called by the platform layer when the user requests to quit. */
 void _Close();
 
-/** Platform implementation of App::GetExecPath. */
 std::string const& __GetExecPath();
 
-/** Platform implementation of App::GetExecDir. */
 std::string const& __GetExecDir();
 
-/** Platform implementation of App::GetWorkDir. */
 std::string const& __GetWorkDir();
 
-/** Platform implementation of App::GetUserDir. */
 std::string const& __GetUserDir();
 
-/** Platform implementation of App::Exit. */
 void __Exit();
 
-/**
- * Platform implementation of App::Run.
- *
- * @param argc Argument count, as passed to main(); not currently used by the backends.
- * @param argv Argument vector, as passed to main(); not currently used by the backends.
- */
 void __Run(int argc, char const** argv);
+
+/**
+ * __Run ticks with `update` set; the loops that block inside a tick of their
+ * own (a modal window, a file dialog) tick without it, so App timeouts,
+ * intervals and UpdateAppEvent do not run while they block, as on macOS.
+ */
+void __Tick(bool update);
 
 } /* namespace App */
 } /* namespace Rocket */

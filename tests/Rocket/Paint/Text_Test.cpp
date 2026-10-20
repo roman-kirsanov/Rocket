@@ -3019,6 +3019,12 @@ TEST(Text, EditingRandomOperationSoakKeepsInvariants) {
    if it is clearly interactive-unfriendly; the timing is printed so it can
    be tracked. */
 TEST(Text, EditingKeystrokeLatencyOnLargeText) {
+    /* each keystroke repaints every glyph, one draw each: on the CPU that is
+       far slower than any GPU, and says nothing about the editing */
+    if (_IsSoftwareRenderer()) {
+        GTEST_SKIP() << "the painter draws in software";
+    }
+
     auto content = std::string();
     for (auto i = 0; i < 400; i++) {
         content += "The quick brown fox jumps over the lazy dog and keeps running.\n";

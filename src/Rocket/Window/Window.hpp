@@ -1,6 +1,15 @@
+/*
+ * Copyright (c) 2026 Roman Kirsanov
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 #pragma once
 
+#include <string>
 #include <vector>
+#include <cstdint>
 #include <utility>
 #include <optional>
 #include <Rocket/Math/Vec2.hpp>
@@ -55,7 +64,7 @@ public:
     /** Returns the backing scale factor (e.g. 2.0 on Retina displays). */
     float getScale() const;
 
-    /** Returns the native window handle (NSWindow* on macOS, SDL_Window* on the SDL3 backend). */
+    /** Returns the native window handle (NSWindow* on macOS, SDL_Window* on the SDL3 backend, HWND on Win32). */
     void* getHandle() const;
 
     /** Returns whether the window is currently visible. */
@@ -76,7 +85,7 @@ public:
     /** Returns whether the window stays above normal windows. */
     bool getTopmost() const;
 
-    /** Returns whether the window is currently maximized (full-screen on macOS, where a zoomed but not full-screen window reports false; maximized on SDL3). */
+    /** Returns whether the window is currently maximized (full-screen on macOS, where a zoomed but not full-screen window reports false; maximized on SDL3 and Win32). */
     bool isMaximized() const;
 
     /** Returns whether the window is currently minimized. */
@@ -154,7 +163,7 @@ public:
 
     /**
      * Enables or disables the close control (stored only on SDL3, which cannot
-     * change the control).
+     * change the control; on Win32 the close button and Alt+F4 are disabled).
      *
      * @param closable True to show a close control, false to hide it.
      */
@@ -169,8 +178,8 @@ public:
 
     /**
      * Enables or disables maximizing (on macOS: the title-bar zoom control;
-     * stored only on SDL3, which cannot change the control; setMaximized is
-     * unaffected).
+     * on Win32: the maximize button; stored only on SDL3, which cannot change
+     * the control; setMaximized is unaffected).
      *
      * @param maximizable True to allow maximizing, false to disallow it.
      */

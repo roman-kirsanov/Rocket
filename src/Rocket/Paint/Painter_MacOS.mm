@@ -243,7 +243,6 @@ static std::optional<Vec4> _FilterBounds(Vec4 const& bounds, Mat3 const& transfo
     return rect;
 }
 
-/* a target-space rect in the downscaled scratch copy, snapped outward to whole texels */
 static Vec4 _ToFilterSpace(Vec4 const& rect, Vec2 const& scale) {
     PROFILE
 

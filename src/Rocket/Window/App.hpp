@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2026 Roman Kirsanov
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 #pragma once
 
 #include <string>
@@ -23,7 +30,7 @@ std::string const& GetWorkDir();
 /**
  * Returns the per-user directory for application settings and data
  * (macOS: ~/Library/Application Support; Linux: $XDG_CONFIG_HOME or
- * ~/.config; intended for Windows: %APPDATA%, which has no backend yet),
+ * ~/.config; Windows: %APPDATA%, the roaming application data folder),
  * cached on first call.
  *
  * The directory is per-user, not per-application: append your own

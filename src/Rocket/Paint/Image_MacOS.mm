@@ -53,7 +53,6 @@ static id<MTLTexture> _CreateTexture(std::uint32_t width, std::uint32_t height) 
     return [_Device() newTextureWithDescriptor: descriptor];
 }
 
-/** Uploads tightly-packed premultiplied RGBA8 pixels into a texture region via a staging buffer. */
 static void _UploadPixels(id<MTLTexture> texture, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, std::uint8_t const* pixels) {
     PROFILE
 
@@ -77,7 +76,6 @@ static void _UploadPixels(id<MTLTexture> texture, std::uint32_t x, std::uint32_t
     [commandBuffer commit];
 }
 
-/** Downloads a texture's pixels as tightly-packed RGBA8; waits for the GPU to finish. */
 static void _DownloadPixels(id<MTLTexture> texture, std::uint32_t width, std::uint32_t height, std::vector<std::uint8_t>& pixels) {
     PROFILE
 

@@ -36,7 +36,7 @@ struct ImagePaintTarget {
 
 /**
  * A render target backed by a window. The painter acquires the window's
- * drawable (its swapchain texture on SDL3) and its own command buffer, and
+ * drawable (its swapchain texture on SDL3 and Win32) and its own command buffer, and
  * submits the command buffer automatically on endPaint(). If the drawable
  * cannot be acquired the whole pass becomes a no-op.
  *

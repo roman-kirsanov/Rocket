@@ -1,7 +1,13 @@
+/*
+ * Copyright (c) 2026 Roman Kirsanov
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 #include <Cocoa/Cocoa.h>
 #include <Rocket/Window/Window.hpp>
 
-/** NSWindow subclass that forwards AppKit delegate and input events to Window via blocks. */
 @interface __NSWindow : NSWindow<NSWindowDelegate>
 
 @property (copy, nonatomic) void(^onShow)(void);
@@ -24,14 +30,13 @@
 @property (copy, nonatomic) void(^onFocus)(void);
 @property (copy, nonatomic) void(^onBlur)(void);
 
-/** Dispatches a key press as a key event (its text, if any, is published separately, see __NSMetalView). */
+/** The key's text, if any, is published separately, see __NSMetalView. */
 - (void)dispatchKeyDown:(NSEvent*)event;
 
 @end
 
 namespace Rocket {
 
-/** Per-window native state: the AppKit window and cached size, position, scale, hover, cursor-hidden and maximizable flags. */
 struct Window::_Window {
     __NSWindow* window;
     Vec2 size;

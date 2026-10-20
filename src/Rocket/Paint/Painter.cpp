@@ -11,8 +11,6 @@
 
 namespace Rocket {
 
-// Resolves a quad outline's per-edge widths (left, top, right, bottom), applying
-// the uniform border as the fallback for any edge without an explicit override.
 static Vec4 _ResolveBorders(QuadOutlineShape const& shape) {
     PROFILE
 

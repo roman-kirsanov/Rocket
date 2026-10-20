@@ -410,13 +410,18 @@ JSONValue ParseJSON(std::string const& text) {
         }
 
         /* The token is already validated against the JSON grammar above, so
-         * strtod_l in the C locale parses all of it. The floating-point
-         * std::from_chars needs macOS 26. Values too small for a double
-         * quietly underflow to zero, but overflow to infinity is an error, as
-         * in the reference implementation. */
-        static auto const _cLocale = newlocale(LC_ALL_MASK, "C", nullptr);
+         * strtod_l in the C locale parses all of it (_strtod_l on Windows).
+         * The floating-point std::from_chars needs macOS 26. Values too small
+         * for a double quietly underflow to zero, but overflow to infinity is
+         * an error, as in the reference implementation. */
         auto const token = std::string(text, start, position - start);
+#ifdef _WIN32
+        static auto const _cLocale = _create_locale(LC_ALL, "C");
+        auto const value = _strtod_l(token.c_str(), nullptr, _cLocale);
+#else
+        static auto const _cLocale = newlocale(LC_ALL_MASK, "C", nullptr);
         auto const value = strtod_l(token.c_str(), nullptr, _cLocale);
+#endif
         if (std::isinf(value)) {
             failAt(start, std::format("number overflow parsing '{}'", token));
         }

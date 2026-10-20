@@ -44,16 +44,16 @@ static inline float _npatchAxis(float p, float srcSize, float dstSize, float src
 static inline float _roundBoxDistance(float2 localPos, float2 size, float4 corners) {
     float2 edges = max(-localPos, (localPos - size));
     float distance = (length(max(edges, 0.0f)) + min(max(edges.x, edges.y), 0.0f));
-    if ((localPos.x < corners.x) && (localPos.y < corners.x)) { // top-left
+    if ((localPos.x < corners.x) && (localPos.y < corners.x)) {
         distance = max(distance, (length(localPos - float2(corners.x, corners.x)) - corners.x));
     }
-    if ((localPos.x > (size.x - corners.y)) && (localPos.y < corners.y)) { // top-right
+    if ((localPos.x > (size.x - corners.y)) && (localPos.y < corners.y)) {
         distance = max(distance, (length(localPos - float2((size.x - corners.y), corners.y)) - corners.y));
     }
-    if ((localPos.x > (size.x - corners.z)) && (localPos.y > (size.y - corners.z))) { // bottom-right
+    if ((localPos.x > (size.x - corners.z)) && (localPos.y > (size.y - corners.z))) {
         distance = max(distance, (length(localPos - float2((size.x - corners.z), (size.y - corners.z))) - corners.z));
     }
-    if ((localPos.x < corners.w) && (localPos.y > (size.y - corners.w))) { // bottom-left
+    if ((localPos.x < corners.w) && (localPos.y > (size.y - corners.w))) {
         distance = max(distance, (length(localPos - float2(corners.w, (size.y - corners.w))) - corners.w));
     }
     return distance;
@@ -77,15 +77,14 @@ static inline float _quadCoverage(float2 localPos, float2 size, float4 corners) 
     return (_edgeCoverage(edges.x) * _edgeCoverage(edges.y));
 }
 
-// Anti-aliased coverage of the shape at a fragment, in shape-local space.
 static inline float _coverage(float2 localPos, ShapeUniforms constant& uShape) {
-    if (uShape.type == 1) { // ellipse
+    if (uShape.type == 1) {
         float2 c = (uShape.bounds.zw * 0.5f);
         return _edgeCoverage(length((localPos - c) / c) - 1.0f);
-    } else if (uShape.type == 2) { // quad outline (per-edge)
-        float4 b        = uShape.borders; // left, top, right, bottom
+    } else if (uShape.type == 2) {
+        float4 b        = uShape.borders;
         float  outerCov = _quadCoverage(localPos, uShape.bounds.zw, uShape.corners);
-        if (any(uShape.corners > float4(0.0f))) { // rounded: outer box minus inset inner box
+        if (any(uShape.corners > float4(0.0f))) {
             // Inner per-corner radius rule: innerR = max(outerR - max(adjacent borders), 0),
             // e.g. inner TL = max(TL - max(left, top), 0). An inner QuadShape inset by the
             // border widths with that radius fits this outline seamlessly.
@@ -93,10 +92,10 @@ static inline float _coverage(float2 localPos, ShapeUniforms constant& uShape) {
             float2 innerSize = (uShape.bounds.zw - float2((b.x + b.z), (b.y + b.w)));
             if (all(innerSize > float2(0.0f))) {
                 float4 innerCorners = max(float4(
-                    (uShape.corners.x - max(b.x, b.y)),  // TL - max(left, top)
-                    (uShape.corners.y - max(b.z, b.y)),  // TR - max(right, top)
-                    (uShape.corners.z - max(b.z, b.w)),  // BR - max(right, bottom)
-                    (uShape.corners.w - max(b.x, b.w))   // BL - max(left, bottom)
+                    (uShape.corners.x - max(b.x, b.y)),
+                    (uShape.corners.y - max(b.z, b.y)),
+                    (uShape.corners.z - max(b.z, b.w)),
+                    (uShape.corners.w - max(b.x, b.w))
                 ), float4(0.0f));
                 innerCov = _edgeCoverage(_roundBoxDistance((localPos - b.xy), innerSize, innerCorners));
             }
@@ -107,16 +106,16 @@ static inline float _coverage(float2 localPos, ShapeUniforms constant& uShape) {
         float dT  = (b.y > 0.0f) ? (localPos.y - b.y)                    : big;
         float dR  = (b.z > 0.0f) ? ((uShape.bounds.z - b.z) - localPos.x) : big;
         float dB  = (b.w > 0.0f) ? ((uShape.bounds.w - b.w) - localPos.y) : big;
-        float holeCov = (_edgeCoverage(-min(dL, dR)) * _edgeCoverage(-min(dT, dB))); // 1 inside the hole
+        float holeCov = (_edgeCoverage(-min(dL, dR)) * _edgeCoverage(-min(dT, dB)));
         return (outerCov * (1.0f - holeCov));
-    } else if (uShape.type == 3) { // ellipse outline
+    } else if (uShape.type == 3) {
         float2 c  = (uShape.bounds.zw * 0.5f);
         float2 ci = max((c - uShape.borders.x), float2(0.0001f));
         float outerCov = _edgeCoverage(length((localPos - c) / c)  - 1.0f);
         float innerCov = _edgeCoverage(length((localPos - c) / ci) - 1.0f);
         return (outerCov * (1.0f - innerCov));
     }
-    return _quadCoverage(localPos, uShape.bounds.zw, uShape.corners); // filled quad
+    return _quadCoverage(localPos, uShape.bounds.zw, uShape.corners);
 }
 
 static inline float _gaussianWeight(int i, float sigma) {
@@ -312,7 +311,6 @@ fragment float4 shadowFilterDilateFragment(VertexResult in [[stage_in]], ShadowF
     return float4(value, center.y, 0.0f, 1.0f);
 }
 
-// Separable gaussian blur of the field along one axis.
 fragment float4 shadowFilterBlurFragment(VertexResult in [[stage_in]], ShadowFilterFieldUniforms constant& uFilter [[buffer(1)]], texture2d<float> texture0 [[texture(0)]], sampler sampler0 [[sampler(0)]]) {
     float  sigma = max(uFilter.sigma, 0.0001f);
     float2 step  = (uFilter.direction * uFilter.texel);
@@ -330,7 +328,6 @@ fragment float4 shadowFilterBlurFragment(VertexResult in [[stage_in]], ShadowFil
     return float4(((wsum > 0.0f) ? (sum / wsum) : 0.0f), mask, 0.0f, 1.0f);
 }
 
-// Vertical gaussian blur of the field, tinted and composited onto the target.
 fragment float4 shadowFilterCompositeFragment(VertexResult in [[stage_in]], ShadowFilterUniforms constant& uFilter [[buffer(1)]], texture2d<float> texture0 [[texture(0)]], sampler sampler0 [[sampler(0)]]) {
     float sigma = max(uFilter.sigma, 0.0001f);
     float sum   = 0.0f;
@@ -354,7 +351,7 @@ fragment float4 shadowFilterCompositeFragment(VertexResult in [[stage_in]], Shad
     float aFinal = (wsum > 0.0f) ? (sum / wsum) : 0.0f;
 
     if (uFilter.inset != 0) {
-        aFinal *= _shadowField(texture0, sampler0, in.screenUV, uFilter.fromSilhouette, 0).y; // clip the inset shadow to the silhouette
+        aFinal *= _shadowField(texture0, sampler0, in.screenUV, uFilter.fromSilhouette, 0).y;
     }
 
     float outA = aFinal * uFilter.color.a * uFilter.opacity;

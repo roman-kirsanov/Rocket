@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 3.23)
 
-# macOS 15 (Sequoia) is the minimum: the window cursors use the frame, column,
-# row and zoom cursor factories AppKit added in that release.
 if(NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum macOS version")
 endif()
@@ -21,6 +19,7 @@ set(FT_DISABLE_BZIP2 ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_PNG ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
+set(ROCKET_EMBED ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Embed.cmake)
 set(ROCKET_SOURCE
     src/Rocket/Audio/Audio.cpp
     src/Rocket/Base/Date.cpp
@@ -88,8 +87,8 @@ if(APPLE)
 
     add_custom_command(
         OUTPUT ${ROCKET_SHADER_HEADER}
-        COMMAND xxd -n Rocket_MetalLib -i ${ROCKET_SHADER_LIB} > ${ROCKET_SHADER_HEADER}
-        DEPENDS ${ROCKET_SHADER_LIB}
+        COMMAND ${CMAKE_COMMAND} -D IN=${ROCKET_SHADER_LIB} -D OUT=${ROCKET_SHADER_HEADER} -D NAME=Rocket_MetalLib -P ${ROCKET_EMBED}
+        DEPENDS ${ROCKET_SHADER_LIB} ${ROCKET_EMBED}
         COMMENT "Embedding Painter.metallib into Painter.metal-lib.hpp"
         VERBATIM
     )
@@ -105,11 +104,64 @@ if(APPLE)
         ${ROCKET_SHADER_HEADER}
     )
 elseif(WIN32)
+    set(ROCKET_PROGRAM_FILES_X86 "ProgramFiles(x86)")
+    file(GLOB ROCKET_WINDOWS_SDK_BINS "$ENV{${ROCKET_PROGRAM_FILES_X86}}/Windows Kits/10/bin/10.*/x64")
+    list(SORT ROCKET_WINDOWS_SDK_BINS COMPARE NATURAL ORDER DESCENDING)
+    set(ROCKET_SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/Rocket/Paint/HLSL)
+    set(ROCKET_SHADER_COMMON ${ROCKET_SHADER_DIR}/Painter.hlsli)
+    set(ROCKET_SHADERS
+        QuadVertex
+        ColorBrush
+        ImageBrush
+        LinearGradientBrush
+        RadialGradientBrush
+        BlurFilter
+        ShadowFilterDilate
+        ShadowFilterBlur
+        ShadowFilterComposite
+    )
 
+    find_program(ROCKET_DXC dxc HINTS $ENV{WindowsSdkVerBinPath}/x64 ${ROCKET_WINDOWS_SDK_BINS} REQUIRED)
+
+    foreach(ROCKET_SHADER_NAME ${ROCKET_SHADERS})
+        set(ROCKET_SHADER_DXIL   ${CMAKE_CURRENT_BINARY_DIR}/${ROCKET_SHADER_NAME}.dxil)
+        set(ROCKET_SHADER_HEADER ${CMAKE_CURRENT_BINARY_DIR}/${ROCKET_SHADER_NAME}.dxil.hpp)
+
+        if(ROCKET_SHADER_NAME STREQUAL "QuadVertex")
+            set(ROCKET_SHADER_PROFILE vs_6_0)
+        else()
+            set(ROCKET_SHADER_PROFILE ps_6_0)
+        endif()
+
+        add_custom_command(
+            OUTPUT ${ROCKET_SHADER_DXIL}
+            COMMAND ${ROCKET_DXC} -nologo -T ${ROCKET_SHADER_PROFILE} -E main -O3 -WX -Fo ${ROCKET_SHADER_DXIL} ${ROCKET_SHADER_DIR}/${ROCKET_SHADER_NAME}.hlsl
+            DEPENDS ${ROCKET_SHADER_DIR}/${ROCKET_SHADER_NAME}.hlsl ${ROCKET_SHADER_COMMON}
+            COMMENT "Compiling ${ROCKET_SHADER_NAME}.hlsl"
+            VERBATIM
+        )
+
+        add_custom_command(
+            OUTPUT ${ROCKET_SHADER_HEADER}
+            COMMAND ${CMAKE_COMMAND} -D IN=${ROCKET_SHADER_DXIL} -D OUT=${ROCKET_SHADER_HEADER} -D NAME=Rocket_DXIL_${ROCKET_SHADER_NAME} -P ${ROCKET_EMBED}
+            DEPENDS ${ROCKET_SHADER_DXIL} ${ROCKET_EMBED}
+            COMMENT "Embedding ${ROCKET_SHADER_NAME}.dxil into ${ROCKET_SHADER_NAME}.dxil.hpp"
+            VERBATIM
+        )
+
+        list(APPEND ROCKET_SOURCE ${ROCKET_SHADER_HEADER})
+    endforeach()
+
+    list(APPEND ROCKET_SOURCE
+        src/Rocket/Audio/Audio_Win32.cpp
+        src/Rocket/Paint/Image_Win32.cpp
+        src/Rocket/Paint/Painter_Win32.cpp
+        src/Rocket/Window/App_Win32.cpp
+        src/Rocket/Window/Clipboard_Win32.cpp
+        src/Rocket/Window/FileDialog_Win32.cpp
+        src/Rocket/Window/Window_Win32.cpp
+    )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    # The SDL3 backend. SDL, SDL_image and SDL_mixer are built from their
-    # submodules and linked statically; SDL_image decodes PNG and JPEG with its
-    # built-in stb_image, so no other image library is needed.
     set(SDL_SHARED OFF CACHE BOOL "" FORCE)
     set(SDL_STATIC ON CACHE BOOL "" FORCE)
     set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
@@ -125,9 +177,6 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(SDLIMAGE_TIF OFF CACHE BOOL "" FORCE)
     set(SDLIMAGE_WEBP OFF CACHE BOOL "" FORCE)
     set(SDLIMAGE_SVG OFF CACHE BOOL "" FORCE)
-    # SDL_mixer plays the audio and decodes it with the decoders it carries
-    # (WAV, AIFF, VOC, AU, MP3, FLAC, Ogg Vorbis); those needing a system
-    # library are left out.
     set(SDLMIXER_VENDORED OFF CACHE BOOL "" FORCE)
     set(SDLMIXER_SAMPLES OFF CACHE BOOL "" FORCE)
     set(SDLMIXER_INSTALL ON CACHE BOOL "" FORCE)
@@ -147,7 +196,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
     find_program(ROCKET_GLSLC glslc REQUIRED)
 
-    set(ROCKET_SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/Rocket/Paint/SDL3)
+    set(ROCKET_SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/Rocket/Paint/GLSL)
     set(ROCKET_SHADER_COMMON ${ROCKET_SHADER_DIR}/Painter.glsl)
     set(ROCKET_SHADERS
         QuadVertex.vert
@@ -161,8 +210,6 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         ShadowFilterComposite.frag
     )
 
-    # Each shader is compiled to SPIR-V and embedded as a byte array
-    # Rocket_SPIRV_<Name> in <Name>.spv.hpp, the way Painter.metallib is.
     foreach(ROCKET_SHADER ${ROCKET_SHADERS})
         get_filename_component(ROCKET_SHADER_NAME ${ROCKET_SHADER} NAME_WE)
 
@@ -179,8 +226,8 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
         add_custom_command(
             OUTPUT ${ROCKET_SHADER_HEADER}
-            COMMAND xxd -n Rocket_SPIRV_${ROCKET_SHADER_NAME} -i ${ROCKET_SHADER_SPIRV} ${ROCKET_SHADER_HEADER}
-            DEPENDS ${ROCKET_SHADER_SPIRV}
+            COMMAND ${CMAKE_COMMAND} -D IN=${ROCKET_SHADER_SPIRV} -D OUT=${ROCKET_SHADER_HEADER} -D NAME=Rocket_SPIRV_${ROCKET_SHADER_NAME} -P ${ROCKET_EMBED}
+            DEPENDS ${ROCKET_SHADER_SPIRV} ${ROCKET_EMBED}
             COMMENT "Embedding ${ROCKET_SHADER_NAME}.spv into ${ROCKET_SHADER_NAME}.spv.hpp"
             VERBATIM
         )
@@ -203,17 +250,30 @@ add_subdirectory(lib/freetype)
 add_subdirectory(lib/lunasvg)
 add_subdirectory(lib/yoga/yoga)
 
-add_library(Rocket ${ROCKET_SOURCE})
+add_library(Rocket STATIC ${ROCKET_SOURCE})
 add_library(Rocket::Rocket ALIAS Rocket)
 
-# Yoga builds itself with -fno-rtti and hidden visibility. Without RTTI, clang
-# emits a private copy of libc++'s `typeinfo for std::exception` into every
-# Yoga object that throws, and a static link then resolves the whole
-# executable's std::exception references to that copy instead of the one in
-# libc++.dylib. The result is that `catch (std::exception const&)` never
-# matches a std::runtime_error (or any other libc++ exception) anywhere in the
-# program. Re-enabling RTTI for Yoga makes it reference the shared typeinfo.
-target_compile_options(yogacore PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-frtti>)
+if(MSVC)
+    target_compile_options(Rocket
+        PUBLIC
+            /utf-8
+            /Zc:__cplusplus
+            /Zc:preprocessor
+        PRIVATE
+            /bigobj
+    )
+
+    target_compile_definitions(Rocket
+        PRIVATE
+            _CRT_SECURE_NO_WARNINGS
+            UNICODE
+            _UNICODE
+    )
+
+    target_compile_options(yogacore PRIVATE /utf-8)
+else()
+    target_compile_options(yogacore PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-frtti>)
+endif()
 
 target_include_directories(Rocket
     PUBLIC
@@ -246,6 +306,32 @@ if(APPLE)
             "-framework QuartzCore"
             "-framework CoreGraphics"
             "-framework ImageIO"
+    )
+elseif(WIN32)
+    target_sources(Rocket
+        INTERFACE
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/Rocket.manifest>
+    )
+
+    target_link_libraries(Rocket
+        PRIVATE
+            avrt
+            d3d12
+            dwmapi
+            dxgi
+            dxguid
+            imm32
+            mfplat
+            mfreadwrite
+            mfuuid
+            ole32
+            shcore
+            shell32
+            shlwapi
+            user32
+            uuid
+            windowscodecs
+            winmm
     )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_libraries(Rocket

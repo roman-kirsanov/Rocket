@@ -199,6 +199,13 @@ TEST(String, AsciiCaseFolding) {
     ASSERT_TRUE(StringToUpper("") == "");
 }
 
+/* The bytes of non-ASCII UTF-8 characters pass through case folding untouched. */
+TEST(String, AsciiCaseFoldingKeepsUtf8) {
+    ASSERT_TRUE(StringToLower("Ünï ДОМ") == "Ünï ДОМ");
+    ASSERT_TRUE(StringToUpper("ünï дом") == "üNï дом");
+    ASSERT_TRUE(StringToLower("ABC日本") == "abc日本");
+}
+
 /* Codepoint case mapping covers ASCII, Latin-1 and Greek. */
 TEST(String, CodepointCaseMapping) {
     ASSERT_TRUE(CodepointToUpper('a') == 'A');

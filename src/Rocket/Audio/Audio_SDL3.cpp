@@ -18,7 +18,6 @@
 
 namespace Rocket {
 
-/** A decoded clip: its samples per channel for getSamples, and the same audio handed to the mixer. */
 struct _DecodedAudio {
     SDL_AudioSpec spec = {};
     std::int64_t frameCount = 0;
@@ -28,7 +27,6 @@ struct _DecodedAudio {
 
 struct Audio::_Audio : _DecodedAudio {};
 
-/** A track playing a range of a clip, or the decay envelope made from that range. */
 struct Sound::_Sound {
     MIX_Track* track = nullptr;
     MIX_Audio* shaped = nullptr;     /* the decay envelope over the range, when set */
@@ -46,7 +44,6 @@ struct Sound::_Sound {
 
 static MIX_Mixer* _mixer = nullptr;
 
-/* One mixer on the default playback device for every sound, made on first use. */
 static MIX_Mixer* _Mixer() {
     PROFILE
 
@@ -65,7 +62,6 @@ static MIX_Mixer* _Mixer() {
     return _mixer;
 }
 
-/* Decodes a whole clip to float32 with SDL_mixer's decoders, then hands it to the mixer. */
 static void _Decode(_DecodedAudio& audio, MIX_AudioDecoder* decoder, std::string const& name) {
     PROFILE
 
@@ -119,8 +115,7 @@ static void _Decode(_DecodedAudio& audio, MIX_AudioDecoder* decoder, std::string
     }
 }
 
-/* Plays the range, or the decay envelope when one is set, from a position in
-   seconds; one past the end starts over. Returns where it started. */
+/* One past the end starts over. */
 float Sound::_Sound::scheduleFrom(MIX_Audio* clip, bool loop, float from) {
     PROFILE
 

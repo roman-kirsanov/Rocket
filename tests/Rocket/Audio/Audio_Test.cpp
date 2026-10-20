@@ -7,6 +7,7 @@
 
 #include <cmath>
 #include <chrono>
+#include <numbers>
 #include <cstdio>
 #include <string>
 #include <thread>
@@ -61,7 +62,7 @@ static std::vector<std::uint8_t> _WriteToneWav(std::string const& path) {
     std::memcpy((buffer.data() + 40), &dataSize32, 4);
 
     for (int i = 0; i < count; i++) {
-        auto const sample = (std::int16_t)(std::sin(((float)i / (float)rate) * 440.0f * 2.0f * (float)M_PI) * 12000.0f);
+        auto const sample = (std::int16_t)(std::sin(((float)i / (float)rate) * 440.0f * 2.0f * std::numbers::pi_v<float>) * 12000.0f);
 
         std::memcpy((buffer.data() + 44 + ((std::size_t)i * 2)), &sample, 2);
     }
@@ -78,6 +79,75 @@ static std::vector<std::uint8_t> _WriteToneWav(std::string const& path) {
     EXPECT_EQ(written, fileSize);
 
     return buffer;
+}
+
+/* Writes the same tone as a stereo 16-bit AIFF (big-endian samples, the
+   right channel at half the left's level) to `path` and returns its bytes. */
+static std::vector<std::uint8_t> _WriteToneAiff(std::string const& path) {
+    auto const count = (int)((_ToneMs / 1000.0f) * (float)_ToneRate);
+    auto const dataSize = ((std::size_t)count * 4);
+    auto const fileSize = (12 + 26 + 16 + dataSize);
+    auto buffer = std::vector<std::uint8_t>();
+
+    auto const put = [&](std::uint32_t value, int bytes) {
+        for (auto i = bytes - 1; i >= 0; i--) {
+            buffer.push_back((std::uint8_t)((value >> (i * 8)) & 0xFF));
+        }
+    };
+    auto const tag = [&](char const* text) {
+        buffer.insert(buffer.end(), text, (text + 4));
+    };
+
+    tag("FORM");
+    put((std::uint32_t)(fileSize - 8), 4);
+    tag("AIFF");
+
+    tag("COMM");
+    put(18, 4);
+    put(2, 2);                  /* channels */
+    put((std::uint32_t)count, 4);
+    put(16, 2);                 /* bits per sample */
+    /* 44100 as an 80-bit extended float: 1.34582... * 2^15 */
+    for (auto const byte : { 0x40, 0x0E, 0xAC, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }) {
+        buffer.push_back((std::uint8_t)byte);
+    }
+
+    tag("SSND");
+    put((std::uint32_t)(8 + dataSize), 4);
+    put(0, 4);                  /* offset */
+    put(0, 4);                  /* block size */
+
+    for (int i = 0; i < count; i++) {
+        auto const left = (std::int16_t)(std::sin(((float)i / (float)_ToneRate) * 440.0f * 2.0f * std::numbers::pi_v<float>) * 12000.0f);
+        auto const right = (std::int16_t)(left / 2);
+
+        put((std::uint16_t)left, 2);
+        put((std::uint16_t)right, 2);
+    }
+
+    auto file = std::fopen(path.c_str(), "wb");
+    EXPECT_TRUE(file != nullptr) << "cannot open " << path;
+
+    if (file == nullptr) {
+        return buffer;
+    }
+
+    auto const written = std::fwrite(buffer.data(), 1, buffer.size(), file);
+    std::fclose(file);
+    EXPECT_EQ(written, buffer.size());
+
+    return buffer;
+}
+
+static float _Peak(Audio const& audio, std::int32_t channel) {
+    auto const samples = audio.getSamples(channel);
+    auto peak = 0.0f;
+
+    for (std::int64_t i = 0; i < audio.getFrameCount(); i++) {
+        peak = std::max(peak, std::abs(samples[i]));
+    }
+
+    return peak;
 }
 
 static void _Sleep(int milliseconds) {
@@ -116,6 +186,30 @@ TEST(Audio, ExposesSamples) {
 
     EXPECT_THROW(audio.getSamples(1), std::out_of_range);
     EXPECT_THROW(audio.getSamples(-1), std::out_of_range);
+}
+
+/* An AIFF decodes like a WAV, from a file and from its bytes, channel by channel. */
+TEST(Audio, DecodesAiff) {
+    auto const path = std::string(ROCKET_BINARY_DIR) + "/audio-test.aiff";
+    auto const bytes = _WriteToneAiff(path);
+
+    auto fromFile = Audio(path);
+    EXPECT_FLOAT_EQ(fromFile.getSampleRate(), (float)_ToneRate);
+    EXPECT_EQ(fromFile.getChannelCount(), 2);
+    EXPECT_EQ(fromFile.getFrameCount(), (std::int64_t)((_ToneMs / 1000.0f) * (float)_ToneRate));
+    EXPECT_NEAR(_Peak(fromFile, 0), (12000.0f / 32768.0f), 0.01f);
+    EXPECT_NEAR(_Peak(fromFile, 1), (6000.0f / 32768.0f), 0.01f);
+
+    auto fromData = Audio(bytes.data(), bytes.size());
+    EXPECT_NEAR(fromData.getDuration(), _ToneMs, 11.0f);
+    EXPECT_EQ(fromData.getChannelCount(), 2);
+}
+
+/* Bytes that are no audio file do not decode. */
+TEST(Audio, RejectsWhatIsNotAudio) {
+    auto const bytes = std::vector<std::uint8_t>(1000, 0x5A);
+
+    EXPECT_THROW(Audio(bytes.data(), bytes.size()), std::runtime_error);
 }
 
 /* Ranges, volume, looping and the play/pause/resume/stop lifecycle. */
