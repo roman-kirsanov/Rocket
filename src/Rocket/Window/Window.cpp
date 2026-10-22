@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <Rocket/Base/Profile.hpp>
 #include <Rocket/Window/Window.hpp>
+#include <Rocket/Window/Gamepad_Private.hpp>
 
 namespace Rocket {
 
@@ -45,6 +46,8 @@ Window::Window()
     , _cursor(Cursor::Default)
     , _inputArea()
     , _pressedKeys()
+    , _pressedGamepadButtons()
+    , _movedGamepadAxes()
     , _impl(nullptr)
 {
     PROFILE
@@ -456,6 +459,45 @@ void Window::_keyUp(Scancode scancode, std::string const& keycode, KeyModifiers 
     onEvent.publish(event);
 }
 
+void Window::_gamepadDown(std::uint32_t gamepad, GamepadButton button) {
+    PROFILE
+
+    if (std::ranges::find(_pressedGamepadButtons, std::pair(gamepad, button)) == _pressedGamepadButtons.end()) {
+        _pressedGamepadButtons.push_back({ gamepad, button });
+    }
+
+    auto event = GamepadDownWindowEvent(*this, gamepad, button);
+
+    _onEvent(event);
+    onEvent.publish(event);
+}
+
+void Window::_gamepadUp(std::uint32_t gamepad, GamepadButton button) {
+    PROFILE
+
+    std::erase(_pressedGamepadButtons, std::pair(gamepad, button));
+
+    auto event = GamepadUpWindowEvent(*this, gamepad, button);
+
+    _onEvent(event);
+    onEvent.publish(event);
+}
+
+void Window::_gamepadAxis(std::uint32_t gamepad, GamepadAxis axis, float value) {
+    PROFILE
+
+    std::erase(_movedGamepadAxes, std::pair(gamepad, axis));
+
+    if (value != 0.0f) {
+        _movedGamepadAxes.push_back({ gamepad, axis });
+    }
+
+    auto event = GamepadAxisWindowEvent(*this, gamepad, axis, value);
+
+    _onEvent(event);
+    onEvent.publish(event);
+}
+
 void Window::_input(std::string const& text) {
     PROFILE
 
@@ -495,10 +537,20 @@ void Window::_focus() {
 void Window::_blur() {
     PROFILE
 
-    /* keys still held when focus leaves are never released here: release them now */
+    /* keys and gamepad buttons still held when focus leaves are never released here: release them now */
     auto const pressedKeys = _pressedKeys;
     for (auto const& [ scancode, keycode ] : pressedKeys) {
         _keyUp(scancode, keycode, {});
+    }
+
+    auto const pressedGamepadButtons = _pressedGamepadButtons;
+    for (auto const& [ gamepad, button ] : pressedGamepadButtons) {
+        _gamepadUp(gamepad, button);
+    }
+
+    auto const movedGamepadAxes = _movedGamepadAxes;
+    for (auto const& [ gamepad, axis ] : movedGamepadAxes) {
+        _gamepadAxis(gamepad, axis, 0.0f);
     }
 
     auto event = BlurWindowEvent(*this);
@@ -514,6 +566,30 @@ void Window::_paint() {
 
     _onEvent(event);
     onEvent.publish(event);
+}
+
+void _GamepadDown(std::uint32_t gamepad, GamepadButton button) {
+    PROFILE
+
+    if (auto const window = Window::GetFocusedWindow(); window != nullptr) {
+        window->_gamepadDown(gamepad, button);
+    }
+}
+
+void _GamepadUp(std::uint32_t gamepad, GamepadButton button) {
+    PROFILE
+
+    if (auto const window = Window::GetFocusedWindow(); window != nullptr) {
+        window->_gamepadUp(gamepad, button);
+    }
+}
+
+void _GamepadAxis(std::uint32_t gamepad, GamepadAxis axis, float value) {
+    PROFILE
+
+    if (auto const window = Window::GetFocusedWindow(); window != nullptr) {
+        window->_gamepadAxis(gamepad, axis, value);
+    }
 }
 
 } /* namespace Rocket */

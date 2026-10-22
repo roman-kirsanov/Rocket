@@ -16,6 +16,7 @@
 #include <Rocket/Window/App_Private.hpp>
 #include <Rocket/Window/App_SDL3.hpp>
 #include <Rocket/Window/Window_SDL3.hpp>
+#include <Rocket/Window/Gamepad_SDL3.hpp>
 
 namespace Rocket {
 namespace App {
@@ -39,6 +40,11 @@ static void _HandleEvent(SDL_Event const& event) {
 
     if (event.type == SDL_EVENT_QUIT) {
         _Close();
+        return;
+    }
+
+    if (__IsGamepadEvent(event)) {
+        __HandleGamepadEvent(event);
         return;
     }
 

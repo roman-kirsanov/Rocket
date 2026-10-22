@@ -345,6 +345,73 @@ KeyModifiers const& KeyUpNodeEvent::getModifiers() const {
     return _modifiers;
 }
 
+GamepadDownNodeEvent::GamepadDownNodeEvent(Node& node, std::uint32_t gamepad, GamepadButton button)
+    : NodeEvent(node)
+    , _gamepad(gamepad)
+    , _button(button)
+{
+    PROFILE
+}
+
+std::uint32_t GamepadDownNodeEvent::getGamepad() const {
+    PROFILE
+
+    return _gamepad;
+}
+
+GamepadButton GamepadDownNodeEvent::getButton() const {
+    PROFILE
+
+    return _button;
+}
+
+GamepadUpNodeEvent::GamepadUpNodeEvent(Node& node, std::uint32_t gamepad, GamepadButton button)
+    : NodeEvent(node)
+    , _gamepad(gamepad)
+    , _button(button)
+{
+    PROFILE
+}
+
+std::uint32_t GamepadUpNodeEvent::getGamepad() const {
+    PROFILE
+
+    return _gamepad;
+}
+
+GamepadButton GamepadUpNodeEvent::getButton() const {
+    PROFILE
+
+    return _button;
+}
+
+GamepadAxisNodeEvent::GamepadAxisNodeEvent(Node& node, std::uint32_t gamepad, GamepadAxis axis, float value)
+    : NodeEvent(node)
+    , _gamepad(gamepad)
+    , _axis(axis)
+    , _value(value)
+{
+    PROFILE
+}
+
+std::uint32_t GamepadAxisNodeEvent::getGamepad() const {
+    PROFILE
+
+    return _gamepad;
+}
+
+GamepadAxis GamepadAxisNodeEvent::getAxis() const {
+    PROFILE
+
+    return _axis;
+}
+
+float GamepadAxisNodeEvent::getValue() const {
+    PROFILE
+
+    return _value;
+}
+
 BeforeInputNodeEvent::BeforeInputNodeEvent(Node& node, std::string const& text)
     : NodeEvent(node)
     , _text(text)

@@ -282,6 +282,9 @@ private:
     void _handleMouseWheelEvent(MouseWheelWindowEvent const&);
     void _handleKeyDownEvent(KeyDownWindowEvent const&);
     void _handleKeyUpEvent(KeyUpWindowEvent const&);
+    void _handleGamepadDownEvent(GamepadDownWindowEvent const&);
+    void _handleGamepadUpEvent(GamepadUpWindowEvent const&);
+    void _handleGamepadAxisEvent(GamepadAxisWindowEvent const&);
     void _handleInputEvent(InputWindowEvent const&);
     void _handleDropFilesEvent(DropFilesWindowEvent const&);
     void _handleMousePosition(Vec2 const&, KeyModifiers const&, bool);
@@ -335,6 +338,9 @@ private:
     void _triggerKeyDown(Scancode, std::string const&, KeyModifiers const&, bool, bool&);
     void _triggerBeforeInput(std::string const&, bool&);
     void _triggerKeyUp(Scancode, std::string const&, KeyModifiers const&);
+    void _triggerGamepadDown(std::uint32_t, GamepadButton);
+    void _triggerGamepadUp(std::uint32_t, GamepadButton);
+    void _triggerGamepadAxis(std::uint32_t, GamepadAxis, float);
     Node* _findNodeAtPosition(Vec2 const&);
     bool _isNodeFocusable(Node const&) const;
     bool _isNodeEditable(Node const&) const;

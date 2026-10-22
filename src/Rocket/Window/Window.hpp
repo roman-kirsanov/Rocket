@@ -248,7 +248,13 @@ private:
     Cursor _cursor;
     std::optional<Vec4> _inputArea;
     std::vector<std::pair<Scancode, std::string>> _pressedKeys;
+    std::vector<std::pair<std::uint32_t, GamepadButton>> _pressedGamepadButtons;
+    std::vector<std::pair<std::uint32_t, GamepadAxis>> _movedGamepadAxes;
     _Window* _impl;
+
+    friend void _GamepadDown(std::uint32_t, GamepadButton);
+    friend void _GamepadUp(std::uint32_t, GamepadButton);
+    friend void _GamepadAxis(std::uint32_t, GamepadAxis, float);
 
     void _show();
     void _hide();
@@ -267,6 +273,9 @@ private:
     void _mouseUp(Mouse const&, Vec2 const&, KeyModifiers const&);
     void _keyDown(Scancode, std::string const&, KeyModifiers const&, bool);
     void _keyUp(Scancode, std::string const&, KeyModifiers const&);
+    void _gamepadDown(std::uint32_t, GamepadButton);
+    void _gamepadUp(std::uint32_t, GamepadButton);
+    void _gamepadAxis(std::uint32_t, GamepadAxis, float);
     void _input(std::string const&);
     void _composition(std::string const&, std::int32_t, std::int32_t);
     void _dropFiles(std::vector<std::string> const&, Vec2 const&);

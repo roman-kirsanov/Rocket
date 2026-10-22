@@ -8,6 +8,8 @@
 #pragma once
 
 #include <string>
+#include <vector>
+#include <cstdint>
 #include <string_view>
 
 namespace Rocket {
@@ -17,6 +19,42 @@ enum class Mouse {
     LeftButton,
     RightButton,
     MiddleButton
+};
+
+/**
+ * Gamepad buttons, named after their position on the gamepad, not after the
+ * label printed on them: South is A on an Xbox pad, Cross on a PlayStation
+ * pad and B on a Nintendo pad.
+ */
+enum class GamepadButton {
+    South,
+    East,
+    West,
+    North,
+    Back,
+    Guide,
+    Start,
+    LeftStick,
+    RightStick,
+    LeftShoulder,
+    RightShoulder,
+    DPadUp,
+    DPadDown,
+    DPadLeft,
+    DPadRight
+};
+
+/**
+ * Gamepad axes. A stick axis goes from -1 to 1, negative to the left and up;
+ * a trigger goes from 0 (released) to 1 (fully pressed).
+ */
+enum class GamepadAxis {
+    LeftX,
+    LeftY,
+    RightX,
+    RightY,
+    LeftTrigger,
+    RightTrigger
 };
 
 /**
@@ -163,17 +201,6 @@ struct KeyModifiers {
 };
 
 /**
- * Returns a human-readable name for a scancode, as printed on a US keyboard
- * (e.g. "A", "0", "Escape").
- *
- * Returns "Unknown" for Scancode::Unknown and for any unmapped value. The
- * returned reference is stable for the lifetime of the process.
- *
- * @param scancode The physical key to name.
- */
-std::string const& GetScancodeName(Scancode scancode);
-
-/**
  * Keycodes: what a key means on the user's current layout (like the web's
  * KeyboardEvent.key). A keycode is a std::string: for a key that types a
  * character it is that character without modifiers, lowercase ("a", "ф",
@@ -294,6 +321,17 @@ inline constexpr auto F20 = std::string_view("F20");
 } /* namespace Keycode */
 
 /**
+ * Returns a human-readable name for a scancode, as printed on a US keyboard
+ * (e.g. "A", "0", "Escape").
+ *
+ * Returns "Unknown" for Scancode::Unknown and for any unmapped value. The
+ * returned reference is stable for the lifetime of the process.
+ *
+ * @param scancode The physical key to name.
+ */
+std::string const& GetScancodeName(Scancode scancode);
+
+/**
  * Returns the keycode the scancode has on a US layout: the character for
  * character keys ("a", "1", "-"; numpad keys give their character, numpad
  * Enter gives "Enter") and the name for the others. Platform layers use it
@@ -351,5 +389,21 @@ std::string GetScancodeLabel(Scancode scancode, std::string const& keycode);
  * @param scancode The physical key.
  */
 std::string GetScancodeLabel(Scancode scancode);
+
+/**
+ * Returns the ids of the connected gamepads, in the order they were
+ * connected (see GamepadConnectAppEvent). Empty before App::Run starts and
+ * after it returns.
+ */
+std::vector<std::uint32_t> GetGamepads();
+
+/**
+ * Returns the name of a connected gamepad as its driver reports it (e.g.
+ * "Xbox Series X Controller", "PS5 Controller"), or an empty string for an
+ * id that is not connected.
+ *
+ * @param gamepad The gamepad's id.
+ */
+std::string GetGamepadName(std::uint32_t gamepad);
 
 } /* namespace Rocket */

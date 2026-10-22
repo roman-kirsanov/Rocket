@@ -13,6 +13,7 @@
 #include <Rocket/Base/Time.hpp>
 #include <Rocket/Base/Profile.hpp>
 #include <Rocket/Window/App_Private.hpp>
+#include <Rocket/Window/Gamepad_Private.hpp>
 
 namespace Rocket {
 namespace App {
@@ -187,9 +188,13 @@ void Run(int argc, char const** argv) {
     _lastTime = GetTime();
     _deltaTime = 0.0;
 
+    __InitGamepads();
+
     OnEvent.publish(ReadyAppEvent{});
 
     __Run(argc, argv);
+
+    __DoneGamepads();
 
     OnEvent.publish(ExitAppEvent{});
 }

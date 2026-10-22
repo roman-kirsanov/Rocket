@@ -9,6 +9,7 @@
 
 #include <string>
 #include <vector>
+#include <cstdint>
 #include <Rocket/Base/Object.hpp>
 #include <Rocket/Math/Vec2.hpp>
 #include <Rocket/Window/Input.hpp>
@@ -394,6 +395,77 @@ private:
     Scancode _scancode;
     std::string _keycode;
     KeyModifiers _modifiers;
+};
+
+/** Fired when a gamepad button is pressed; dispatched on the focused node, or on the Document when nothing is focused. */
+class GamepadDownNodeEvent : public NodeEvent {
+public:
+    /**
+     * A press of the given button.
+     *
+     * @param node    The node that is the target of the event.
+     * @param gamepad The gamepad the button belongs to (see GamepadConnectAppEvent).
+     * @param button  The button that was pressed.
+     */
+    GamepadDownNodeEvent(Node& node, std::uint32_t gamepad, GamepadButton button);
+
+    /** Returns the gamepad the button belongs to. */
+    std::uint32_t getGamepad() const;
+
+    /** Returns the button that was pressed. */
+    GamepadButton getButton() const;
+private:
+    std::uint32_t _gamepad;
+    GamepadButton _button;
+};
+
+/** Fired when a gamepad button is released; dispatched on the focused node, or on the Document when nothing is focused. */
+class GamepadUpNodeEvent : public NodeEvent {
+public:
+    /**
+     * A release of the given button.
+     *
+     * @param node    The node that is the target of the event.
+     * @param gamepad The gamepad the button belongs to (see GamepadConnectAppEvent).
+     * @param button  The button that was released.
+     */
+    GamepadUpNodeEvent(Node& node, std::uint32_t gamepad, GamepadButton button);
+
+    /** Returns the gamepad the button belongs to. */
+    std::uint32_t getGamepad() const;
+
+    /** Returns the button that was released. */
+    GamepadButton getButton() const;
+private:
+    std::uint32_t _gamepad;
+    GamepadButton _button;
+};
+
+/** Fired when a gamepad stick or trigger moves; dispatched on the focused node, or on the Document when nothing is focused. */
+class GamepadAxisNodeEvent : public NodeEvent {
+public:
+    /**
+     * A move of the given axis.
+     *
+     * @param node    The node that is the target of the event.
+     * @param gamepad The gamepad the axis belongs to (see GamepadConnectAppEvent).
+     * @param axis    The axis that moved.
+     * @param value   Its new value (see GamepadAxis for the range).
+     */
+    GamepadAxisNodeEvent(Node& node, std::uint32_t gamepad, GamepadAxis axis, float value);
+
+    /** Returns the gamepad the axis belongs to. */
+    std::uint32_t getGamepad() const;
+
+    /** Returns the axis that moved. */
+    GamepadAxis getAxis() const;
+
+    /** Returns the axis's new value (see GamepadAxis for the range). */
+    float getValue() const;
+private:
+    std::uint32_t _gamepad;
+    GamepadAxis _axis;
+    float _value;
 };
 
 /**

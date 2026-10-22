@@ -225,6 +225,73 @@ KeyModifiers const& KeyUpWindowEvent::getModifiers() const {
     return _modifiers;
 }
 
+GamepadDownWindowEvent::GamepadDownWindowEvent(Window& window, std::uint32_t gamepad, GamepadButton button)
+    : WindowEvent(window)
+    , _gamepad(gamepad)
+    , _button(button)
+{
+    PROFILE
+}
+
+std::uint32_t GamepadDownWindowEvent::getGamepad() const {
+    PROFILE
+
+    return _gamepad;
+}
+
+GamepadButton GamepadDownWindowEvent::getButton() const {
+    PROFILE
+
+    return _button;
+}
+
+GamepadUpWindowEvent::GamepadUpWindowEvent(Window& window, std::uint32_t gamepad, GamepadButton button)
+    : WindowEvent(window)
+    , _gamepad(gamepad)
+    , _button(button)
+{
+    PROFILE
+}
+
+std::uint32_t GamepadUpWindowEvent::getGamepad() const {
+    PROFILE
+
+    return _gamepad;
+}
+
+GamepadButton GamepadUpWindowEvent::getButton() const {
+    PROFILE
+
+    return _button;
+}
+
+GamepadAxisWindowEvent::GamepadAxisWindowEvent(Window& window, std::uint32_t gamepad, GamepadAxis axis, float value)
+    : WindowEvent(window)
+    , _gamepad(gamepad)
+    , _axis(axis)
+    , _value(value)
+{
+    PROFILE
+}
+
+std::uint32_t GamepadAxisWindowEvent::getGamepad() const {
+    PROFILE
+
+    return _gamepad;
+}
+
+GamepadAxis GamepadAxisWindowEvent::getAxis() const {
+    PROFILE
+
+    return _axis;
+}
+
+float GamepadAxisWindowEvent::getValue() const {
+    PROFILE
+
+    return _value;
+}
+
 InputWindowEvent::InputWindowEvent(Window& window, std::string const& text)
     : WindowEvent(window)
     , _text(text)

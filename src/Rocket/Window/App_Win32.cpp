@@ -18,6 +18,7 @@
 #include <shlobj.h>
 #include <Rocket/Base/Profile.hpp>
 #include <Rocket/Window/App_Private.hpp>
+#include <Rocket/Window/Gamepad_Private.hpp>
 #include <Rocket/Window/App_Win32.hpp>
 #include <Rocket/Window/Window_Win32.hpp>
 
@@ -334,6 +335,7 @@ void __Tick(bool update) {
     }
 
     _DispatchHeldMessages(_held);
+    __UpdateGamepads();
 
     if (update) {
         _Update();

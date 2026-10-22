@@ -6,6 +6,10 @@ endif()
 
 project(Rocket VERSION 0.1.0 LANGUAGES C CXX)
 
+if(APPLE)
+    enable_language(OBJCXX)
+endif()
+
 include(CTest)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -54,16 +58,34 @@ set(ROCKET_SOURCE
     src/Rocket/UI/Splitter.cpp
     src/Rocket/UI/Window.cpp
     src/Rocket/Window/App.cpp
+    src/Rocket/Window/AppEvent.cpp
     src/Rocket/Window/Clipboard.cpp
     src/Rocket/Window/FileDialog.cpp
+    src/Rocket/Window/Gamepad_SDL3.cpp
     src/Rocket/Window/Input.cpp
     src/Rocket/Window/Window.cpp
     src/Rocket/Window/WindowEvent.cpp
 )
 
-if(APPLE)
-    enable_language(OBJCXX)
+# Gamepads are read through SDL on every platform; the other backends build only its gamepad part.
+set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+set(SDL_STATIC ON CACHE BOOL "" FORCE)
+set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(SDL_INSTALL ON CACHE BOOL "" FORCE)
 
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(SDL_AUDIO OFF CACHE BOOL "" FORCE)
+    set(SDL_VIDEO OFF CACHE BOOL "" FORCE)
+    set(SDL_GPU OFF CACHE BOOL "" FORCE)
+    set(SDL_RENDER OFF CACHE BOOL "" FORCE)
+    set(SDL_CAMERA OFF CACHE BOOL "" FORCE)
+    set(SDL_POWER OFF CACHE BOOL "" FORCE)
+    set(SDL_DIALOG OFF CACHE BOOL "" FORCE)
+    set(SDL_TRAY OFF CACHE BOOL "" FORCE)
+endif()
+
+if(APPLE)
     set(ROCKET_SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/Rocket/Paint/Metal/Painter.metal)
     set(ROCKET_SHADER_TYPES  ${CMAKE_CURRENT_SOURCE_DIR}/src/Rocket/Paint/Metal/Painter.metal.hpp)
     set(ROCKET_SHADER_HEADER ${CMAKE_CURRENT_BINARY_DIR}/Painter.metal-lib.hpp)
@@ -162,11 +184,6 @@ elseif(WIN32)
         src/Rocket/Window/Window_Win32.cpp
     )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
-    set(SDL_STATIC ON CACHE BOOL "" FORCE)
-    set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
-    set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
-    set(SDL_INSTALL ON CACHE BOOL "" FORCE)
     set(SDLIMAGE_INSTALL ON CACHE BOOL "" FORCE)
     set(SDLIMAGE_VENDORED OFF CACHE BOOL "" FORCE)
     set(SDLIMAGE_SAMPLES OFF CACHE BOOL "" FORCE)
@@ -189,10 +206,6 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(SDLMIXER_GME OFF CACHE BOOL "" FORCE)
     set(SDLMIXER_MIDI OFF CACHE BOOL "" FORCE)
     set(BUILD_SHARED_LIBS OFF)
-
-    add_subdirectory(lib/sdl EXCLUDE_FROM_ALL)
-    add_subdirectory(lib/sdl_image EXCLUDE_FROM_ALL)
-    add_subdirectory(lib/sdl_mixer EXCLUDE_FROM_ALL)
 
     find_program(ROCKET_GLSLC glslc REQUIRED)
 
@@ -246,6 +259,13 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     )
 endif()
 
+add_subdirectory(lib/sdl EXCLUDE_FROM_ALL)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_subdirectory(lib/sdl_image EXCLUDE_FROM_ALL)
+    add_subdirectory(lib/sdl_mixer EXCLUDE_FROM_ALL)
+endif()
+
 add_subdirectory(lib/freetype)
 add_subdirectory(lib/lunasvg)
 add_subdirectory(lib/yoga/yoga)
@@ -286,6 +306,7 @@ target_include_directories(Rocket
 
 target_link_libraries(Rocket
     PRIVATE
+        SDL3::SDL3-static
         freetype
         lunasvg
         yogacore
@@ -336,7 +357,6 @@ elseif(WIN32)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_libraries(Rocket
         PRIVATE
-            SDL3::SDL3-static
             SDL3_image::SDL3_image-static
             SDL3_mixer::SDL3_mixer-static
     )

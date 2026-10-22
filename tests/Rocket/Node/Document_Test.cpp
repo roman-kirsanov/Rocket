@@ -414,6 +414,64 @@ TEST(Document, Focus) {
     ASSERT_TRUE(keycode == Keycode::A);
 }
 
+/* Gamepad input goes to the focused node, like keys. */
+TEST(Document, GamepadEventsReachTheFocusedNode) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto a = Node();
+    a.setWidth(100.0f);
+    a.setHeight(50.0f);
+    a.setTabIndex(1);
+    document.appendChild(a);
+
+    document.update();
+
+    window.onEvent.publish(MouseMoveWindowEvent(window, { 10.0f, 10.0f }, KeyModifiers{}));
+    window.onEvent.publish(MouseDownWindowEvent(window, Mouse::LeftButton, { 10.0f, 10.0f }, KeyModifiers{}));
+    window.onEvent.publish(MouseUpWindowEvent(window, Mouse::LeftButton, { 10.0f, 10.0f }, KeyModifiers{}));
+    ASSERT_TRUE(a.isFocused() == true);
+
+    auto events = std::vector<std::string>();
+    auto sub = Sub<NodeEvent const&>(a.onEvent, [&](NodeEvent const& event) {
+        if (auto e = event.as<GamepadDownNodeEvent>()) {
+            events.push_back("down " + std::to_string(e->getGamepad()) + " " + std::to_string(static_cast<int>(e->getButton())));
+        } else if (auto e = event.as<GamepadUpNodeEvent>()) {
+            events.push_back("up " + std::to_string(e->getGamepad()) + " " + std::to_string(static_cast<int>(e->getButton())));
+        } else if (auto e = event.as<GamepadAxisNodeEvent>()) {
+            events.push_back("axis " + std::to_string(e->getGamepad()) + " " + std::to_string(static_cast<int>(e->getAxis())) + " " + std::to_string(e->getValue()));
+        }
+    });
+
+    window.onEvent.publish(GamepadDownWindowEvent(window, 7, GamepadButton::South));
+    window.onEvent.publish(GamepadUpWindowEvent(window, 7, GamepadButton::South));
+    window.onEvent.publish(GamepadAxisWindowEvent(window, 7, GamepadAxis::LeftX, -0.5f));
+
+    EXPECT_EQ(events, std::vector<std::string>({ "down 7 0", "up 7 0", "axis 7 0 -0.500000" }));
+}
+
+/* With nothing focused, gamepad input goes to the document. */
+TEST(Document, GamepadEventsReachTheDocumentWithoutFocus) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+    document.update();
+
+    auto buttons = std::vector<GamepadButton>();
+    auto sub = Sub<NodeEvent const&>(document.onEvent, [&](NodeEvent const& event) {
+        if (auto e = event.as<GamepadDownNodeEvent>()) {
+            buttons.push_back(e->getButton());
+        }
+    });
+
+    window.onEvent.publish(GamepadDownWindowEvent(window, 1, GamepadButton::Start));
+
+    EXPECT_EQ(buttons, std::vector<GamepadButton>({ GamepadButton::Start }));
+}
+
 /* Wheel: scrolling over a scrollable node shifts its children by the
    scroll position on the next update, clamped to the scroll overflow. */
 TEST(Document, Wheel) {

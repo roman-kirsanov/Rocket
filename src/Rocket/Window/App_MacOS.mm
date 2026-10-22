@@ -9,6 +9,7 @@
 #include <Cocoa/Cocoa.h>
 #include <Rocket/Base/Profile.hpp>
 #include <Rocket/Window/App_Private.hpp>
+#include <Rocket/Window/Gamepad_Private.hpp>
 
 auto constexpr _APP_EVENT_TIMEOUT = 16.667;
 
@@ -139,6 +140,7 @@ void __Run(int argc, char const** argv) {
                 [NSApp updateWindows];
             }
 
+            __UpdateGamepads();
             _Update();
 
             if (_isExited) {

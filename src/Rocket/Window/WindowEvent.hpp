@@ -331,6 +331,77 @@ private:
     KeyModifiers _modifiers;
 };
 
+/** A gamepad button was pressed while the window had focus. */
+class GamepadDownWindowEvent : public WindowEvent {
+public:
+    /**
+     * An event for the given button.
+     *
+     * @param window  The window the event originated from.
+     * @param gamepad The gamepad the button belongs to (see GamepadConnectAppEvent).
+     * @param button  The button that was pressed.
+     */
+    GamepadDownWindowEvent(Window& window, std::uint32_t gamepad, GamepadButton button);
+
+    /** Returns the gamepad the button belongs to. */
+    std::uint32_t getGamepad() const;
+
+    /** Returns the button that was pressed. */
+    GamepadButton getButton() const;
+private:
+    std::uint32_t _gamepad;
+    GamepadButton _button;
+};
+
+/** A gamepad button was released while the window had focus. */
+class GamepadUpWindowEvent : public WindowEvent {
+public:
+    /**
+     * An event for the given button.
+     *
+     * @param window  The window the event originated from.
+     * @param gamepad The gamepad the button belongs to (see GamepadConnectAppEvent).
+     * @param button  The button that was released.
+     */
+    GamepadUpWindowEvent(Window& window, std::uint32_t gamepad, GamepadButton button);
+
+    /** Returns the gamepad the button belongs to. */
+    std::uint32_t getGamepad() const;
+
+    /** Returns the button that was released. */
+    GamepadButton getButton() const;
+private:
+    std::uint32_t _gamepad;
+    GamepadButton _button;
+};
+
+/** A gamepad stick or trigger moved while the window had focus. */
+class GamepadAxisWindowEvent : public WindowEvent {
+public:
+    /**
+     * An event for the given axis.
+     *
+     * @param window  The window the event originated from.
+     * @param gamepad The gamepad the axis belongs to (see GamepadConnectAppEvent).
+     * @param axis    The axis that moved.
+     * @param value   Its new value (see GamepadAxis for the range).
+     */
+    GamepadAxisWindowEvent(Window& window, std::uint32_t gamepad, GamepadAxis axis, float value);
+
+    /** Returns the gamepad the axis belongs to. */
+    std::uint32_t getGamepad() const;
+
+    /** Returns the axis that moved. */
+    GamepadAxis getAxis() const;
+
+    /** Returns the axis's new value (see GamepadAxis for the range). */
+    float getValue() const;
+private:
+    std::uint32_t _gamepad;
+    GamepadAxis _axis;
+    float _value;
+};
+
 /**
  * Text the OS text system committed while the window had focus: typed
  * characters, the result of a dead key or input method, the emoji picker,

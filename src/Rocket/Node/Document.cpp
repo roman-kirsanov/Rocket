@@ -335,6 +335,12 @@ void Document::_handleEvent(WindowEvent const& event) {
         _handleKeyDownEvent(*keyDownEvent);
     } else if (auto keyUpEvent = event.as<KeyUpWindowEvent>()) {
         _handleKeyUpEvent(*keyUpEvent);
+    } else if (auto gamepadDownEvent = event.as<GamepadDownWindowEvent>()) {
+        _handleGamepadDownEvent(*gamepadDownEvent);
+    } else if (auto gamepadUpEvent = event.as<GamepadUpWindowEvent>()) {
+        _handleGamepadUpEvent(*gamepadUpEvent);
+    } else if (auto gamepadAxisEvent = event.as<GamepadAxisWindowEvent>()) {
+        _handleGamepadAxisEvent(*gamepadAxisEvent);
     } else if (auto inputEvent = event.as<InputWindowEvent>()) {
         _handleInputEvent(*inputEvent);
     } else if (auto dropFilesEvent = event.as<DropFilesWindowEvent>()) {
@@ -457,6 +463,27 @@ void Document::_handleKeyUpEvent(KeyUpWindowEvent const& event) {
     PROFILE
 
     _triggerKeyUp(event.getScancode(), event.getKeycode(), event.getModifiers());
+    _updateAll();
+}
+
+void Document::_handleGamepadDownEvent(GamepadDownWindowEvent const& event) {
+    PROFILE
+
+    _triggerGamepadDown(event.getGamepad(), event.getButton());
+    _updateAll();
+}
+
+void Document::_handleGamepadUpEvent(GamepadUpWindowEvent const& event) {
+    PROFILE
+
+    _triggerGamepadUp(event.getGamepad(), event.getButton());
+    _updateAll();
+}
+
+void Document::_handleGamepadAxisEvent(GamepadAxisWindowEvent const& event) {
+    PROFILE
+
+    _triggerGamepadAxis(event.getGamepad(), event.getAxis(), event.getValue());
     _updateAll();
 }
 
@@ -2308,6 +2335,42 @@ void Document::_triggerKeyUp(Scancode scancode, std::string const& keycode, KeyM
 
     targetNode->dispatchEvent(
         KeyUpNodeEvent(*targetNode, scancode, keycode, modifiers)
+    );
+}
+
+void Document::_triggerGamepadDown(std::uint32_t gamepad, GamepadButton button) {
+    PROFILE
+
+    _flushEvents();
+
+    auto const targetNode = ((_focusState.focusedNode != nullptr) ? _focusState.focusedNode : this);
+
+    targetNode->dispatchEvent(
+        GamepadDownNodeEvent(*targetNode, gamepad, button)
+    );
+}
+
+void Document::_triggerGamepadUp(std::uint32_t gamepad, GamepadButton button) {
+    PROFILE
+
+    _flushEvents();
+
+    auto const targetNode = ((_focusState.focusedNode != nullptr) ? _focusState.focusedNode : this);
+
+    targetNode->dispatchEvent(
+        GamepadUpNodeEvent(*targetNode, gamepad, button)
+    );
+}
+
+void Document::_triggerGamepadAxis(std::uint32_t gamepad, GamepadAxis axis, float value) {
+    PROFILE
+
+    _flushEvents();
+
+    auto const targetNode = ((_focusState.focusedNode != nullptr) ? _focusState.focusedNode : this);
+
+    targetNode->dispatchEvent(
+        GamepadAxisNodeEvent(*targetNode, gamepad, axis, value)
     );
 }
 

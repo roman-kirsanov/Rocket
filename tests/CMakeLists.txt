@@ -32,6 +32,7 @@ foreach(TEST_SOURCE ${TEST_SOURCES})
     target_link_libraries(${TEST_NAME}
         PRIVATE
             Rocket::Rocket
+            SDL3::SDL3-static
             gmock_main
     )
 
