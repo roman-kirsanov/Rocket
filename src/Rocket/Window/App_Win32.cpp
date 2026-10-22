@@ -342,7 +342,15 @@ void __Tick(bool update) {
     }
 
     if (_GetTicks() >= _frameEnd) {
-        _frameEnd = _GetTicks() + static_cast<std::uint64_t>(_GetFramePeriod() * static_cast<double>(_GetTicksPerSecond()));
+        /* From the frame's deadline, not from when the loop woke, so a late wake
+           does not add to every frame. A loop more than a frame behind starts a
+           new beat instead of catching up. */
+        _frameEnd += static_cast<std::uint64_t>(_GetFramePeriod() * static_cast<double>(_GetTicksPerSecond()));
+
+        if (_frameEnd <= _GetTicks()) {
+            _frameEnd = _GetTicks() + static_cast<std::uint64_t>(_GetFramePeriod() * static_cast<double>(_GetTicksPerSecond()));
+        }
+
         __PaintWindows();
     }
 }

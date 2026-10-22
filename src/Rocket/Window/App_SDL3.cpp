@@ -259,7 +259,16 @@ void __Tick(bool update) {
     }
 
     if (SDL_GetTicksNS() >= _nextFrame) {
-        _nextFrame = (SDL_GetTicksNS() + _GetFramePeriod());
+        /* From the frame's deadline, not from when the loop woke: the wait above
+           rounds up to whole milliseconds, and counting from the wake would add
+           that lateness to every frame (84 frames a second on a 90 Hz screen). A
+           loop more than a frame behind starts a new beat instead of catching up. */
+        _nextFrame += _GetFramePeriod();
+
+        if (_nextFrame <= SDL_GetTicksNS()) {
+            _nextFrame = (SDL_GetTicksNS() + _GetFramePeriod());
+        }
+
         __PaintWindows();
     }
 }
