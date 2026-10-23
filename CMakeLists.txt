@@ -31,6 +31,7 @@ set(ROCKET_SOURCE
     src/Rocket/Base/Object.cpp
     src/Rocket/Base/String.cpp
     src/Rocket/Base/Time.cpp
+    src/Rocket/Fetch/Fetch.cpp
     src/Rocket/Math/Float.cpp
     src/Rocket/Math/Mat3.cpp
     src/Rocket/Math/Vec2.cpp
@@ -266,6 +267,58 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_subdirectory(lib/sdl_mixer EXCLUDE_FROM_ALL)
 endif()
 
+# libcurl is built from its submodule as a static library, HTTP(S) only. TLS
+# comes from the platform: Schannel on Windows, OpenSSL elsewhere (Homebrew's
+# static OpenSSL on macOS, verified against the system keychain). The options
+# are set inside a function so names curl shares with Rocket, like
+# BUILD_TESTING, keep their values out here.
+function(rocket_add_curl)
+    set(BUILD_SHARED_LIBS OFF)
+    set(BUILD_STATIC_LIBS ON)
+    set(BUILD_CURL_EXE OFF)
+    set(BUILD_TESTING OFF)
+    set(BUILD_EXAMPLES OFF)
+    set(BUILD_LIBCURL_DOCS OFF)
+    set(BUILD_MISC_DOCS OFF)
+    set(ENABLE_CURL_MANUAL OFF)
+    set(PICKY_COMPILER OFF)
+    set(CURL_USE_LIBPSL OFF)
+    set(CURL_USE_LIBSSH2 OFF)
+    set(CURL_BROTLI OFF CACHE STRING "" FORCE)
+    set(CURL_ZSTD OFF CACHE STRING "" FORCE)
+    set(USE_LIBIDN2 OFF)
+    set(USE_NGHTTP2 OFF)
+
+    foreach(PROTOCOL DICT FILE FTP GOPHER IMAP IPFS LDAP MQTT POP3 RTSP SMTP TELNET TFTP WEBSOCKETS)
+        set(CURL_DISABLE_${PROTOCOL} ON)
+    endforeach()
+
+    if(WIN32)
+        set(CURL_USE_SCHANNEL ON)
+        set(CURL_USE_OPENSSL OFF)
+    else()
+        set(CURL_USE_OPENSSL ON)
+    endif()
+
+    if(APPLE)
+        set(USE_APPLE_SECTRUST ON)
+        set(OPENSSL_USE_STATIC_LIBS ON)
+
+        if(NOT DEFINED OPENSSL_ROOT_DIR)
+            execute_process(
+                COMMAND brew --prefix openssl@3
+                OUTPUT_VARIABLE OPENSSL_ROOT_DIR
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                ERROR_QUIET
+            )
+        endif()
+    endif()
+
+    add_subdirectory(lib/curl EXCLUDE_FROM_ALL)
+endfunction()
+
+rocket_add_curl()
+
 add_subdirectory(lib/freetype)
 add_subdirectory(lib/lunasvg)
 add_subdirectory(lib/yoga/yoga)
@@ -310,6 +363,7 @@ target_link_libraries(Rocket
         freetype
         lunasvg
         yogacore
+        CURL::libcurl_static
 )
 
 if(APPLE)

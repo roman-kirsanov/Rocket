@@ -18,6 +18,7 @@
 #include <Rocket/Base/String.hpp>
 #include <Rocket/Base/Task.hpp>
 #include <Rocket/Base/Time.hpp>
+#include <Rocket/Fetch/Fetch.hpp>
 #include <Rocket/Math/Float.hpp>
 #include <Rocket/Math/Mat3.hpp>
 #include <Rocket/Math/Vec2.hpp>

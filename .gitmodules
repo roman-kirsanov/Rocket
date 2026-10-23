@@ -22,3 +22,6 @@
 [submodule "lib/sdl_mixer"]
 	path = lib/sdl_mixer
 	url = https://github.com/libsdl-org/SDL_mixer.git
+[submodule "lib/curl"]
+	path = lib/curl
+	url = https://github.com/curl/curl.git
