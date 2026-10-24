@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.23)
+cmake_minimum_required(VERSION 3.25)
 
 if(NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum macOS version")
@@ -10,19 +10,9 @@ if(APPLE)
     enable_language(OBJCXX)
 endif()
 
-include(CTest)
-include(GNUInstallDirs)
-include(CMakePackageConfigHelpers)
-
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(LUNASVG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(FT_DISABLE_ZLIB ON CACHE BOOL "" FORCE)
-set(FT_DISABLE_BZIP2 ON CACHE BOOL "" FORCE)
-set(FT_DISABLE_PNG ON CACHE BOOL "" FORCE)
-set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
-set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
 set(ROCKET_EMBED ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Embed.cmake)
 set(ROCKET_SOURCE
     src/Rocket/Audio/Audio.cpp
@@ -68,54 +58,7 @@ set(ROCKET_SOURCE
     src/Rocket/Window/WindowEvent.cpp
 )
 
-# Gamepads are read through SDL on every platform; the other backends build only its gamepad part.
-set(SDL_SHARED OFF CACHE BOOL "" FORCE)
-set(SDL_STATIC ON CACHE BOOL "" FORCE)
-set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
-set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(SDL_INSTALL ON CACHE BOOL "" FORCE)
-
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(SDL_AUDIO OFF CACHE BOOL "" FORCE)
-    set(SDL_VIDEO OFF CACHE BOOL "" FORCE)
-    set(SDL_GPU OFF CACHE BOOL "" FORCE)
-    set(SDL_RENDER OFF CACHE BOOL "" FORCE)
-    set(SDL_CAMERA OFF CACHE BOOL "" FORCE)
-    set(SDL_POWER OFF CACHE BOOL "" FORCE)
-    set(SDL_DIALOG OFF CACHE BOOL "" FORCE)
-    set(SDL_TRAY OFF CACHE BOOL "" FORCE)
-endif()
-
 if(APPLE)
-    set(ROCKET_SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/Rocket/Paint/Metal/Painter.metal)
-    set(ROCKET_SHADER_TYPES  ${CMAKE_CURRENT_SOURCE_DIR}/src/Rocket/Paint/Metal/Painter.metal.hpp)
-    set(ROCKET_SHADER_HEADER ${CMAKE_CURRENT_BINARY_DIR}/Painter.metal-lib.hpp)
-    set(ROCKET_SHADER_AIR    ${CMAKE_CURRENT_BINARY_DIR}/Painter.air)
-    set(ROCKET_SHADER_LIB    ${CMAKE_CURRENT_BINARY_DIR}/Painter.metallib)
-
-    add_custom_command(
-        OUTPUT ${ROCKET_SHADER_AIR}
-        COMMAND xcrun -sdk macosx metal -c ${ROCKET_SHADER_SOURCE} -o ${ROCKET_SHADER_AIR}
-        DEPENDS ${ROCKET_SHADER_SOURCE} ${ROCKET_SHADER_TYPES}
-        COMMENT "Compiling Painter.metal"
-        VERBATIM
-    )
-
-    add_custom_command(
-        OUTPUT ${ROCKET_SHADER_LIB}
-        COMMAND xcrun -sdk macosx metallib ${ROCKET_SHADER_AIR} -o ${ROCKET_SHADER_LIB}
-        DEPENDS ${ROCKET_SHADER_AIR}
-        VERBATIM
-    )
-
-    add_custom_command(
-        OUTPUT ${ROCKET_SHADER_HEADER}
-        COMMAND ${CMAKE_COMMAND} -D IN=${ROCKET_SHADER_LIB} -D OUT=${ROCKET_SHADER_HEADER} -D NAME=Rocket_MetalLib -P ${ROCKET_EMBED}
-        DEPENDS ${ROCKET_SHADER_LIB} ${ROCKET_EMBED}
-        COMMENT "Embedding Painter.metallib into Painter.metal-lib.hpp"
-        VERBATIM
-    )
-
     list(APPEND ROCKET_SOURCE
         src/Rocket/Audio/Audio_MacOS.mm
         src/Rocket/Paint/Image_MacOS.mm
@@ -124,57 +67,8 @@ if(APPLE)
         src/Rocket/Window/Clipboard_MacOS.mm
         src/Rocket/Window/FileDialog_MacOS.mm
         src/Rocket/Window/Window_MacOS.mm
-        ${ROCKET_SHADER_HEADER}
     )
 elseif(WIN32)
-    set(ROCKET_PROGRAM_FILES_X86 "ProgramFiles(x86)")
-    file(GLOB ROCKET_WINDOWS_SDK_BINS "$ENV{${ROCKET_PROGRAM_FILES_X86}}/Windows Kits/10/bin/10.*/x64")
-    list(SORT ROCKET_WINDOWS_SDK_BINS COMPARE NATURAL ORDER DESCENDING)
-    set(ROCKET_SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/Rocket/Paint/HLSL)
-    set(ROCKET_SHADER_COMMON ${ROCKET_SHADER_DIR}/Painter.hlsli)
-    set(ROCKET_SHADERS
-        QuadVertex
-        ColorBrush
-        ImageBrush
-        LinearGradientBrush
-        RadialGradientBrush
-        BlurFilter
-        ShadowFilterDilate
-        ShadowFilterBlur
-        ShadowFilterComposite
-    )
-
-    find_program(ROCKET_DXC dxc HINTS $ENV{WindowsSdkVerBinPath}/x64 ${ROCKET_WINDOWS_SDK_BINS} REQUIRED)
-
-    foreach(ROCKET_SHADER_NAME ${ROCKET_SHADERS})
-        set(ROCKET_SHADER_DXIL   ${CMAKE_CURRENT_BINARY_DIR}/${ROCKET_SHADER_NAME}.dxil)
-        set(ROCKET_SHADER_HEADER ${CMAKE_CURRENT_BINARY_DIR}/${ROCKET_SHADER_NAME}.dxil.hpp)
-
-        if(ROCKET_SHADER_NAME STREQUAL "QuadVertex")
-            set(ROCKET_SHADER_PROFILE vs_6_0)
-        else()
-            set(ROCKET_SHADER_PROFILE ps_6_0)
-        endif()
-
-        add_custom_command(
-            OUTPUT ${ROCKET_SHADER_DXIL}
-            COMMAND ${ROCKET_DXC} -nologo -T ${ROCKET_SHADER_PROFILE} -E main -O3 -WX -Fo ${ROCKET_SHADER_DXIL} ${ROCKET_SHADER_DIR}/${ROCKET_SHADER_NAME}.hlsl
-            DEPENDS ${ROCKET_SHADER_DIR}/${ROCKET_SHADER_NAME}.hlsl ${ROCKET_SHADER_COMMON}
-            COMMENT "Compiling ${ROCKET_SHADER_NAME}.hlsl"
-            VERBATIM
-        )
-
-        add_custom_command(
-            OUTPUT ${ROCKET_SHADER_HEADER}
-            COMMAND ${CMAKE_COMMAND} -D IN=${ROCKET_SHADER_DXIL} -D OUT=${ROCKET_SHADER_HEADER} -D NAME=Rocket_DXIL_${ROCKET_SHADER_NAME} -P ${ROCKET_EMBED}
-            DEPENDS ${ROCKET_SHADER_DXIL} ${ROCKET_EMBED}
-            COMMENT "Embedding ${ROCKET_SHADER_NAME}.dxil into ${ROCKET_SHADER_NAME}.dxil.hpp"
-            VERBATIM
-        )
-
-        list(APPEND ROCKET_SOURCE ${ROCKET_SHADER_HEADER})
-    endforeach()
-
     list(APPEND ROCKET_SOURCE
         src/Rocket/Audio/Audio_Win32.cpp
         src/Rocket/Paint/Image_Win32.cpp
@@ -185,70 +79,6 @@ elseif(WIN32)
         src/Rocket/Window/Window_Win32.cpp
     )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(SDLIMAGE_INSTALL ON CACHE BOOL "" FORCE)
-    set(SDLIMAGE_VENDORED OFF CACHE BOOL "" FORCE)
-    set(SDLIMAGE_SAMPLES OFF CACHE BOOL "" FORCE)
-    set(SDLIMAGE_BACKEND_STB ON CACHE BOOL "" FORCE)
-    set(SDLIMAGE_PNG_LIBPNG OFF CACHE BOOL "" FORCE)
-    set(SDLIMAGE_AVIF OFF CACHE BOOL "" FORCE)
-    set(SDLIMAGE_JXL OFF CACHE BOOL "" FORCE)
-    set(SDLIMAGE_TIF OFF CACHE BOOL "" FORCE)
-    set(SDLIMAGE_WEBP OFF CACHE BOOL "" FORCE)
-    set(SDLIMAGE_SVG OFF CACHE BOOL "" FORCE)
-    set(SDLMIXER_VENDORED OFF CACHE BOOL "" FORCE)
-    set(SDLMIXER_SAMPLES OFF CACHE BOOL "" FORCE)
-    set(SDLMIXER_INSTALL ON CACHE BOOL "" FORCE)
-    set(SDLMIXER_FLAC_LIBFLAC OFF CACHE BOOL "" FORCE)
-    set(SDLMIXER_MP3_MPG123 OFF CACHE BOOL "" FORCE)
-    set(SDLMIXER_VORBIS_VORBISFILE OFF CACHE BOOL "" FORCE)
-    set(SDLMIXER_OPUS OFF CACHE BOOL "" FORCE)
-    set(SDLMIXER_WAVPACK OFF CACHE BOOL "" FORCE)
-    set(SDLMIXER_MOD OFF CACHE BOOL "" FORCE)
-    set(SDLMIXER_GME OFF CACHE BOOL "" FORCE)
-    set(SDLMIXER_MIDI OFF CACHE BOOL "" FORCE)
-    set(BUILD_SHARED_LIBS OFF)
-
-    find_program(ROCKET_GLSLC glslc REQUIRED)
-
-    set(ROCKET_SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/Rocket/Paint/GLSL)
-    set(ROCKET_SHADER_COMMON ${ROCKET_SHADER_DIR}/Painter.glsl)
-    set(ROCKET_SHADERS
-        QuadVertex.vert
-        ColorBrush.frag
-        ImageBrush.frag
-        LinearGradientBrush.frag
-        RadialGradientBrush.frag
-        BlurFilter.frag
-        ShadowFilterDilate.frag
-        ShadowFilterBlur.frag
-        ShadowFilterComposite.frag
-    )
-
-    foreach(ROCKET_SHADER ${ROCKET_SHADERS})
-        get_filename_component(ROCKET_SHADER_NAME ${ROCKET_SHADER} NAME_WE)
-
-        set(ROCKET_SHADER_SPIRV  ${CMAKE_CURRENT_BINARY_DIR}/${ROCKET_SHADER_NAME}.spv)
-        set(ROCKET_SHADER_HEADER ${CMAKE_CURRENT_BINARY_DIR}/${ROCKET_SHADER_NAME}.spv.hpp)
-
-        add_custom_command(
-            OUTPUT ${ROCKET_SHADER_SPIRV}
-            COMMAND ${ROCKET_GLSLC} --target-env=vulkan1.0 -O -o ${ROCKET_SHADER_SPIRV} ${ROCKET_SHADER_DIR}/${ROCKET_SHADER}
-            DEPENDS ${ROCKET_SHADER_DIR}/${ROCKET_SHADER} ${ROCKET_SHADER_COMMON}
-            COMMENT "Compiling ${ROCKET_SHADER}"
-            VERBATIM
-        )
-
-        add_custom_command(
-            OUTPUT ${ROCKET_SHADER_HEADER}
-            COMMAND ${CMAKE_COMMAND} -D IN=${ROCKET_SHADER_SPIRV} -D OUT=${ROCKET_SHADER_HEADER} -D NAME=Rocket_SPIRV_${ROCKET_SHADER_NAME} -P ${ROCKET_EMBED}
-            DEPENDS ${ROCKET_SHADER_SPIRV} ${ROCKET_EMBED}
-            COMMENT "Embedding ${ROCKET_SHADER_NAME}.spv into ${ROCKET_SHADER_NAME}.spv.hpp"
-            VERBATIM
-        )
-
-        list(APPEND ROCKET_SOURCE ${ROCKET_SHADER_HEADER})
-    endforeach()
-
     list(APPEND ROCKET_SOURCE
         src/Rocket/Audio/Audio_SDL3.cpp
         src/Rocket/Paint/Image_SDL3.cpp
@@ -260,201 +90,26 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     )
 endif()
 
-add_subdirectory(lib/sdl EXCLUDE_FROM_ALL)
-
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    add_subdirectory(lib/sdl_image EXCLUDE_FROM_ALL)
-    add_subdirectory(lib/sdl_mixer EXCLUDE_FROM_ALL)
-endif()
-
-# libcurl is built from its submodule as a static library, HTTP(S) only. TLS
-# comes from the platform: Schannel on Windows, OpenSSL elsewhere (Homebrew's
-# static OpenSSL on macOS, verified against the system keychain). The options
-# are set inside a function so names curl shares with Rocket, like
-# BUILD_TESTING, keep their values out here.
-function(rocket_add_curl)
-    set(BUILD_SHARED_LIBS OFF)
-    set(BUILD_STATIC_LIBS ON)
-    set(BUILD_CURL_EXE OFF)
-    set(BUILD_TESTING OFF)
-    set(BUILD_EXAMPLES OFF)
-    set(BUILD_LIBCURL_DOCS OFF)
-    set(BUILD_MISC_DOCS OFF)
-    set(ENABLE_CURL_MANUAL OFF)
-    set(PICKY_COMPILER OFF)
-    set(CURL_USE_LIBPSL OFF)
-    set(CURL_USE_LIBSSH2 OFF)
-    set(CURL_BROTLI OFF CACHE STRING "" FORCE)
-    set(CURL_ZSTD OFF CACHE STRING "" FORCE)
-    set(USE_LIBIDN2 OFF)
-    set(USE_NGHTTP2 OFF)
-
-    foreach(PROTOCOL DICT FILE FTP GOPHER IMAP IPFS LDAP MQTT POP3 RTSP SMTP TELNET TFTP WEBSOCKETS)
-        set(CURL_DISABLE_${PROTOCOL} ON)
-    endforeach()
-
-    if(WIN32)
-        set(CURL_USE_SCHANNEL ON)
-        set(CURL_USE_OPENSSL OFF)
-    else()
-        set(CURL_USE_OPENSSL ON)
-    endif()
-
-    if(APPLE)
-        set(USE_APPLE_SECTRUST ON)
-        set(OPENSSL_USE_STATIC_LIBS ON)
-
-        if(NOT DEFINED OPENSSL_ROOT_DIR)
-            execute_process(
-                COMMAND brew --prefix openssl@3
-                OUTPUT_VARIABLE OPENSSL_ROOT_DIR
-                OUTPUT_STRIP_TRAILING_WHITESPACE
-                ERROR_QUIET
-            )
-        endif()
-    endif()
-
-    add_subdirectory(lib/curl EXCLUDE_FROM_ALL)
-endfunction()
-
-rocket_add_curl()
-
-add_subdirectory(lib/freetype)
-add_subdirectory(lib/lunasvg)
-add_subdirectory(lib/yoga/yoga)
-
 add_library(Rocket STATIC ${ROCKET_SOURCE})
 add_library(Rocket::Rocket ALIAS Rocket)
 
-if(MSVC)
-    target_compile_options(Rocket
-        PUBLIC
-            /utf-8
-            /Zc:__cplusplus
-            /Zc:preprocessor
-        PRIVATE
-            /bigobj
-    )
+include(CTest)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
-    target_compile_definitions(Rocket
-        PRIVATE
-            _CRT_SECURE_NO_WARNINGS
-            UNICODE
-            _UNICODE
-    )
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Shaders.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/CFlags.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/LFlags.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddCurl.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddFreetype.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddLunaSVG.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddYoga.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddSDL.cmake)
 
-    target_compile_options(yogacore PRIVATE /utf-8)
-else()
-    target_compile_options(yogacore PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-frtti>)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddSDLImage.cmake)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddSDLMixer.cmake)
 endif()
 
-target_include_directories(Rocket
-    PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
-        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/lib/inplace_vector/include
-        ${CMAKE_CURRENT_BINARY_DIR}
-)
-
-target_link_libraries(Rocket
-    PRIVATE
-        SDL3::SDL3-static
-        freetype
-        lunasvg
-        yogacore
-        CURL::libcurl_static
-)
-
-if(APPLE)
-    target_compile_options(Rocket
-        PRIVATE
-            $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>
-    )
-
-    target_link_libraries(Rocket
-        PRIVATE
-            "-framework AVFoundation"
-            "-framework Carbon"
-            "-framework Cocoa"
-            "-framework Metal"
-            "-framework QuartzCore"
-            "-framework CoreGraphics"
-            "-framework ImageIO"
-    )
-elseif(WIN32)
-    target_sources(Rocket
-        INTERFACE
-            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/Rocket.manifest>
-    )
-
-    target_link_libraries(Rocket
-        PRIVATE
-            avrt
-            d3d12
-            dwmapi
-            dxgi
-            dxguid
-            imm32
-            mfplat
-            mfreadwrite
-            mfuuid
-            ole32
-            shcore
-            shell32
-            shlwapi
-            user32
-            uuid
-            windowscodecs
-            winmm
-    )
-elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    target_link_libraries(Rocket
-        PRIVATE
-            SDL3_image::SDL3_image-static
-            SDL3_mixer::SDL3_mixer-static
-    )
-endif()
-
-install(TARGETS Rocket yogacore
-    EXPORT RocketTargets
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
-
-install(DIRECTORY src/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    FILES_MATCHING
-        PATTERN "*.hpp"
-        PATTERN "*.h"
-)
-
-install(EXPORT RocketTargets
-    NAMESPACE Rocket::
-    FILE RocketTargets.cmake
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Rocket
-)
-
-write_basic_package_version_file(
-    ${CMAKE_CURRENT_BINARY_DIR}/RocketConfigVersion.cmake
-    VERSION ${PROJECT_VERSION}
-    COMPATIBILITY SameMajorVersion
-)
-
-configure_package_config_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/RocketConfig.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/RocketConfig.cmake
-    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Rocket
-)
-
-install(FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/RocketConfig.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/RocketConfigVersion.cmake
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Rocket
-)
-
-if(BUILD_TESTING)
-    add_subdirectory(tests)
-endif()
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Install.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Testing.cmake)

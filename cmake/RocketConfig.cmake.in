@@ -5,9 +5,26 @@ include(CMakeFindDependencyMacro)
 find_dependency(Threads)
 find_dependency(freetype CONFIG)
 find_dependency(lunasvg CONFIG)
+find_dependency(SDL3 CONFIG)
+
+# libcurl was linked against Homebrew's static OpenSSL on macOS; its package
+# looks OpenSSL up again here, so point it at the same one.
+if(APPLE)
+    set(OPENSSL_USE_STATIC_LIBS ON)
+
+    if(NOT DEFINED OPENSSL_ROOT_DIR)
+        execute_process(
+            COMMAND brew --prefix openssl@3
+            OUTPUT_VARIABLE OPENSSL_ROOT_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+        )
+    endif()
+endif()
+
+find_dependency(CURL CONFIG)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    find_dependency(SDL3 CONFIG)
     find_dependency(SDL3_image CONFIG)
     find_dependency(SDL3_mixer CONFIG)
 endif()
