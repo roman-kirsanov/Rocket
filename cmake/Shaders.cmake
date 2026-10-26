@@ -4,6 +4,10 @@
 #   macOS    Painter.metal -> Painter.metallib -> Rocket_MetalLib in Painter.metal-lib.hpp
 #   Windows  <Name>.hlsl   -> <Name>.dxil      -> Rocket_DXIL_<Name> in <Name>.dxil.hpp
 #   Linux    <Name>.vert/.frag -> <Name>.spv   -> Rocket_SPIRV_<Name> in <Name>.spv.hpp
+#   GLES     <Name>.vert/.frag/.glsl, as text  -> Rocket_GLES_<Name> in <Name>.glsl.hpp
+#
+# GLSL ES has no #include: the GLES shaders are embedded as source, and the
+# painter puts Painter.glsl in front of each when it compiles them.
 
 block()
     if(APPLE)
@@ -37,6 +41,36 @@ block()
         )
 
         target_sources(Rocket PRIVATE ${SHADER_HEADER})
+    elseif(ROCKET_GLES)
+        set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/Rocket/Paint/GLES)
+        set(SHADER_FILES
+            Painter.glsl
+            QuadVertex.vert
+            ColorBrush.frag
+            ImageBrush.frag
+            LinearGradientBrush.frag
+            RadialGradientBrush.frag
+            BlurFilter.frag
+            ShadowFilterDilate.frag
+            ShadowFilterBlur.frag
+            ShadowFilterComposite.frag
+        )
+
+        foreach(SHADER_FILE ${SHADER_FILES})
+            get_filename_component(SHADER_NAME ${SHADER_FILE} NAME_WE)
+
+            set(SHADER_HEADER ${CMAKE_CURRENT_BINARY_DIR}/${SHADER_NAME}.glsl.hpp)
+
+            add_custom_command(
+                OUTPUT ${SHADER_HEADER}
+                COMMAND ${CMAKE_COMMAND} -D IN=${SHADER_DIR}/${SHADER_FILE} -D OUT=${SHADER_HEADER} -D NAME=Rocket_GLES_${SHADER_NAME} -P ${ROCKET_EMBED}
+                DEPENDS ${SHADER_DIR}/${SHADER_FILE} ${ROCKET_EMBED}
+                COMMENT "Embedding ${SHADER_FILE} into ${SHADER_NAME}.glsl.hpp"
+                VERBATIM
+            )
+
+            target_sources(Rocket PRIVATE ${SHADER_HEADER})
+        endforeach()
     elseif(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
         set(SHADERS
             QuadVertex

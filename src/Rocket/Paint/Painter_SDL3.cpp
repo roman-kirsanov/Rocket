@@ -21,6 +21,7 @@
 #include <Rocket/Paint/Painter.hpp>
 #include <Rocket/Paint/Image.hpp>
 #include <Rocket/Paint/Painter_Private.hpp>
+#include <Rocket/Paint/Painter_SDL3.hpp>
 #include <Rocket/Window/App_SDL3.hpp>
 #include <Rocket/Window/Window.hpp>
 #include "QuadVertex.spv.hpp"
@@ -34,6 +35,12 @@
 #include "ShadowFilterComposite.spv.hpp"
 
 namespace Rocket {
+
+/* How many times a new window is offered to the GPU device, and how long to wait between
+   the tries: under load the Vulkan driver can fail to describe a new window's surface for
+   a moment (seen with NVIDIA on Wayland, as an error SDL has no name for) */
+static auto constexpr _CLAIM_ATTEMPTS = 5;
+static auto constexpr _CLAIM_RETRY_DELAY_MS = 20;
 
 /* The uniform blocks of GLSL/Painter.glsl in std140 layout: vec2 aligns to 8
    bytes, vec4, mat3 columns and array elements to 16, so the padding is spelled
@@ -951,6 +958,32 @@ int __GetDefaultTextureFormat() {
     PROFILE
 
     return (int)SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+}
+
+bool __ClaimWindow(SDL_Window* window) {
+    PROFILE
+
+    auto const device = static_cast<SDL_GPUDevice*>(__GetDefaultGPUDevice());
+    auto claimed = ::SDL_ClaimWindowForGPUDevice(device, window);
+
+    for (auto attempt = 1; (claimed == false) && (attempt < _CLAIM_ATTEMPTS); attempt++) {
+        ::SDL_Delay(_CLAIM_RETRY_DELAY_MS);
+        claimed = ::SDL_ClaimWindowForGPUDevice(device, window);
+    }
+
+    return claimed;
+}
+
+void __ReleaseWindow(SDL_Window* window) {
+    PROFILE
+
+    ::SDL_ReleaseWindowFromGPUDevice(static_cast<SDL_GPUDevice*>(__GetDefaultGPUDevice()), window);
+}
+
+std::uint64_t __GetWindowFlags() {
+    PROFILE
+
+    return 0;
 }
 
 _FilterTextures& Painter::_Painter::getFilterTextures(std::uint32_t width, std::uint32_t height) {

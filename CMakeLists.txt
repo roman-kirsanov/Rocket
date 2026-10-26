@@ -13,6 +13,15 @@ endif()
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Linux only: draw with OpenGL ES 3.0 instead of SDL_GPU, for devices with no
+# Vulkan driver (the Mali GPUs of the AmberELEC handhelds).
+option(ROCKET_GLES "Draw with OpenGL ES 3.0 instead of SDL_GPU (Linux)" OFF)
+
+if(ROCKET_GLES AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message(FATAL_ERROR "ROCKET_GLES is for Linux only")
+endif()
+
 set(ROCKET_EMBED ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Embed.cmake)
 set(ROCKET_SOURCE
     src/Rocket/Audio/Audio.cpp
@@ -79,10 +88,20 @@ elseif(WIN32)
         src/Rocket/Window/Window_Win32.cpp
     )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    if(ROCKET_GLES)
+        list(APPEND ROCKET_SOURCE
+            src/Rocket/Paint/Image_GLES.cpp
+            src/Rocket/Paint/Painter_GLES.cpp
+        )
+    else()
+        list(APPEND ROCKET_SOURCE
+            src/Rocket/Paint/Image_SDL3.cpp
+            src/Rocket/Paint/Painter_SDL3.cpp
+        )
+    endif()
+
     list(APPEND ROCKET_SOURCE
         src/Rocket/Audio/Audio_SDL3.cpp
-        src/Rocket/Paint/Image_SDL3.cpp
-        src/Rocket/Paint/Painter_SDL3.cpp
         src/Rocket/Window/App_SDL3.cpp
         src/Rocket/Window/Clipboard_SDL3.cpp
         src/Rocket/Window/FileDialog_SDL3.cpp

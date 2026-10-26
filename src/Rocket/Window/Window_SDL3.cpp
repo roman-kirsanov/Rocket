@@ -18,7 +18,7 @@
 #include <SDL3/SDL.h>
 #include <Rocket/Base/Profile.hpp>
 #include <Rocket/Base/String.hpp>
-#include <Rocket/Paint/Painter_Private.hpp>
+#include <Rocket/Paint/Painter_SDL3.hpp>
 #include <Rocket/Window/App_Private.hpp>
 #include <Rocket/Window/App_SDL3.hpp>
 #include <Rocket/Window/Input_Private.hpp>
@@ -29,12 +29,6 @@ namespace Rocket {
 /* SDL reports the wheel in notches (fractions of one for a touchpad); the
    macOS backend publishes points, and this many points make one notch */
 static auto constexpr _WHEEL_SCALE = 50.0f;
-
-/* How many times a new window is offered to the GPU device, and how long to wait between
-   the tries: under load the Vulkan driver can fail to describe a new window's surface for
-   a moment (seen with NVIDIA on Wayland, as an error SDL has no name for) */
-static auto constexpr _CLAIM_ATTEMPTS = 5;
-static auto constexpr _CLAIM_RETRY_DELAY_MS = 20;
 
 struct Window::_Window {
     SDL_Window* window;
@@ -448,7 +442,7 @@ void Window::__done() {
     _handlers.erase(id);
     std::erase(_modalWindows, id);
 
-    SDL_ReleaseWindowFromGPUDevice(static_cast<SDL_GPUDevice*>(__GetDefaultGPUDevice()), _impl->window);
+    __ReleaseWindow(_impl->window);
     SDL_DestroyWindow(_impl->window);
 
     delete _impl;
@@ -481,7 +475,7 @@ void Window::__init() {
     };
 
     /* Created like the macOS window: hidden, titled only, not resizable. */
-    _impl->window = SDL_CreateWindow("", 640, 480, (SDL_WINDOW_HIDDEN | SDL_WINDOW_HIGH_PIXEL_DENSITY));
+    _impl->window = SDL_CreateWindow("", 640, 480, (SDL_WINDOW_HIDDEN | SDL_WINDOW_HIGH_PIXEL_DENSITY | __GetWindowFlags()));
 
     if (_impl->window == nullptr) {
         auto const error = std::string(SDL_GetError());
@@ -489,14 +483,7 @@ void Window::__init() {
         throw std::runtime_error(error);
     }
 
-    auto claimed = SDL_ClaimWindowForGPUDevice(static_cast<SDL_GPUDevice*>(__GetDefaultGPUDevice()), _impl->window);
-
-    for (auto attempt = 1; (claimed == false) && (attempt < _CLAIM_ATTEMPTS); attempt++) {
-        SDL_Delay(_CLAIM_RETRY_DELAY_MS);
-        claimed = SDL_ClaimWindowForGPUDevice(static_cast<SDL_GPUDevice*>(__GetDefaultGPUDevice()), _impl->window);
-    }
-
-    if (claimed == false) {
+    if (__ClaimWindow(_impl->window) == false) {
         auto const error = std::string(SDL_GetError());
         SDL_DestroyWindow(_impl->window);
         delete _impl;

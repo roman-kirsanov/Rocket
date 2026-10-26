@@ -10,6 +10,15 @@ block()
             ${CMAKE_CURRENT_BINARY_DIR}
     )
 
+    # The GLES painter declares the GL entry points from SDL's copy of the
+    # Khronos headers and loads them through SDL.
+    if(ROCKET_GLES)
+        target_include_directories(Rocket
+            PRIVATE
+                ${CMAKE_CURRENT_SOURCE_DIR}/lib/sdl/src/video/khronos
+        )
+    endif()
+
     if(APPLE)
         target_compile_options(Rocket
             PRIVATE

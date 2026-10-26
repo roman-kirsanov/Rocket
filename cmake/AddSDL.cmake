@@ -21,5 +21,14 @@ block()
         set(SDL_TRAY OFF CACHE BOOL "" FORCE)
     endif()
 
+    # The handhelds have no Vulkan and no desktop: OpenGL ES over KMS/DRM.
+    if(ROCKET_GLES)
+        set(SDL_OPENGLES ON CACHE BOOL "" FORCE)
+        set(SDL_KMSDRM ON CACHE BOOL "" FORCE)
+        set(SDL_VULKAN OFF CACHE BOOL "" FORCE)
+        set(SDL_GPU OFF CACHE BOOL "" FORCE)
+        set(SDL_UNIX_CONSOLE_BUILD ON CACHE BOOL "" FORCE)
+    endif()
+
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/lib/sdl)
 endblock()
