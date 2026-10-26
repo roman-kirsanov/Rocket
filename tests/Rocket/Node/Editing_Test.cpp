@@ -794,6 +794,57 @@ TEST(Editing, CaretPaintsInsideBox) {
     EXPECT_LE(caret.getMaxY(), box.getMaxY());
 }
 
+/* A multi-line caret at the end of its text lies past the text's own box,
+   and an empty text has no width at all; the caret is painted all the same,
+   inside the scissor it is painted with. */
+static bool _CaretInsideItsScissor(_Editor const& e) {
+    auto afterImage = false;
+
+    for (auto const& paint : e.paints) {
+        if (paint.image) {
+            afterImage = true;
+        } else if (afterImage && paint.rect.has_value() && paint.color.has_value() && paint.scissor.has_value()) {
+            return (
+                (paint.rect->x >= paint.scissor->x) &&
+                (paint.rect->getMaxX() <= paint.scissor->getMaxX()) &&
+                (paint.rect->y >= paint.scissor->y) &&
+                (paint.rect->getMaxY() <= paint.scissor->getMaxY())
+            );
+        }
+    }
+
+    return false;
+}
+
+TEST(Editing, SingleLineCaretAtTheEndOfItsTextIsNotClipped) {
+    auto e = _Editor("hello");
+    e.focus();
+    e.key(Rocket::Scancode::End);
+    e.render();
+
+    ASSERT_EQ(e.caretRects().size(), 1u);
+    EXPECT_TRUE(_CaretInsideItsScissor(e));
+}
+
+TEST(Editing, MultiLineCaretAtTheEndOfItsTextIsNotClipped) {
+    auto e = _Editor("hello", true, { 200.0f, 60.0f });
+    e.focus();
+    e.key(Rocket::Scancode::End);
+    e.render();
+
+    ASSERT_EQ(e.caretRects().size(), 1u);
+    EXPECT_TRUE(_CaretInsideItsScissor(e));
+}
+
+TEST(Editing, MultiLineCaretOfAnEmptyTextIsNotClipped) {
+    auto e = _Editor("", true, { 200.0f, 60.0f });
+    e.focus();
+    e.render();
+
+    ASSERT_EQ(e.caretRects().size(), 1u);
+    EXPECT_TRUE(_CaretInsideItsScissor(e));
+}
+
 /* ============================ lifecycle ================================== */
 
 /* Removing the focused editable from the tree while keys keep arriving must

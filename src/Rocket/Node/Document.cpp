@@ -1459,15 +1459,21 @@ void Document::_updateNode(Node& node) {
 
     /* An unset overflow clips, the same as Hidden: only Visible lets content
        out. Each axis is clipped on its own, so a node outside the clip on one
-       axis keeps the other axis it lets content out on. */
-    auto& clipRect = node._computedClipRectInDocument;
-
-    if (node._overflowX != NodeOverflow::Visible) {
-        _ClipSpan(clipRect.x, clipRect.width, innerBorderRect.x, innerBorderRect.width);
+       axis keeps the other axis it lets content out on. Text is never clipped
+       to its own box: its caret sits just past its last glyph and an empty
+       text has no width, so it takes only the clip of its ancestors. */
+    if (
+        node._display != NodeDisplay::Text &&
+        node._overflowX != NodeOverflow::Visible
+    ) {
+        _ClipSpan(node._computedClipRectInDocument.x, node._computedClipRectInDocument.width, innerBorderRect.x, innerBorderRect.width);
     }
 
-    if (node._overflowY != NodeOverflow::Visible) {
-        _ClipSpan(clipRect.y, clipRect.height, innerBorderRect.y, innerBorderRect.height);
+    if (
+        node._display != NodeDisplay::Text &&
+        node._overflowY != NodeOverflow::Visible
+    ) {
+        _ClipSpan(node._computedClipRectInDocument.y, node._computedClipRectInDocument.height, innerBorderRect.y, innerBorderRect.height);
     }
 
     auto visibleRect = Vec4{};
