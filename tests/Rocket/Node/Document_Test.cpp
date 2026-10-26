@@ -2821,6 +2821,32 @@ TEST(Document, DetachResetsScrollPosition) {
     ASSERT_TRUE(content.getComputedBorderRect().y == 0.0f);
 }
 
+/* A node reports how far its content reaches past it, and nothing when its content fits. */
+TEST(Document, ReportsTheScrollOverflowOfANode) {
+    auto window = Window();
+    window.setSize({ 640.0f, 480.0f });
+
+    auto document = Document(window);
+
+    auto viewport = Node();
+    viewport.setWidth(100.0f);
+    viewport.setHeight(100.0f);
+    viewport.setOverflowY(NodeOverflow::Scroll);
+    document.appendChild(viewport);
+
+    auto content = Node();
+    content.setWidth(100.0f);
+    content.setHeight(300.0f);
+    viewport.appendChild(content);
+
+    document.update();
+    ASSERT_TRUE(viewport.getScrollOverflow().y == 200.0f);
+
+    content.setHeight(50.0f);
+    document.update();
+    ASSERT_TRUE(viewport.getScrollOverflow().y == 0.0f);
+}
+
 /* A text node detached and reattached measures again: its Text object is
    destroyed on detach and lazily rebuilt by the next layout. */
 TEST(Document, ReattachedTextNodeRemeasures) {

@@ -189,6 +189,9 @@ public:
     /** Returns the next sibling, or nullptr if this is the last child. */
     Node* getNextSibling() const;
 
+    /** Returns how far the content reaches past the visible area on each axis, from the last update; 0 on an axis with nothing to scroll to. */
+    Vec2 const& getScrollOverflow() const;
+
     /** Returns the most recently computed border-box rectangle, in document coordinates (ancestor scroll applied). */
     Vec4 const& getComputedBorderRect() const;
 

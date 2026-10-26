@@ -259,6 +259,12 @@ Node* Node::getNextSibling() const {
     return _nextSibling;
 }
 
+Vec2 const& Node::getScrollOverflow() const {
+    PROFILE
+
+    return _scrollOverflow;
+}
+
 Vec4 const& Node::getComputedBorderRect() const {
     PROFILE
 

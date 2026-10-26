@@ -124,9 +124,9 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddFreetype.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddLunaSVG.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddYoga.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddSDL.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddSDLImage.cmake)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddSDLImage.cmake)
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddSDLMixer.cmake)
 endif()
 

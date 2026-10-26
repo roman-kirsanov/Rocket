@@ -1,5 +1,7 @@
-# SDL_image, the Linux backend's image decoder. It decodes PNG and JPEG with
-# its built-in stb_image, so no other image library is needed.
+# SDL_image, the Linux backend's image decoder, built on every platform so an
+# app can read and write image files on the CPU. It decodes PNG and JPEG with
+# its built-in stb_image everywhere, not ImageIO or WIC, so no other image
+# library is needed and every platform decodes the same way.
 
 block()
     set(BUILD_SHARED_LIBS OFF)
@@ -7,6 +9,8 @@ block()
     set(SDLIMAGE_VENDORED OFF CACHE BOOL "" FORCE)
     set(SDLIMAGE_SAMPLES OFF CACHE BOOL "" FORCE)
     set(SDLIMAGE_BACKEND_STB ON CACHE BOOL "" FORCE)
+    set(SDLIMAGE_BACKEND_IMAGEIO OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_BACKEND_WIC OFF CACHE BOOL "" FORCE)
     set(SDLIMAGE_PNG_LIBPNG OFF CACHE BOOL "" FORCE)
     set(SDLIMAGE_AVIF OFF CACHE BOOL "" FORCE)
     set(SDLIMAGE_JXL OFF CACHE BOOL "" FORCE)
