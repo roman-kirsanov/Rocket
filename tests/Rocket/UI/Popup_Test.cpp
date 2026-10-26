@@ -32,6 +32,11 @@ struct _PopupHarness {
     class Node* elsewhere = nullptr;
     int closes = 0;
     bool renderPopup = true;
+    float anchorTop = 50.0f;
+    float anchorLeft = 50.0f;
+    float anchorHeight = 40.0f;
+    PopupFlip flip;
+    PopupFlip flipSeenByChildren;
 
     _PopupHarness()
         : window()
@@ -40,14 +45,16 @@ struct _PopupHarness {
 
         reconciler.setUpdateFn([&] {
             Context(document, [&] {
-                Node({ .ref = &anchor, .position = NodePosition::Absolute, .width = NodeValue(100.0f), .height = NodeValue(40.0f), .top = NodeValue(50.0f), .left = NodeValue(50.0f) }, [&] {
+                Node({ .ref = &anchor, .position = NodePosition::Absolute, .width = NodeValue(100.0f), .height = NodeValue(anchorHeight), .top = NodeValue(anchorTop), .left = NodeValue(anchorLeft) }, [&] {
                     if (renderPopup) {
                         auto rendered = props;
                         rendered.nodeProps.ref = &popup;
                         rendered.contentProps.ref = &area;
                         rendered.onClose = [&]{ closes++; };
+                        rendered.onFlip = [&](PopupFlip const& flipped) { flip = flipped; };
 
                         Popup(rendered, [&] {
+                            flipSeenByChildren = flip;
                             Node({ .ref = &content, .width = NodeValue(80.0f), .height = NodeValue(30.0f) });
                         });
                     }
@@ -206,8 +213,9 @@ TEST(Popup, HeaderAndFooter) {
     ASSERT_FLOAT_EQ(h.area->getComputedBorderRect().height, 60.0f - 2.0f - 40.0f);
 }
 
-TEST(Popup, AdjustOffLeavesThePopupWhereItIs) {
+TEST(Popup, CollisionOffLeavesThePopupWhereItIs) {
     auto h = _PopupHarness();
+    h.props.collision = PopupCollision::None;
     h.props.nodeProps.left = NodeValue(600.0f);
     h.render();
     h.render();
@@ -218,10 +226,9 @@ TEST(Popup, AdjustOffLeavesThePopupWhereItIs) {
     ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().x, 650.0f);
 }
 
-TEST(Popup, AdjustKeepsThePopupInsideTheDocument) {
+TEST(Popup, ShiftKeepsThePopupInsideTheDocument) {
     auto h = _PopupHarness();
     auto const size = h.document.getSize();
-    h.props.adjust = true;
 
     /* A popup that fits is hidden for the render before it is measured,
        then shown where it would have been anyway. */
@@ -233,25 +240,25 @@ TEST(Popup, AdjustKeepsThePopupInsideTheDocument) {
     ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().x, 50.0f);
     ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().y, 50.0f);
 
-    /* Past the right and bottom edges: shifted back, a gap short of them,
-       and it stays there on later renders. */
+    /* Past the right and bottom edges: shifted back flush with them, and it
+       stays there on later renders. */
     h.props.nodeProps.left = NodeValue(600.0f);
     h.props.nodeProps.top = NodeValue(440.0f);
     h.render();
     h.render();
-    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxX(), size.width - 4.0f);
-    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxY(), size.height - 4.0f);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxX(), size.width);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxY(), size.height);
     h.render();
-    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxX(), size.width - 4.0f);
-    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxY(), size.height - 4.0f);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxX(), size.width);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxY(), size.height);
 
     /* Past the left and top edges. */
     h.props.nodeProps.left = NodeValue(-200.0f);
     h.props.nodeProps.top = NodeValue(-200.0f);
     h.render();
     h.render();
-    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().x, 4.0f);
-    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().y, 4.0f);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().x, 0.0f);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().y, 0.0f);
 
     /* Back in range, the shift goes and the origin is a percentage again. */
     h.props.nodeProps.left = std::nullopt;
@@ -263,10 +270,9 @@ TEST(Popup, AdjustKeepsThePopupInsideTheDocument) {
     ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().y, 50.0f);
 }
 
-TEST(Popup, AdjustKeepsTheTransformOrigin) {
+TEST(Popup, ShiftKeepsTheTransformOrigin) {
     auto h = _PopupHarness();
     auto const size = h.document.getSize();
-    h.props.adjust = true;
 
     /* Hanging up and to the left of a point near the top-left corner: the
        origin's percentage and the shift are applied together. */
@@ -275,8 +281,8 @@ TEST(Popup, AdjustKeepsTheTransformOrigin) {
     h.props.nodeProps.top = NodeValue(-40.0f);
     h.render();
     h.render();
-    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().x, 4.0f);
-    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().y, 4.0f);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().x, 0.0f);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().y, 0.0f);
 
     /* Same origin, but in range: placed by the percentage alone. */
     h.props.nodeProps.left = NodeValue(300.0f);
@@ -287,4 +293,189 @@ TEST(Popup, AdjustKeepsTheTransformOrigin) {
     ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxX(), 350.0f);
     ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxY(), 350.0f);
     ASSERT_TRUE(size.width > 350.0f);
+}
+
+TEST(Popup, FlipsAboveItsAnchorWhenItRunsPastTheBottom) {
+    auto h = _PopupHarness();
+    h.props.collision = PopupCollision::Flip;
+    h.anchorTop = 440.0f;
+    h.props.anchorOrigin = PopupOrigin{ PopupVerticalOrigin::Bottom, PopupHorizontalOrigin::Left };
+
+    h.render();
+    h.render();
+
+    /* Below the anchor it would end at 512; above it, it ends on the anchor's top. */
+    ASSERT_TRUE(h.flip.vertical);
+    ASSERT_FALSE(h.flip.horizontal);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxY(), 440.0f);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().x, 50.0f);
+
+    /* It stays flipped on later renders. */
+    h.render();
+    ASSERT_TRUE(h.flip.vertical);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxY(), 440.0f);
+}
+
+TEST(Popup, StaysOnItsSideWhenItFits) {
+    auto h = _PopupHarness();
+    h.props.collision = PopupCollision::Flip;
+    h.props.anchorOrigin = PopupOrigin{ PopupVerticalOrigin::Bottom, PopupHorizontalOrigin::Left };
+
+    h.render();
+    h.render();
+
+    ASSERT_FALSE(h.flip.vertical);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().y, 90.0f);
+}
+
+TEST(Popup, MirrorsItsOffsetWhenItFlips) {
+    auto h = _PopupHarness();
+    h.props.collision = PopupCollision::Flip;
+    h.props.anchorOrigin = PopupOrigin{ PopupVerticalOrigin::Bottom, PopupHorizontalOrigin::Left };
+    h.props.offset = Vec2{ 0.0f, 6.0f };
+
+    /* Below an anchor that fits, the gap is under the anchor. */
+    h.render();
+    h.render();
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().y, 96.0f);
+
+    /* Flipped above an anchor at the bottom, the gap is over it. */
+    h.anchorTop = 440.0f;
+    h.render();
+    h.render();
+    ASSERT_TRUE(h.flip.vertical);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxY(), 434.0f);
+}
+
+TEST(Popup, FlipsAroundThePointItIsPlacedAt) {
+    auto h = _PopupHarness();
+    h.props.collision = PopupCollision::Flip;
+    auto const size = h.document.getSize();
+    h.props.nodeProps.top = NodeValue(size.height - 70.0f);
+
+    h.render();
+    h.render();
+
+    /* Placed with its top at 20 above the bottom, it hangs up from that point instead. */
+    ASSERT_TRUE(h.flip.vertical);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxY(), size.height - 20.0f);
+}
+
+TEST(Popup, NeverFlipsAnAxisWhoseBothEdgesAreSet) {
+    auto h = _PopupHarness();
+    h.props.collision = PopupCollision::Flip;
+    auto const size = h.document.getSize();
+    h.props.nodeProps.top = NodeValue(size.height - 70.0f);
+    h.props.nodeProps.bottom = NodeValue(-100.0f);
+
+    h.render();
+    h.render();
+
+    ASSERT_FALSE(h.flip.vertical);
+}
+
+TEST(Popup, ShiftsWithoutFlippingByDefault) {
+    auto h = _PopupHarness();
+    auto const size = h.document.getSize();
+    h.anchorTop = 440.0f;
+    h.props.anchorOrigin = PopupOrigin{ PopupVerticalOrigin::Bottom, PopupHorizontalOrigin::Left };
+
+    h.render();
+    h.render();
+
+    /* Not flipped, only shifted up to the bottom edge. */
+    ASSERT_FALSE(h.flip.vertical);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxY(), size.height);
+}
+
+TEST(Popup, FitCapsItsMaximumSizeToTheDocument) {
+    auto h = _PopupHarness();
+    auto const size = h.document.getSize();
+    h.props.collision = PopupCollision::Fit;
+
+    h.render();
+
+    ASSERT_TRUE(h.popup->getMaxWidth() == NodeValue(size.width));
+    ASSERT_TRUE(h.popup->getMaxHeight() == NodeValue(size.height));
+}
+
+TEST(Popup, FitKeepsASmallerMaximumItIsGiven) {
+    auto h = _PopupHarness();
+    h.props.collision = PopupCollision::Fit;
+    h.props.nodeProps.maxHeight = NodeValue(100.0f);
+
+    h.render();
+
+    ASSERT_TRUE(h.popup->getMaxHeight() == NodeValue(100.0f));
+}
+
+TEST(Popup, FlipDoesNotShiftWhatStillRunsPastAnEdge) {
+    auto h = _PopupHarness();
+    auto const size = h.document.getSize();
+    h.props.collision = PopupCollision::Flip;
+    h.props.nodeProps.top = NodeValue(-200.0f);
+    h.props.nodeProps.bottom = NodeValue(size.height);
+
+    h.render();
+    h.render();
+
+    /* Both edges set, so it cannot flip, and Flip never slides it back. */
+    ASSERT_FALSE(h.flip.vertical);
+    ASSERT_TRUE(h.popup->getComputedBorderRect().y < 0.0f);
+}
+
+TEST(Popup, FitShiftsThePopupInsideTheDocument) {
+    auto h = _PopupHarness();
+    auto const size = h.document.getSize();
+    h.props.collision = PopupCollision::Fit;
+    h.props.nodeProps.left = NodeValue(600.0f);
+
+    h.render();
+    h.render();
+
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxX(), size.width);
+}
+
+TEST(Popup, FlipsToTheLeftOfItsAnchorWhenItRunsPastTheRight) {
+    auto h = _PopupHarness();
+    h.anchorLeft = 530.0f;
+    h.props.collision = PopupCollision::Flip;
+    h.props.anchorOrigin = PopupOrigin{ PopupVerticalOrigin::Top, PopupHorizontalOrigin::Right };
+
+    h.render();
+    h.render();
+
+    /* Right of the anchor it would end at 712; left of it, it ends on the anchor's left edge. */
+    ASSERT_TRUE(h.flip.horizontal);
+    ASSERT_FALSE(h.flip.vertical);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxX(), 530.0f);
+}
+
+TEST(Popup, KeepsTheSideThatRunsPastLessWhenNeitherFits) {
+    auto h = _PopupHarness();
+    h.anchorTop = 10.0f;
+    h.anchorHeight = 440.0f;
+    h.props.collision = PopupCollision::Flip;
+    h.props.anchorOrigin = PopupOrigin{ PopupVerticalOrigin::Bottom, PopupHorizontalOrigin::Left };
+
+    h.render();
+    h.render();
+
+    /* Below, it runs 2 past the bottom; above, 22 past the top. */
+    ASSERT_FALSE(h.flip.vertical);
+    ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().y, 450.0f);
+}
+
+TEST(Popup, ReportsItsFlipBeforeItRendersItsChildren) {
+    auto h = _PopupHarness();
+    h.anchorTop = 440.0f;
+    h.props.collision = PopupCollision::Flip;
+    h.props.anchorOrigin = PopupOrigin{ PopupVerticalOrigin::Bottom, PopupHorizontalOrigin::Left };
+
+    h.render();
+    ASSERT_FALSE(h.flipSeenByChildren.vertical);
+
+    /* The render that decides to flip shows its children the flip already. */
+    h.render();
+    ASSERT_TRUE(h.flipSeenByChildren.vertical);
 }
