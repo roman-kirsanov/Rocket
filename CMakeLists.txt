@@ -25,6 +25,7 @@ endif()
 set(ROCKET_EMBED ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Embed.cmake)
 set(ROCKET_SOURCE
     src/Rocket/Audio/Audio.cpp
+    src/Rocket/Base/Base64.cpp
     src/Rocket/Base/Date.cpp
     src/Rocket/Base/JSON.cpp
     src/Rocket/Base/Object.cpp

@@ -8,6 +8,7 @@
 #pragma once
 
 #include <Rocket/Audio/Audio.hpp>
+#include <Rocket/Base/Base64.hpp>
 #include <Rocket/Base/Date.hpp>
 #include <Rocket/Base/Effect.hpp>
 #include <Rocket/Base/Enum.hpp>
