@@ -120,26 +120,6 @@ Fetch::Fetch(FetchOptions const& options)
     }
 }
 
-Fetch::Fetch(Fetch && other) noexcept
-    : _impl(std::exchange(other._impl, nullptr))
-{
-    PROFILE
-
-    _rebind();
-}
-
-Fetch& Fetch::operator=(Fetch && other) noexcept {
-    PROFILE
-
-    if (this != &other) {
-        delete _impl;
-        _impl = std::exchange(other._impl, nullptr);
-        _rebind();
-    }
-
-    return *this;
-}
-
 bool Fetch::isOK() const {
     PROFILE
 
@@ -428,15 +408,6 @@ void Fetch::_open(FetchOptions const& options) {
     ::curl_multi_add_handle(_impl->multi, _impl->easy);
 
     _pump([&] { return _impl->headersDone; });
-}
-
-void Fetch::_rebind() {
-    PROFILE
-
-    if (_impl != nullptr && _impl->easy != nullptr) {
-        ::curl_easy_setopt(_impl->easy, CURLOPT_HEADERDATA, this);
-        ::curl_easy_setopt(_impl->easy, CURLOPT_WRITEDATA, this);
-    }
 }
 
 void Fetch::_finishHeaders() const {

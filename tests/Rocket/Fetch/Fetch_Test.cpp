@@ -189,19 +189,6 @@ TEST(Fetch, MovesOutOfATemporary) {
     EXPECT_EQ(bytes.size(), 5uz);
 }
 
-TEST(Fetch, ReadsTheBodyAfterAMove) {
-    auto server = Server();
-    auto first = Fetch({ .url = server.url("/big") });
-    auto second = std::move(first);
-    auto total = 0uz;
-
-    for (auto const& chunk : second) {
-        total += chunk.size();
-    }
-
-    EXPECT_EQ(total, 1'000'000uz);
-}
-
 TEST(Fetch, StreamsWithRead) {
     auto server = Server();
     auto fetch = Fetch({ .url = server.url("/big") });

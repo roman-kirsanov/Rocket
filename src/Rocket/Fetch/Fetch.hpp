@@ -68,7 +68,7 @@ struct FetchOptions {
  * the getters above throw. If the body was already loaded, streaming reads
  * the stored value.
  *
- * A Fetch is used from one thread at a time.
+ * A Fetch is used from one thread at a time and cannot be copied or moved.
  */
 class Fetch {
 public:
@@ -107,9 +107,9 @@ public:
      */
     explicit Fetch(FetchOptions const& options);
 
-    Fetch(Fetch &&) noexcept;
+    Fetch(Fetch &&) = delete;
     Fetch(Fetch const&) = delete;
-    Fetch& operator=(Fetch &&) noexcept;
+    Fetch& operator=(Fetch &&) = delete;
     Fetch& operator=(Fetch const&) = delete;
 
     /** Returns true for a 2xx status. */
@@ -161,7 +161,6 @@ private:
     static std::size_t _onWrite(char* data, std::size_t size, std::size_t count, void* user);
 
     void _open(FetchOptions const& options);
-    void _rebind();
     void _finishHeaders() const;
     bool _hasPending() const;
 
