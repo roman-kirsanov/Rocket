@@ -26,15 +26,6 @@ static auto constexpr _DEFAULT_REFRESH_RATE = 60.0f;
 static auto _isExited = false;
 static auto _nextFrame = std::uint64_t(0);
 
-static std::uint64_t _GetFramePeriod() {
-    PROFILE
-
-    auto const mode = SDL_GetCurrentDisplayMode(SDL_GetPrimaryDisplay());
-    auto const refreshRate = ((mode != nullptr) && (mode->refresh_rate > 0.0f)) ? mode->refresh_rate : _DEFAULT_REFRESH_RATE;
-
-    return static_cast<std::uint64_t>(1000000000.0 / static_cast<double>(refreshRate));
-}
-
 static void _HandleEvent(SDL_Event const& event) {
     PROFILE
 
@@ -51,50 +42,6 @@ static void _HandleEvent(SDL_Event const& event) {
     __HandleEvent(event);
 }
 
-/* Moves and wheel turns arrive at the mouse's own rate, often far above the
-   frame rate, and every one of them can cost a layout. macOS coalesces them to
-   the display, and so does the run loop: they are held until the frame is due
-   or another event comes, consecutive moves of a window collapse into the last
-   one and consecutive turns into their sum. */
-static bool _IsCoalescedEvent(SDL_Event const& event) {
-    PROFILE
-
-    return (event.type == SDL_EVENT_MOUSE_MOTION)
-        || (event.type == SDL_EVENT_MOUSE_WHEEL);
-}
-
-static void _CoalesceEvent(std::vector<SDL_Event>& held, SDL_Event const& event) {
-    PROFILE
-
-    if (held.empty() == false) {
-        auto& last = held.back();
-
-        if (
-            (event.type == SDL_EVENT_MOUSE_MOTION) &&
-            (last.type == SDL_EVENT_MOUSE_MOTION) &&
-            (last.motion.windowID == event.motion.windowID) &&
-            (last.motion.state == event.motion.state)
-        ) {
-            last = event;
-            return;
-        }
-
-        if (
-            (event.type == SDL_EVENT_MOUSE_WHEEL) &&
-            (last.type == SDL_EVENT_MOUSE_WHEEL) &&
-            (last.wheel.windowID == event.wheel.windowID)
-        ) {
-            last.wheel.x += event.wheel.x;
-            last.wheel.y += event.wheel.y;
-            last.wheel.mouse_x = event.wheel.mouse_x;
-            last.wheel.mouse_y = event.wheel.mouse_y;
-            return;
-        }
-    }
-
-    held.push_back(event);
-}
-
 /* Held events carry no strings, so they outlive SDL's next poll, which frees
    the strings of the events before it: every other event is handled at once. */
 static void _HandleHeldEvents(std::vector<SDL_Event>& held) {
@@ -107,6 +54,51 @@ static void _HandleHeldEvents(std::vector<SDL_Event>& held) {
     for (auto const& event : events) {
         _HandleEvent(event);
     }
+}
+
+/* Moves and wheel turns arrive at the mouse's own rate, often far above the
+   frame rate, and every one of them can cost a layout. macOS coalesces them to
+   the display, and so does the run loop: they are held until the frame is due
+   or another event comes, consecutive moves of a window collapse into the last
+   one and consecutive turns into their sum. Returns true for an event it held,
+   false for one it handled. */
+static bool _TakeEvent(std::vector<SDL_Event>& held, SDL_Event const& event) {
+    PROFILE
+
+    if ((event.type != SDL_EVENT_MOUSE_MOTION) && (event.type != SDL_EVENT_MOUSE_WHEEL)) {
+        _HandleHeldEvents(held);
+        _HandleEvent(event);
+        return false;
+    }
+
+    if (held.empty() == false) {
+        auto& last = held.back();
+
+        if (
+            (event.type == SDL_EVENT_MOUSE_MOTION) &&
+            (last.type == SDL_EVENT_MOUSE_MOTION) &&
+            (last.motion.windowID == event.motion.windowID) &&
+            (last.motion.state == event.motion.state)
+        ) {
+            last = event;
+            return true;
+        }
+
+        if (
+            (event.type == SDL_EVENT_MOUSE_WHEEL) &&
+            (last.type == SDL_EVENT_MOUSE_WHEEL) &&
+            (last.wheel.windowID == event.wheel.windowID)
+        ) {
+            last.wheel.x += event.wheel.x;
+            last.wheel.y += event.wheel.y;
+            last.wheel.mouse_x = event.wheel.mouse_x;
+            last.wheel.mouse_y = event.wheel.mouse_y;
+            return true;
+        }
+    }
+
+    held.push_back(event);
+    return true;
 }
 
 /* SDL returns folders with a trailing separator; Rocket's have none. */
@@ -219,8 +211,6 @@ void __Run(int argc, char const** argv) {
 void __Tick(bool update) {
     PROFILE
 
-    __InitVideo();
-
     static thread_local auto _held = std::vector<SDL_Event>();
 
     auto event = SDL_Event{};
@@ -229,27 +219,17 @@ void __Tick(bool update) {
         auto const now = SDL_GetTicksNS();
         auto const wait = (_nextFrame > now) ? (_nextFrame - now) : 0;
 
-        if (SDL_WaitEventTimeout(&event, static_cast<Sint32>((wait + 999999) / 1000000)) == false) {
+        /* held moves and turns wait for the frame or the next other event */
+        if (
+            (SDL_WaitEventTimeout(&event, static_cast<Sint32>((wait + 999999) / 1000000)) == false) ||
+            (_TakeEvent(_held, event) == false)
+        ) {
             break;
         }
-
-        if (_IsCoalescedEvent(event)) {
-            _CoalesceEvent(_held, event);
-            continue;
-        }
-
-        _HandleHeldEvents(_held);
-        _HandleEvent(event);
-        break;
     }
 
     while (SDL_PollEvent(&event)) {
-        if (_IsCoalescedEvent(event)) {
-            _CoalesceEvent(_held, event);
-        } else {
-            _HandleHeldEvents(_held);
-            _HandleEvent(event);
-        }
+        _TakeEvent(_held, event);
     }
 
     _HandleHeldEvents(_held);
@@ -258,15 +238,27 @@ void __Tick(bool update) {
         _Update();
     }
 
-    if (SDL_GetTicksNS() >= _nextFrame) {
+    if (auto const now = SDL_GetTicksNS(); now >= _nextFrame) {
+        /* The fastest display a window is painted on, so no window gets fewer
+           frames than its screen shows; the primary display when no window is
+           painted. */
+        auto refreshRate = __GetRefreshRate();
+
+        if (refreshRate <= 0.0f) {
+            auto const mode = SDL_GetCurrentDisplayMode(SDL_GetPrimaryDisplay());
+            refreshRate = ((mode != nullptr) && (mode->refresh_rate > 0.0f)) ? mode->refresh_rate : _DEFAULT_REFRESH_RATE;
+        }
+
+        auto const period = static_cast<std::uint64_t>(1000000000.0 / static_cast<double>(refreshRate));
+
         /* From the frame's deadline, not from when the loop woke: the wait above
            rounds up to whole milliseconds, and counting from the wake would add
            that lateness to every frame (84 frames a second on a 90 Hz screen). A
            loop more than a frame behind starts a new beat instead of catching up. */
-        _nextFrame += _GetFramePeriod();
+        _nextFrame += period;
 
-        if (_nextFrame <= SDL_GetTicksNS()) {
-            _nextFrame = (SDL_GetTicksNS() + _GetFramePeriod());
+        if (_nextFrame <= now) {
+            _nextFrame = (now + period);
         }
 
         __PaintWindows();

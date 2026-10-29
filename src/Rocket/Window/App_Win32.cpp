@@ -304,8 +304,6 @@ void __Run(int argc, char const** argv) {
 void __Tick(bool update) {
     PROFILE
 
-    __InitWin32();
-
     static auto const _timer = ::CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
     static thread_local auto _held = std::vector<MSG>();
 

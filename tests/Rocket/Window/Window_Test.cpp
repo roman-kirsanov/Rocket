@@ -15,6 +15,7 @@
 
 #ifdef __linux__
 #include <SDL3/SDL.h>
+#include <Rocket/Window/Window_SDL3.hpp>
 #endif
 
 #ifdef _WIN32
@@ -293,6 +294,145 @@ TEST(Window, WheelTurnsArrivingTogetherSum) {
 
     ASSERT_TRUE(wheels.size() == 2);
     ASSERT_TRUE(wheels.at(1) == wheels.at(0)); /* four half notches turn as far as two notches */
+}
+
+static void _PushText(Window& window, char const* text) {
+    auto event = SDL_Event{};
+    event.text.type = SDL_EVENT_TEXT_INPUT;
+    event.text.windowID = SDL_GetWindowID(static_cast<SDL_Window*>(window.getHandle()));
+    event.text.text = text;
+    _PushEvent(window, event);
+}
+
+static void _PushKey(Window& window, SDL_Scancode scancode) {
+    auto event = SDL_Event{};
+    event.key.type = SDL_EVENT_KEY_DOWN;
+    event.key.windowID = SDL_GetWindowID(static_cast<SDL_Window*>(window.getHandle()));
+    event.key.scancode = scancode;
+    event.key.down = true;
+    _PushEvent(window, event);
+}
+
+/* Text input arrives without its control characters, and text made only of
+   them does not arrive. */
+TEST(Window, TextInputDropsControlCharacters) {
+    auto window = Window();
+    auto texts = std::vector<std::string>();
+    auto sub = Sub(window.onEvent, [&](WindowEvent const& event) {
+        if (auto input = event.as<InputWindowEvent>()) {
+            texts.push_back(input->getText());
+        }
+    });
+    _PushText(window, "a\x01" "b\x7F" "\xD1\x8F");
+    _PushText(window, "\x01\x1B");
+
+    _RunBriefly();
+
+    ASSERT_TRUE(texts == std::vector<std::string>({ "ab\xD1\x8F" }));
+}
+
+/* A move with no button held releases a press whose release never arrived. */
+TEST(Window, MoveWithNoButtonReleasesAPress) {
+    auto window = Window();
+    auto events = std::vector<std::string>();
+    auto sub = Sub(window.onEvent, [&](WindowEvent const& event) {
+        if (event.is<MouseMoveWindowEvent>()) {
+            events.push_back("move");
+        } else if (event.is<MouseDownWindowEvent>()) {
+            events.push_back("down");
+        } else if (event.is<MouseUpWindowEvent>()) {
+            events.push_back("up");
+        }
+    });
+    _PushButton(window, SDL_EVENT_MOUSE_BUTTON_DOWN, 10.0f, 10.0f);
+    _PushMotion(window, 20.0f, 10.0f);
+
+    _RunBriefly();
+
+    ASSERT_TRUE(events == std::vector<std::string>({ "move", "down", "up", "move" }));
+}
+
+/* While a window is modal, input reaches only that window. */
+TEST(Window, ModalWindowTakesTheInput) {
+    auto window = Window();
+    auto modal = Window();
+    auto keys = std::vector<std::string>();
+    auto windowSub = Sub(window.onEvent, [&](WindowEvent const& event) {
+        if (event.is<KeyDownWindowEvent>()) {
+            keys.push_back("window");
+        }
+    });
+    auto modalSub = Sub(modal.onEvent, [&](WindowEvent const& event) {
+        if (event.is<KeyDownWindowEvent>()) {
+            keys.push_back("modal");
+            modal.stopModal();
+        }
+    });
+    _PushKey(window, SDL_SCANCODE_A);
+    _PushKey(modal, SDL_SCANCODE_A);
+
+    modal.runModal();
+
+    ASSERT_TRUE(keys == std::vector<std::string>({ "modal" }));
+}
+
+/* A pixel size change at the same scale is not a DPI change. */
+TEST(Window, PixelSizeChangeAtTheSameScaleIsNoDPIChange) {
+    auto window = Window();
+    auto changes = 0;
+    auto sub = Sub(window.onEvent, [&](WindowEvent const& event) {
+        if (event.is<DPIChangeWindowEvent>()) {
+            changes += 1;
+        }
+    });
+    auto event = SDL_Event{};
+    event.window.type = SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED;
+    event.window.windowID = SDL_GetWindowID(static_cast<SDL_Window*>(window.getHandle()));
+    _PushEvent(window, event);
+
+    _RunBriefly();
+
+    ASSERT_TRUE(changes == 0);
+}
+
+/* Under the mouse, a window shows its cursor, created once and reused. */
+TEST(Window, CursorShowsUnderTheMouse) {
+    auto window = Window();
+    auto event = SDL_Event{};
+    event.window.type = SDL_EVENT_WINDOW_MOUSE_ENTER;
+    event.window.windowID = SDL_GetWindowID(static_cast<SDL_Window*>(window.getHandle()));
+    _PushEvent(window, event);
+    _RunBriefly();
+
+    window.setCursor(Cursor::Pointer);
+    auto const pointer = SDL_GetCursor();
+    window.setCursor(Cursor::Default);
+    window.setCursor(Cursor::Pointer);
+
+    ASSERT_TRUE(window.isHover());
+    ASSERT_TRUE(pointer != SDL_GetDefaultCursor());
+    ASSERT_TRUE(SDL_GetCursor() == pointer);
+}
+
+/* No window that is not painted counts toward the refresh rate. */
+TEST(Window, RefreshRateIgnoresHiddenWindows) {
+    auto window = Window();
+
+    auto const refreshRate = __GetRefreshRate();
+
+    ASSERT_TRUE(refreshRate == 0.0f);
+}
+
+/* A shown window counts with the refresh rate of the display it is on. */
+TEST(Window, RefreshRateFollowsTheDisplayOfAShownWindow) {
+    auto window = Window();
+    window.setVisible(true);
+    auto const mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(static_cast<SDL_Window*>(window.getHandle())));
+    auto const expected = (mode != nullptr) ? mode->refresh_rate : 0.0f;
+
+    auto const refreshRate = __GetRefreshRate();
+
+    ASSERT_TRUE(refreshRate == expected);
 }
 
 #endif

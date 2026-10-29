@@ -245,33 +245,6 @@ std::string __GetLayoutKeycode(Scancode scancode) {
     return GetDefaultKeycode(scancode);
 }
 
-static std::string _SanitizeInput(char const* text) {
-    PROFILE
-
-    if (text == nullptr) {
-        return "";
-    }
-
-    static thread_local auto _codepoints = std::vector<std::uint32_t>();
-    static thread_local auto _kept = std::vector<std::uint32_t>();
-
-    StringToCodepoints(text, _codepoints);
-
-    _kept.clear();
-
-    for (auto codepoint : _codepoints) {
-        if (_IsControlCodepoint(codepoint) == false) {
-            _kept.push_back(codepoint);
-        }
-    }
-
-    auto string = std::string();
-
-    StringFromCodepoints(_kept, string);
-
-    return string;
-}
-
 static std::optional<Mouse> _MouseConvert(std::uint8_t button) {
     PROFILE
 
@@ -283,87 +256,42 @@ static std::optional<Mouse> _MouseConvert(std::uint8_t button) {
     }
 }
 
-static SDL_SystemCursor _CursorConvert(Cursor cursor) {
-    PROFILE
-
-    switch (cursor) {
-        case Cursor::Default:      return SDL_SYSTEM_CURSOR_DEFAULT;
-        case Cursor::ContextMenu:  return SDL_SYSTEM_CURSOR_DEFAULT;     // NOTE: Not supported in SDL3
-        case Cursor::Help:         return SDL_SYSTEM_CURSOR_DEFAULT;     // NOTE: Not supported in SDL3
-        case Cursor::Pointer:      return SDL_SYSTEM_CURSOR_POINTER;
-        case Cursor::Progress:     return SDL_SYSTEM_CURSOR_PROGRESS;
-        case Cursor::Wait:         return SDL_SYSTEM_CURSOR_WAIT;
-        case Cursor::Cell:         return SDL_SYSTEM_CURSOR_CROSSHAIR;   // NOTE: Not supported in SDL3
-        case Cursor::Crosshair:    return SDL_SYSTEM_CURSOR_CROSSHAIR;
-        case Cursor::Text:         return SDL_SYSTEM_CURSOR_TEXT;
-        case Cursor::VerticalText: return SDL_SYSTEM_CURSOR_TEXT;        // NOTE: Not supported in SDL3
-        case Cursor::Alias:        return SDL_SYSTEM_CURSOR_DEFAULT;     // NOTE: Not supported in SDL3
-        case Cursor::Copy:         return SDL_SYSTEM_CURSOR_DEFAULT;     // NOTE: Not supported in SDL3
-        case Cursor::Move:         return SDL_SYSTEM_CURSOR_MOVE;
-        case Cursor::NoDrop:       return SDL_SYSTEM_CURSOR_NOT_ALLOWED; // NOTE: Not supported in SDL3
-        case Cursor::NotAllowed:   return SDL_SYSTEM_CURSOR_NOT_ALLOWED;
-        case Cursor::Grab:         return SDL_SYSTEM_CURSOR_POINTER;     // NOTE: Not supported in SDL3
-        case Cursor::Grabbing:     return SDL_SYSTEM_CURSOR_POINTER;     // NOTE: Not supported in SDL3
-        case Cursor::EResize:      return SDL_SYSTEM_CURSOR_E_RESIZE;
-        case Cursor::NResize:      return SDL_SYSTEM_CURSOR_N_RESIZE;
-        case Cursor::NEResize:     return SDL_SYSTEM_CURSOR_NE_RESIZE;
-        case Cursor::NWResize:     return SDL_SYSTEM_CURSOR_NW_RESIZE;
-        case Cursor::SResize:      return SDL_SYSTEM_CURSOR_S_RESIZE;
-        case Cursor::SEResize:     return SDL_SYSTEM_CURSOR_SE_RESIZE;
-        case Cursor::SWResize:     return SDL_SYSTEM_CURSOR_SW_RESIZE;
-        case Cursor::WResize:      return SDL_SYSTEM_CURSOR_W_RESIZE;
-        case Cursor::EWResize:     return SDL_SYSTEM_CURSOR_EW_RESIZE;
-        case Cursor::NSResize:     return SDL_SYSTEM_CURSOR_NS_RESIZE;
-        case Cursor::NESWResize:   return SDL_SYSTEM_CURSOR_NESW_RESIZE;
-        case Cursor::ColResize:    return SDL_SYSTEM_CURSOR_EW_RESIZE;   // NOTE: Not supported in SDL3
-        case Cursor::RowResize:    return SDL_SYSTEM_CURSOR_NS_RESIZE;   // NOTE: Not supported in SDL3
-        case Cursor::AllScroll:    return SDL_SYSTEM_CURSOR_MOVE;        // NOTE: Not supported in SDL3
-        case Cursor::ZoomIn:       return SDL_SYSTEM_CURSOR_DEFAULT;     // NOTE: Not supported in SDL3
-        case Cursor::ZoomOut:      return SDL_SYSTEM_CURSOR_DEFAULT;     // NOTE: Not supported in SDL3
-        case Cursor::None:         return SDL_SYSTEM_CURSOR_DEFAULT;     /* hidden instead, see __setCursor */
-    }
-
-    return SDL_SYSTEM_CURSOR_DEFAULT;
-}
-
-/* System cursors are created once and kept for the life of the process. */
-static SDL_Cursor* _GetCursor(Cursor cursor) {
-    PROFILE
-
-    static auto _cursors = std::map<SDL_SystemCursor, SDL_Cursor*>();
-
-    auto const systemCursor = _CursorConvert(cursor);
-    auto it = _cursors.find(systemCursor);
-
-    if (it == _cursors.end()) {
-        it = _cursors.emplace(systemCursor, SDL_CreateSystemCursor(systemCursor)).first;
-    }
-
-    return it->second;
-}
-
-/* Input goes to the innermost modal window only, as under [NSApp runModalForWindow:]. */
-static bool _IsInputEvent(std::uint32_t type) {
-    PROFILE
-
-    switch (type) {
-        case SDL_EVENT_KEY_DOWN:
-        case SDL_EVENT_KEY_UP:
-        case SDL_EVENT_TEXT_INPUT:
-        case SDL_EVENT_TEXT_EDITING:
-        case SDL_EVENT_MOUSE_MOTION:
-        case SDL_EVENT_MOUSE_BUTTON_DOWN:
-        case SDL_EVENT_MOUSE_BUTTON_UP:
-        case SDL_EVENT_MOUSE_WHEEL:
-        case SDL_EVENT_PINCH_UPDATE:
-        case SDL_EVENT_DROP_BEGIN:
-        case SDL_EVENT_DROP_FILE:
-        case SDL_EVENT_DROP_COMPLETE:
-            return true;
-        default:
-            return false;
-    }
-}
+/* Cursor::None has no entry: it hides the cursor instead, see __setCursor. */
+static std::map<Cursor, SDL_SystemCursor> const _cursorMap = {
+    { Cursor::Default, SDL_SYSTEM_CURSOR_DEFAULT },
+    { Cursor::ContextMenu, SDL_SYSTEM_CURSOR_DEFAULT },    // NOTE: Not supported in SDL3
+    { Cursor::Help, SDL_SYSTEM_CURSOR_DEFAULT },           // NOTE: Not supported in SDL3
+    { Cursor::Pointer, SDL_SYSTEM_CURSOR_POINTER },
+    { Cursor::Progress, SDL_SYSTEM_CURSOR_PROGRESS },
+    { Cursor::Wait, SDL_SYSTEM_CURSOR_WAIT },
+    { Cursor::Cell, SDL_SYSTEM_CURSOR_CROSSHAIR },         // NOTE: Not supported in SDL3
+    { Cursor::Crosshair, SDL_SYSTEM_CURSOR_CROSSHAIR },
+    { Cursor::Text, SDL_SYSTEM_CURSOR_TEXT },
+    { Cursor::VerticalText, SDL_SYSTEM_CURSOR_TEXT },      // NOTE: Not supported in SDL3
+    { Cursor::Alias, SDL_SYSTEM_CURSOR_DEFAULT },          // NOTE: Not supported in SDL3
+    { Cursor::Copy, SDL_SYSTEM_CURSOR_DEFAULT },           // NOTE: Not supported in SDL3
+    { Cursor::Move, SDL_SYSTEM_CURSOR_MOVE },
+    { Cursor::NoDrop, SDL_SYSTEM_CURSOR_NOT_ALLOWED },     // NOTE: Not supported in SDL3
+    { Cursor::NotAllowed, SDL_SYSTEM_CURSOR_NOT_ALLOWED },
+    { Cursor::Grab, SDL_SYSTEM_CURSOR_POINTER },           // NOTE: Not supported in SDL3
+    { Cursor::Grabbing, SDL_SYSTEM_CURSOR_POINTER },       // NOTE: Not supported in SDL3
+    { Cursor::EResize, SDL_SYSTEM_CURSOR_E_RESIZE },
+    { Cursor::NResize, SDL_SYSTEM_CURSOR_N_RESIZE },
+    { Cursor::NEResize, SDL_SYSTEM_CURSOR_NE_RESIZE },
+    { Cursor::NWResize, SDL_SYSTEM_CURSOR_NW_RESIZE },
+    { Cursor::SResize, SDL_SYSTEM_CURSOR_S_RESIZE },
+    { Cursor::SEResize, SDL_SYSTEM_CURSOR_SE_RESIZE },
+    { Cursor::SWResize, SDL_SYSTEM_CURSOR_SW_RESIZE },
+    { Cursor::WResize, SDL_SYSTEM_CURSOR_W_RESIZE },
+    { Cursor::EWResize, SDL_SYSTEM_CURSOR_EW_RESIZE },
+    { Cursor::NSResize, SDL_SYSTEM_CURSOR_NS_RESIZE },
+    { Cursor::NESWResize, SDL_SYSTEM_CURSOR_NESW_RESIZE },
+    { Cursor::ColResize, SDL_SYSTEM_CURSOR_EW_RESIZE },    // NOTE: Not supported in SDL3
+    { Cursor::RowResize, SDL_SYSTEM_CURSOR_NS_RESIZE },    // NOTE: Not supported in SDL3
+    { Cursor::AllScroll, SDL_SYSTEM_CURSOR_MOVE },         // NOTE: Not supported in SDL3
+    { Cursor::ZoomIn, SDL_SYSTEM_CURSOR_DEFAULT },         // NOTE: Not supported in SDL3
+    { Cursor::ZoomOut, SDL_SYSTEM_CURSOR_DEFAULT }         // NOTE: Not supported in SDL3
+};
 
 /* Makes a window operation take effect before the call returns, so the getters
    report it. Only a shown window is synced: a hidden one has nothing on screen
@@ -387,8 +315,25 @@ void __HandleEvent(SDL_Event const& event) {
 
     auto const id = SDL_GetWindowID(window);
 
-    if (_IsInputEvent(event.type) && (_modalWindows.empty() == false) && (_modalWindows.back() != id)) {
-        return;
+    /* input goes to the innermost modal window only, as under [NSApp runModalForWindow:] */
+    if ((_modalWindows.empty() == false) && (_modalWindows.back() != id)) {
+        switch (event.type) {
+            case SDL_EVENT_KEY_DOWN:
+            case SDL_EVENT_KEY_UP:
+            case SDL_EVENT_TEXT_INPUT:
+            case SDL_EVENT_TEXT_EDITING:
+            case SDL_EVENT_MOUSE_MOTION:
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            case SDL_EVENT_MOUSE_BUTTON_UP:
+            case SDL_EVENT_MOUSE_WHEEL:
+            case SDL_EVENT_PINCH_UPDATE:
+            case SDL_EVENT_DROP_BEGIN:
+            case SDL_EVENT_DROP_FILE:
+            case SDL_EVENT_DROP_COMPLETE:
+                return;
+            default:
+                break;
+        }
     }
 
     auto const it = _handlers.find(id);
@@ -398,6 +343,35 @@ void __HandleEvent(SDL_Event const& event) {
         auto const onEvent = it->second.onEvent;
         onEvent(event);
     }
+}
+
+/* nothing would be presented, and a vsync present can wait for a frame that never comes */
+static bool _IsPainted(SDL_Window* window) {
+    PROFILE
+
+    return (SDL_GetWindowFlags(window) & (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED | SDL_WINDOW_OCCLUDED)) == 0;
+}
+
+float __GetRefreshRate() {
+    PROFILE
+
+    auto refreshRate = 0.0f;
+
+    for (auto const& [ id, handlers ] : _handlers) {
+        auto const window = SDL_GetWindowFromID(id);
+
+        if ((window == nullptr) || (_IsPainted(window) == false)) {
+            continue;
+        }
+
+        auto const mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(window));
+
+        if (mode != nullptr) {
+            refreshRate = std::max(refreshRate, mode->refresh_rate);
+        }
+    }
+
+    return refreshRate;
 }
 
 void __PaintWindows() {
@@ -416,12 +390,7 @@ void __PaintWindows() {
             continue; /* destroyed while an earlier window painted */
         }
 
-        auto const window = SDL_GetWindowFromID(id);
-        auto const flags = SDL_GetWindowFlags(window);
-
-        /* nothing would be presented, and a vsync present can wait for a
-           frame that never comes */
-        if ((flags & (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED | SDL_WINDOW_OCCLUDED)) != 0) {
+        if (_IsPainted(SDL_GetWindowFromID(id)) == false) {
             continue;
         }
 
@@ -494,12 +463,10 @@ void Window::__init() {
 
     auto const modifiers = []() { return _ModifiersConvert(SDL_GetModState()); };
 
-    auto const releaseButtons = [this](Vec2 const& position) {
-        auto const pressed = _impl->pressedButtons;
-        _impl->pressedButtons.clear();
-        for (auto const mouse : pressed) {
-            _mouseUp(mouse, position, _ModifiersConvert(SDL_GetModState()));
-        }
+    auto const mousePosition = []() {
+        auto position = Vec2{};
+        SDL_GetMouseState(&position.x, &position.y);
+        return position;
     };
 
     auto const dispatchMouseMove = [this, modifiers](Vec2 const& position) {
@@ -507,17 +474,8 @@ void Window::__init() {
         _mouseMove(position, modifiers());
     };
 
-    auto const refreshScale = [this]() {
-        auto const scale = SDL_GetWindowPixelDensity(_impl->window);
-        if (scale != _impl->scale) {
-            _impl->scale = scale;
-            _dpiChange();
-            _resize();
-        }
-    };
-
     _handlers[SDL_GetWindowID(_impl->window)] = _WindowHandlers{
-        .onEvent = [this, modifiers, releaseButtons, dispatchMouseMove, refreshScale](SDL_Event const& event) {
+        .onEvent = [this, modifiers, mousePosition, dispatchMouseMove](SDL_Event const& event) {
             switch (event.type) {
                 case SDL_EVENT_WINDOW_CLOSE_REQUESTED: {
                     _close();
@@ -529,7 +487,12 @@ void Window::__init() {
                 }
                 case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
                 case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED: {
-                    refreshScale();
+                    auto const scale = SDL_GetWindowPixelDensity(_impl->window);
+                    if (scale != _impl->scale) {
+                        _impl->scale = scale;
+                        _dpiChange();
+                        _resize();
+                    }
                     break;
                 }
                 case SDL_EVENT_WINDOW_MAXIMIZED: {
@@ -558,18 +521,14 @@ void Window::__init() {
                     break;
                 }
                 case SDL_EVENT_WINDOW_MOUSE_ENTER: {
-                    auto position = Vec2{};
-                    SDL_GetMouseState(&position.x, &position.y);
                     _impl->hover = true;
                     __setCursor(getCursor()); /* SDL's cursor is global: put this window's back */
-                    _mouseEnter(position, modifiers());
+                    _mouseEnter(mousePosition(), modifiers());
                     break;
                 }
                 case SDL_EVENT_WINDOW_MOUSE_LEAVE: {
-                    auto position = Vec2{};
-                    SDL_GetMouseState(&position.x, &position.y);
                     _impl->hover = false;
-                    _mouseExit(position, modifiers());
+                    _mouseExit(mousePosition(), modifiers());
                     break;
                 }
                 case SDL_EVENT_WINDOW_FOCUS_GAINED: {
@@ -577,9 +536,7 @@ void Window::__init() {
 
                     /* report the cursor position on activation to refresh hover without a move */
                     if (SDL_GetMouseFocus() == _impl->window) {
-                        auto position = Vec2{};
-                        SDL_GetMouseState(&position.x, &position.y);
-                        dispatchMouseMove(position);
+                        dispatchMouseMove(mousePosition());
                     }
                     break;
                 }
@@ -593,7 +550,11 @@ void Window::__init() {
                     /* a move with no button held ends a press whose release never
                        arrived (the window manager took it): keep down/up paired */
                     if ((event.motion.state == 0) && (_impl->pressedButtons.empty() == false)) {
-                        releaseButtons(position);
+                        auto const pressed = std::move(_impl->pressedButtons);
+                        _impl->pressedButtons.clear();
+                        for (auto const mouse : pressed) {
+                            _mouseUp(mouse, position, modifiers());
+                        }
                     }
 
                     dispatchMouseMove(position);
@@ -665,8 +626,18 @@ void Window::__init() {
                     break;
                 }
                 case SDL_EVENT_TEXT_INPUT: {
-                    auto const input = _SanitizeInput(event.text.text);
-                    if (input.empty() == false) {
+                    if (event.text.text == nullptr) {
+                        break;
+                    }
+
+                    static thread_local auto _codepoints = std::vector<std::uint32_t>();
+
+                    StringToCodepoints(event.text.text, _codepoints);
+                    std::erase_if(_codepoints, _IsControlCodepoint);
+
+                    if (_codepoints.empty() == false) {
+                        auto input = std::string();
+                        StringFromCodepoints(_codepoints, input);
                         _input(input);
                     }
                     break;
@@ -870,7 +841,18 @@ void Window::__setCursor(Cursor cursor) {
 
     /* SDL's cursor is global too: apply it only while the mouse is over this window */
     if (_impl->hover && (cursor != Cursor::None)) {
-        SDL_SetCursor(_GetCursor(cursor));
+        /* system cursors are created once and kept for the life of the process */
+        static auto _cursors = std::map<SDL_SystemCursor, SDL_Cursor*>();
+
+        auto const it = _cursorMap.find(cursor);
+        auto const systemCursor = (it != _cursorMap.end()) ? it->second : SDL_SYSTEM_CURSOR_DEFAULT;
+        auto cursorIt = _cursors.find(systemCursor);
+
+        if (cursorIt == _cursors.end()) {
+            cursorIt = _cursors.emplace(systemCursor, SDL_CreateSystemCursor(systemCursor)).first;
+        }
+
+        SDL_SetCursor(cursorIt->second);
     }
 }
 

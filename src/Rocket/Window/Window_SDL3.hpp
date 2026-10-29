@@ -15,6 +15,9 @@ namespace Rocket {
 /** Input goes to the innermost modal window only. */
 void __HandleEvent(SDL_Event const& event);
 
+/** Returns the highest refresh rate of the displays the painted windows are on, or 0 when no window is painted or no rate is known. */
+float __GetRefreshRate();
+
 /** Paints only shown, unminimized, unoccluded windows. */
 void __PaintWindows();
 
