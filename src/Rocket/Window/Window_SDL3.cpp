@@ -11,6 +11,7 @@
 #include <vector>
 #include <cassert>
 #include <cstdint>
+#include <format>
 #include <optional>
 #include <stdexcept>
 #include <algorithm>
@@ -25,10 +26,6 @@
 #include <Rocket/Window/Window_SDL3.hpp>
 
 namespace Rocket {
-
-/* SDL reports the wheel in notches (fractions of one for a touchpad); the
-   macOS backend publishes points, and this many points make one notch */
-static auto constexpr _WHEEL_SCALE = 50.0f;
 
 struct Window::_Window {
     SDL_Window* window;
@@ -51,16 +48,20 @@ struct Window::_Window {
     std::vector<std::string> droppedFiles;
 };
 
-/** What the run loop calls on a window: set up by the window itself, which alone may reach its private members. */
+/* Set up by the window itself, which alone may reach its private members. */
 struct _WindowHandlers {
     std::function<void(SDL_Event const&)> onEvent;
     std::function<void()> onPaint;
 };
 
+/* SDL reports the wheel in notches (fractions of one for a touchpad); the
+   macOS backend publishes points, and this many points make one notch */
+static auto constexpr _wheelScale = 50.0f;
+
 static auto _handlers = std::map<SDL_WindowID, _WindowHandlers>();
 static auto _modalWindows = std::vector<SDL_WindowID>();
 
-static std::map<SDL_Scancode, Scancode> const _keyMap = {
+static auto const _keyMap = std::map<SDL_Scancode, Scancode>{
     { SDL_SCANCODE_0, Scancode::Digit0 },
     { SDL_SCANCODE_1, Scancode::Digit1 },
     { SDL_SCANCODE_2, Scancode::Digit2 },
@@ -183,81 +184,8 @@ static std::map<SDL_Scancode, Scancode> const _keyMap = {
     { SDL_SCANCODE_NONUSBACKSLASH, Scancode::IntlBackslash }
 };
 
-static Scancode _KeyConvert(SDL_Scancode scancode) {
-    PROFILE
-
-    auto const it = _keyMap.find(scancode);
-
-    return (it != _keyMap.end()) ? it->second : Scancode::Unknown;
-}
-
-static KeyModifiers _ModifiersConvert(SDL_Keymod mod) {
-    PROFILE
-
-    return {
-        .control = ((mod & SDL_KMOD_CTRL) != 0),
-        .shift = ((mod & SDL_KMOD_SHIFT) != 0),
-        .meta = ((mod & SDL_KMOD_GUI) != 0),
-        .alt = ((mod & SDL_KMOD_ALT) != 0)
-    };
-}
-
-static bool _IsControlCodepoint(std::uint32_t codepoint) {
-    PROFILE
-
-    return (codepoint < 0x20u) || ((codepoint >= 0x7Fu) && (codepoint < 0xA0u));
-}
-
-/* What the key means on the current layout: character keys take the
-   character the layout gives them without modifiers (lowercased, so Shift
-   does not change it); every other key, and a character key that yields no
-   usable character (a dead key, a control character), keeps its name. */
-static std::string _GetKeycode(SDL_Scancode sdlScancode, Scancode scancode) {
-    PROFILE
-
-    if (__IsCharacterScancode(scancode) == false) {
-        return GetDefaultKeycode(scancode);
-    }
-
-    auto const key = SDL_GetKeyFromScancode(sdlScancode, SDL_KMOD_NONE, false);
-
-    if ((key == SDLK_UNKNOWN) || ((key & SDLK_SCANCODE_MASK) != 0) || _IsControlCodepoint(key)) {
-        return GetDefaultKeycode(scancode);
-    }
-
-    auto keycode = std::string();
-    StringFromCodepoints({ CodepointToLower(key) }, keycode);
-
-    return keycode;
-}
-
-std::string __GetLayoutKeycode(Scancode scancode) {
-    PROFILE
-
-    App::__InitVideo();
-
-    for (auto const& [sdlScancode, mapped] : _keyMap) {
-        if (mapped == scancode) {
-            return _GetKeycode(sdlScancode, scancode);
-        }
-    }
-
-    return GetDefaultKeycode(scancode);
-}
-
-static std::optional<Mouse> _MouseConvert(std::uint8_t button) {
-    PROFILE
-
-    switch (button) {
-        case SDL_BUTTON_LEFT:   return Mouse::LeftButton;
-        case SDL_BUTTON_RIGHT:  return Mouse::RightButton;
-        case SDL_BUTTON_MIDDLE: return Mouse::MiddleButton;
-        default:                return std::nullopt; /* buttons past the third (back, forward) are not published */
-    }
-}
-
 /* Cursor::None has no entry: it hides the cursor instead, see __setCursor. */
-static std::map<Cursor, SDL_SystemCursor> const _cursorMap = {
+static auto const _cursorMap = std::map<Cursor, SDL_SystemCursor>{
     { Cursor::Default, SDL_SYSTEM_CURSOR_DEFAULT },
     { Cursor::ContextMenu, SDL_SYSTEM_CURSOR_DEFAULT },    // NOTE: Not supported in SDL3
     { Cursor::Help, SDL_SYSTEM_CURSOR_DEFAULT },           // NOTE: Not supported in SDL3
@@ -293,15 +221,106 @@ static std::map<Cursor, SDL_SystemCursor> const _cursorMap = {
     { Cursor::ZoomOut, SDL_SYSTEM_CURSOR_DEFAULT }         // NOTE: Not supported in SDL3
 };
 
-/* Makes a window operation take effect before the call returns, so the getters
-   report it. Only a shown window is synced: a hidden one has nothing on screen
-   to wait for, and on Wayland the wait would run into SDL's timeout. */
+static Scancode _KeyConvert(SDL_Scancode scancode) {
+    PROFILE
+
+    auto const it = _keyMap.find(scancode);
+
+    return (it != _keyMap.end()) ? it->second : Scancode::Unknown;
+}
+
+static KeyModifiers _ModifiersConvert(SDL_Keymod mod) {
+    PROFILE
+
+    return {
+        .control = ((mod & SDL_KMOD_CTRL) != 0),
+        .shift = ((mod & SDL_KMOD_SHIFT) != 0),
+        .meta = ((mod & SDL_KMOD_GUI) != 0),
+        .alt = ((mod & SDL_KMOD_ALT) != 0)
+    };
+}
+
+static bool _IsControlCodepoint(std::uint32_t codepoint) {
+    PROFILE
+
+    return (codepoint < 0x20u) || ((codepoint >= 0x7Fu) && (codepoint < 0xA0u));
+}
+
+static std::string _GetKeycode(SDL_Scancode sdlScancode, Scancode scancode) {
+    PROFILE
+
+    if (__IsCharacterScancode(scancode) == false) {
+        return GetDefaultKeycode(scancode);
+    }
+
+    auto const key = SDL_GetKeyFromScancode(sdlScancode, SDL_KMOD_NONE, false);
+
+    if ((key == SDLK_UNKNOWN) || ((key & SDLK_SCANCODE_MASK) != 0) || _IsControlCodepoint(key)) {
+        return GetDefaultKeycode(scancode);
+    }
+
+    auto keycode = std::string();
+    StringFromCodepoints({ CodepointToLower(key) }, keycode);
+
+    return keycode;
+}
+
+static std::optional<Mouse> _MouseConvert(std::uint8_t button) {
+    PROFILE
+
+    switch (button) {
+        case SDL_BUTTON_LEFT:   return Mouse::LeftButton;
+        case SDL_BUTTON_RIGHT:  return Mouse::RightButton;
+        case SDL_BUTTON_MIDDLE: return Mouse::MiddleButton;
+        default:                return std::nullopt; /* buttons past the third (back, forward) are not published */
+    }
+}
+
+/* Only a shown window is synced: a hidden one has nothing on screen to wait
+   for, and on Wayland the wait would run into SDL's timeout. */
 static void _SyncWindow(SDL_Window* window) {
     PROFILE
 
     if ((SDL_GetWindowFlags(window) & SDL_WINDOW_HIDDEN) == 0) {
         SDL_SyncWindow(window);
     }
+}
+
+/* nothing would be presented, and a vsync present can wait for a frame that never comes */
+static bool _IsPainted(SDL_Window* window) {
+    PROFILE
+
+    return (SDL_GetWindowFlags(window) & (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED | SDL_WINDOW_OCCLUDED)) == 0;
+}
+
+static SDL_Rect _PositionDisplayBounds(SDL_Window* window) {
+    PROFILE
+
+    auto display = SDL_GetDisplayForWindow(window);
+
+    if (display == 0) {
+        display = SDL_GetPrimaryDisplay();
+    }
+
+    auto bounds = SDL_Rect{};
+
+    SDL_GetDisplayBounds(display, &bounds);
+
+    return bounds;
+}
+
+std::string __GetLayoutKeycode(Scancode scancode) {
+    PROFILE
+
+    App::__InitVideo();
+
+    for (auto const& [sdlScancode, mapped] : _keyMap) {
+        if (mapped == scancode) {
+            return _GetKeycode(sdlScancode, scancode);
+        }
+    }
+
+    return GetDefaultKeycode(scancode);
 }
 
 void __HandleEvent(SDL_Event const& event) {
@@ -343,13 +362,6 @@ void __HandleEvent(SDL_Event const& event) {
         auto const onEvent = it->second.onEvent;
         onEvent(event);
     }
-}
-
-/* nothing would be presented, and a vsync present can wait for a frame that never comes */
-static bool _IsPainted(SDL_Window* window) {
-    PROFILE
-
-    return (SDL_GetWindowFlags(window) & (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED | SDL_WINDOW_OCCLUDED)) == 0;
 }
 
 float __GetRefreshRate() {
@@ -447,16 +459,15 @@ void Window::__init() {
     _impl->window = SDL_CreateWindow("", 640, 480, (SDL_WINDOW_HIDDEN | SDL_WINDOW_HIGH_PIXEL_DENSITY | __GetWindowFlags()));
 
     if (_impl->window == nullptr) {
-        auto const error = std::string(SDL_GetError());
         delete _impl;
-        throw std::runtime_error(error);
+        throw std::runtime_error(std::format("Failed to create the window: {}", SDL_GetError()));
     }
 
     if (__ClaimWindow(_impl->window) == false) {
         auto const error = std::string(SDL_GetError());
         SDL_DestroyWindow(_impl->window);
         delete _impl;
-        throw std::runtime_error(error);
+        throw std::runtime_error(std::format("Failed to claim the window for the GPU device: {}", error));
     }
 
     _impl->scale = SDL_GetWindowPixelDensity(_impl->window);
@@ -469,13 +480,13 @@ void Window::__init() {
         return position;
     };
 
-    auto const dispatchMouseMove = [this, modifiers](Vec2 const& position) {
+    auto const dispatchMouseMove = [&, modifiers](Vec2 const& position) {
         _impl->mousePosition = position;
         _mouseMove(position, modifiers());
     };
 
     _handlers[SDL_GetWindowID(_impl->window)] = _WindowHandlers{
-        .onEvent = [this, modifiers, mousePosition, dispatchMouseMove](SDL_Event const& event) {
+        .onEvent = [&, modifiers, mousePosition, dispatchMouseMove](SDL_Event const& event) {
             switch (event.type) {
                 case SDL_EVENT_WINDOW_CLOSE_REQUESTED: {
                     _close();
@@ -488,6 +499,7 @@ void Window::__init() {
                 case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
                 case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED: {
                     auto const scale = SDL_GetWindowPixelDensity(_impl->window);
+
                     if (scale != _impl->scale) {
                         _impl->scale = scale;
                         _dpiChange();
@@ -562,6 +574,7 @@ void Window::__init() {
                 }
                 case SDL_EVENT_MOUSE_BUTTON_DOWN: {
                     auto const mouse = _MouseConvert(event.button.button);
+
                     if (mouse.has_value() == false) {
                         break;
                     }
@@ -581,6 +594,7 @@ void Window::__init() {
                 }
                 case SDL_EVENT_MOUSE_BUTTON_UP: {
                     auto const mouse = _MouseConvert(event.button.button);
+
                     if (mouse.has_value() == false) {
                         break;
                     }
@@ -593,7 +607,7 @@ void Window::__init() {
                 case SDL_EVENT_MOUSE_WHEEL: {
                     /* the horizontal sign follows macOS's scrolling delta, which is
                        positive to the left */
-                    _mouseWheel({ (event.wheel.x * -_WHEEL_SCALE), (event.wheel.y * _WHEEL_SCALE) }, modifiers());
+                    _mouseWheel({ (event.wheel.x * -_wheelScale), (event.wheel.y * _wheelScale) }, modifiers());
                     break;
                 }
                 case SDL_EVENT_PINCH_UPDATE: {
@@ -673,7 +687,7 @@ void Window::__init() {
                 }
             }
         },
-        .onPaint = [this]() {
+        .onPaint = [&]() {
             _paint();
         }
     };
@@ -854,24 +868,6 @@ void Window::__setCursor(Cursor cursor) {
 
         SDL_SetCursor(cursorIt->second);
     }
-}
-
-/* The display whose coordinate space position values are expressed in, and
-   its bounds in global coordinates. */
-static SDL_Rect _PositionDisplayBounds(SDL_Window* window) {
-    PROFILE
-
-    auto display = SDL_GetDisplayForWindow(window);
-
-    if (display == 0) {
-        display = SDL_GetPrimaryDisplay();
-    }
-
-    auto bounds = SDL_Rect{};
-
-    SDL_GetDisplayBounds(display, &bounds);
-
-    return bounds;
 }
 
 Vec2 const& Window::__getPosition() const {

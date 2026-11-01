@@ -62,13 +62,6 @@ static std::optional<GamepadAxis> _AxisConvert(Uint8 axis) {
     }
 }
 
-/* SDL gives a stick -32768..32767 and a trigger 0..32767. */
-static float _AxisValue(Sint16 value) {
-    PROFILE
-
-    return std::max(-1.0f, static_cast<float>(value) / 32767.0f);
-}
-
 std::vector<std::uint32_t> GetGamepads() {
     PROFILE
 
@@ -130,7 +123,8 @@ void __HandleGamepadEvent(SDL_Event const& event) {
         }
         case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
             if (auto const axis = _AxisConvert(event.gaxis.axis); axis.has_value()) {
-                _GamepadAxis(event.gaxis.which, *axis, _AxisValue(event.gaxis.value));
+                /* SDL gives a stick -32768..32767 and a trigger 0..32767. */
+                _GamepadAxis(event.gaxis.which, *axis, std::max(-1.0f, (static_cast<float>(event.gaxis.value) / 32767.0f)));
             }
             break;
         }

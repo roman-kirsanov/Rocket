@@ -9,52 +9,36 @@
 #include <cassert>
 #include <algorithm>
 #include <Rocket/Base/Profile.hpp>
-#include <Rocket/Window/Window.hpp>
 #include <Rocket/Window/Gamepad_Private.hpp>
+#include <Rocket/Window/Window.hpp>
 
 namespace Rocket {
 
 static auto _windows = std::vector<Window*>();
 
-static void _AddWindow(Window* window) {
-    PROFILE
-
-    assert(window != nullptr);
-
-    _windows.push_back(window);
-}
-
-static void _RemoveWindow(Window* window) {
-    PROFILE
-
-    assert(window != nullptr);
-
-    std::erase(_windows, window);
-}
-
 Window::~Window() {
     PROFILE
 
-    _RemoveWindow(this);
+    std::erase(_windows, this);
 
     __done();
 }
 
 Window::Window()
     : onEvent()
+    , _impl(nullptr)
     , _title()
-    , _cursor(Cursor::Default)
     , _inputArea()
     , _pressedKeys()
     , _pressedGamepadButtons()
     , _movedGamepadAxes()
-    , _impl(nullptr)
+    , _cursor(Cursor::Default)
 {
     PROFILE
 
     __init();
 
-    _AddWindow(this);
+    _windows.push_back(this);
 }
 
 std::string const& Window::getTitle() const {
@@ -537,7 +521,7 @@ void Window::_focus() {
 void Window::_blur() {
     PROFILE
 
-    /* keys and gamepad buttons still held when focus leaves are never released here: release them now */
+    /* The platform sends no key or button releases to a window that has lost focus. */
     auto const pressedKeys = _pressedKeys;
     for (auto const& [ scancode, keycode ] : pressedKeys) {
         _keyUp(scancode, keycode, {});

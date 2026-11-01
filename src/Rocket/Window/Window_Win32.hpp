@@ -9,8 +9,6 @@
 
 #include <Rocket/Window/Window.hpp>
 
-/* <windows.h> stays out of this header, as out of App_Win32.hpp. */
-
 namespace Rocket {
 
 void __PaintWindows();

@@ -26,14 +26,14 @@ bool KeyModifiers::operator==(KeyModifiers const& modifiers) const {
 bool KeyModifiers::operator!=(KeyModifiers const& modifiers) const {
     PROFILE
 
-    return !operator==(modifiers);
+    return (operator==(modifiers) == false);
 }
 
 std::string const& GetScancodeName(Scancode scancode) {
     PROFILE
 
-    static auto _unknown = std::string("Unknown");
-    static auto _namemap = std::unordered_map<Scancode, std::string>{
+    static auto const _unknown = std::string("Unknown");
+    static auto const _namemap = std::unordered_map<Scancode, std::string>{
         { Scancode::Unknown, "Unknown" },
         { Scancode::Digit0, "0" },
         { Scancode::Digit1, "1" },
@@ -157,7 +157,8 @@ std::string const& GetScancodeName(Scancode scancode) {
         { Scancode::IntlBackslash, "IntlBackslash" }
     };
 
-    auto it = _namemap.find(scancode);
+    auto const it = _namemap.find(scancode);
+
     if (it != _namemap.end()) {
         return it->second;
     } else {
@@ -291,7 +292,8 @@ std::string GetDefaultKeycode(Scancode scancode) {
         { Scancode::IntlBackslash, Keycode::Backslash }
     };
 
-    auto it = _keycodes.find(scancode);
+    auto const it = _keycodes.find(scancode);
+
     if (it != _keycodes.end()) {
         return std::string(it->second);
     } else {

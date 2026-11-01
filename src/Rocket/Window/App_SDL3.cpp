@@ -9,19 +9,20 @@
 #include <vector>
 #include <cstdint>
 #include <cstdlib>
+#include <format>
 #include <stdexcept>
 #include <filesystem>
 #include <SDL3/SDL.h>
 #include <Rocket/Base/Profile.hpp>
 #include <Rocket/Window/App_Private.hpp>
-#include <Rocket/Window/App_SDL3.hpp>
-#include <Rocket/Window/Window_SDL3.hpp>
 #include <Rocket/Window/Gamepad_SDL3.hpp>
+#include <Rocket/Window/Window_SDL3.hpp>
+#include <Rocket/Window/App_SDL3.hpp>
 
 namespace Rocket {
 namespace App {
 
-static auto constexpr _DEFAULT_REFRESH_RATE = 60.0f;
+static auto constexpr _defaultRefreshRate = 60.0f;
 
 static auto _isExited = false;
 static auto _nextFrame = std::uint64_t(0);
@@ -60,8 +61,7 @@ static void _HandleHeldEvents(std::vector<SDL_Event>& held) {
    frame rate, and every one of them can cost a layout. macOS coalesces them to
    the display, and so does the run loop: they are held until the frame is due
    or another event comes, consecutive moves of a window collapse into the last
-   one and consecutive turns into their sum. Returns true for an event it held,
-   false for one it handled. */
+   one and consecutive turns into their sum. */
 static bool _TakeEvent(std::vector<SDL_Event>& held, SDL_Event const& event) {
     PROFILE
 
@@ -127,7 +127,7 @@ void __InitVideo() {
     SDL_SetHint(SDL_HINT_IME_IMPLEMENTED_UI, "composition");
 
     if (SDL_InitSubSystem(SDL_INIT_VIDEO) == false) {
-        throw std::runtime_error(SDL_GetError());
+        throw std::runtime_error(std::format("Failed to initialize SDL video: {}", SDL_GetError()));
     }
 
     _initialized = true;
@@ -141,7 +141,7 @@ std::string const& __GetExecPath() {
         auto error = std::error_code();
         auto const path = std::filesystem::read_symlink("/proc/self/exe", error);
 
-        return error ? std::string() : path.string();
+        return (error.value() != 0) ? std::string() : path.string();
     }();
 
     return _execPath;
@@ -164,7 +164,7 @@ std::string const& __GetWorkDir() {
 
     static auto _workDir = std::string();
 
-    if (auto const currentDirectory = SDL_GetCurrentDirectory()) {
+    if (auto const currentDirectory = SDL_GetCurrentDirectory(); currentDirectory != nullptr) {
         _workDir = _TrimSeparator(currentDirectory);
         SDL_free(currentDirectory);
     }
@@ -197,7 +197,7 @@ void __Exit() {
 }
 
 void __Run(int argc, char const** argv) {
-    // PROFILE
+    PROFILE
 
     __InitVideo();
 
@@ -246,7 +246,7 @@ void __Tick(bool update) {
 
         if (refreshRate <= 0.0f) {
             auto const mode = SDL_GetCurrentDisplayMode(SDL_GetPrimaryDisplay());
-            refreshRate = ((mode != nullptr) && (mode->refresh_rate > 0.0f)) ? mode->refresh_rate : _DEFAULT_REFRESH_RATE;
+            refreshRate = ((mode != nullptr) && (mode->refresh_rate > 0.0f)) ? mode->refresh_rate : _defaultRefreshRate;
         }
 
         auto const period = static_cast<std::uint64_t>(1000000000.0 / static_cast<double>(refreshRate));

@@ -10,7 +10,6 @@
 namespace Rocket {
 namespace App {
 
-/** Initializes SDL's video subsystem, with the hints the backend relies on; safe to call any number of times. */
 void __InitVideo();
 
 } /* namespace App */

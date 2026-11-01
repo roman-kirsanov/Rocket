@@ -6,8 +6,8 @@
  */
 
 #include <Rocket/Base/Profile.hpp>
-#include <Rocket/Window/WindowEvent.hpp>
 #include <Rocket/Window/Window.hpp>
+#include <Rocket/Window/WindowEvent.hpp>
 
 namespace Rocket {
 

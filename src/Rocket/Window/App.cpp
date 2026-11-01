@@ -10,8 +10,8 @@
 #include <memory>
 #include <vector>
 #include <algorithm>
-#include <Rocket/Base/Time.hpp>
 #include <Rocket/Base/Profile.hpp>
+#include <Rocket/Base/Time.hpp>
 #include <Rocket/Window/App_Private.hpp>
 #include <Rocket/Window/Gamepad_Private.hpp>
 
@@ -37,7 +37,7 @@ Pub<AppEvent const&> OnEvent = {};
 static void _UpdateDeltaTime() {
     PROFILE
 
-    auto nowTime = GetTime();
+    auto const nowTime = GetTime();
     _deltaTime = (nowTime - _lastTime);
     _lastTime = nowTime;
 }

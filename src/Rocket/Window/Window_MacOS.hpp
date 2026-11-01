@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#pragma once
+
 #include <Cocoa/Cocoa.h>
 #include <Rocket/Window/Window.hpp>
 
@@ -30,7 +32,6 @@
 @property (copy, nonatomic) void(^onFocus)(void);
 @property (copy, nonatomic) void(^onBlur)(void);
 
-/** The key's text, if any, is published separately, see __NSMetalView. */
 - (void)dispatchKeyDown:(NSEvent*)event;
 
 @end

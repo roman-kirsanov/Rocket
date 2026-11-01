@@ -18,8 +18,8 @@
 
 namespace Rocket {
 
-static auto constexpr _OPEN_ATTEMPTS = 10;
-static auto constexpr _OPEN_RETRY_DELAY_MS = 5;
+static auto constexpr _openAttempts = 10;
+static auto constexpr _openRetryDelayMs = 5;
 
 static HWND _GetOwner() {
     PROFILE
@@ -36,12 +36,12 @@ static HWND _GetOwner() {
 static bool _OpenClipboard() {
     PROFILE
 
-    for (auto attempt = 0; attempt < _OPEN_ATTEMPTS; attempt++) {
-        if (::OpenClipboard(_GetOwner())) {
+    for (auto attempt = 0; attempt < _openAttempts; attempt++) {
+        if (::OpenClipboard(_GetOwner()) != FALSE) {
             return true;
         }
 
-        ::Sleep(_OPEN_RETRY_DELAY_MS);
+        ::Sleep(_openRetryDelayMs);
     }
 
     return false;

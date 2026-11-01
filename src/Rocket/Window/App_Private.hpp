@@ -28,11 +28,6 @@ void __Exit();
 
 void __Run(int argc, char const** argv);
 
-/**
- * __Run ticks with `update` set; the loops that block inside a tick of their
- * own (a modal window, a file dialog) tick without it, so App timeouts,
- * intervals and UpdateAppEvent do not run while they block, as on macOS.
- */
 void __Tick(bool update);
 
 } /* namespace App */

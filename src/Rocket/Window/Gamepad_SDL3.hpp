@@ -12,10 +12,7 @@
 
 namespace Rocket {
 
-/** Whether the event is one of SDL's gamepad events, which __HandleGamepadEvent handles. */
 bool __IsGamepadEvent(SDL_Event const& event);
-
-/** Sends one of SDL's gamepad events on: a connect or disconnect to App::OnEvent, a button or axis to the focused window. */
 void __HandleGamepadEvent(SDL_Event const& event);
 
 } /* namespace Rocket */

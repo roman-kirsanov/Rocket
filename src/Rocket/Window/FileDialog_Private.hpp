@@ -5,12 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#pragma once
+
 #include <Rocket/Window/FileDialog.hpp>
 
 namespace Rocket {
 
 void __OpenFileDialog(OpenFileDialogOptions const& options, OpenFileDialogCallback const& callback);
-
 void __SaveFileDialog(SaveFileDialogOptions const& options, SaveFileDialogCallback const& callback);
 
 } /* namespace Rocket */

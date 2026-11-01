@@ -14,12 +14,12 @@
 #include <Rocket/Base/Profile.hpp>
 #include <Rocket/Window/App_Private.hpp>
 #include <Rocket/Window/App_SDL3.hpp>
-#include <Rocket/Window/FileDialog_Private.hpp>
 #include <Rocket/Window/Window.hpp>
+#include <Rocket/Window/FileDialog_Private.hpp>
 
 namespace Rocket {
 
-/** SDL's dialog callback may run on another thread. */
+/* SDL's dialog callback may run on another thread. */
 struct _OpenFileDialogState {
     std::mutex mutex;
     std::atomic<bool> done = false;

@@ -12,10 +12,10 @@
 #include <cstdint>
 #include <utility>
 #include <optional>
-#include <Rocket/Math/Vec2.hpp>
-#include <Rocket/Math/Vec4.hpp>
 #include <Rocket/Base/Object.hpp>
 #include <Rocket/Base/PubSub.hpp>
+#include <Rocket/Math/Vec2.hpp>
+#include <Rocket/Math/Vec4.hpp>
 #include <Rocket/Window/Cursor.hpp>
 #include <Rocket/Window/WindowEvent.hpp>
 
@@ -41,9 +41,16 @@ public:
     /** Creates a hidden native window and adds it to GetWindows. */
     Window();
 
+    /** Deleted: a window cannot be moved. */
     Window(Window &&) = delete;
+
+    /** Deleted: a window cannot be copied. */
     Window(Window const&) = delete;
+
+    /** Deleted: a window cannot be move-assigned. */
     Window& operator=(Window &&) = delete;
+
+    /** Deleted: a window cannot be copy-assigned. */
     Window& operator=(Window const&) = delete;
 
     /** Returns the window title. */
@@ -239,22 +246,20 @@ public:
     /** Returns all windows currently alive in this process, in creation order. */
     static std::vector<Window*> const& GetWindows();
 protected:
-    /** Called for every event of this window, before onEvent subscribers. */
-    virtual void _onEvent(WindowEvent const&) {};
+    /**
+     * Called for every event of this window, before onEvent subscribers.
+     *
+     * @param event The event of this window.
+     */
+    virtual void _onEvent(WindowEvent const& event) {}
 private:
-    struct _Window;
-
+    struct _Window* _impl;
     std::string _title;
-    Cursor _cursor;
     std::optional<Vec4> _inputArea;
     std::vector<std::pair<Scancode, std::string>> _pressedKeys;
     std::vector<std::pair<std::uint32_t, GamepadButton>> _pressedGamepadButtons;
     std::vector<std::pair<std::uint32_t, GamepadAxis>> _movedGamepadAxes;
-    _Window* _impl;
-
-    friend void _GamepadDown(std::uint32_t, GamepadButton);
-    friend void _GamepadUp(std::uint32_t, GamepadButton);
-    friend void _GamepadAxis(std::uint32_t, GamepadAxis, float);
+    Cursor _cursor;
 
     void _show();
     void _hide();
@@ -319,6 +324,10 @@ private:
     void __setFocus();
     void __runModal();
     void __stopModal();
+
+    friend void _GamepadDown(std::uint32_t, GamepadButton);
+    friend void _GamepadUp(std::uint32_t, GamepadButton);
+    friend void _GamepadAxis(std::uint32_t, GamepadAxis, float);
 
 #ifdef _WIN32
     static std::intptr_t __stdcall __WindowProc(void*, std::uint32_t, std::uintptr_t, std::intptr_t);

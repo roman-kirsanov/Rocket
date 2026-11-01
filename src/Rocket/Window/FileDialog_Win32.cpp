@@ -15,8 +15,8 @@
 #include <shobjidl.h>
 #include <Rocket/Base/Profile.hpp>
 #include <Rocket/Window/App_Win32.hpp>
-#include <Rocket/Window/FileDialog_Private.hpp>
 #include <Rocket/Window/Window.hpp>
+#include <Rocket/Window/FileDialog_Private.hpp>
 
 namespace Rocket {
 

@@ -19,13 +19,13 @@
 #include <Rocket/Base/Profile.hpp>
 #include <Rocket/Window/App_Private.hpp>
 #include <Rocket/Window/Gamepad_Private.hpp>
-#include <Rocket/Window/App_Win32.hpp>
 #include <Rocket/Window/Window_Win32.hpp>
+#include <Rocket/Window/App_Win32.hpp>
 
 namespace Rocket {
 namespace App {
 
-static auto constexpr _DEFAULT_REFRESH_RATE = 60.0;
+static auto constexpr _defaultRefreshRate = 60.0;
 
 static auto _isExited = false;
 static auto _frameEnd = std::uint64_t(0);
@@ -37,9 +37,9 @@ static double _GetFramePeriod() {
 
     auto mode = DEVMODEW{ .dmSize = sizeof(DEVMODEW) };
 
-    auto const rate = (::EnumDisplaySettingsW(nullptr, ENUM_CURRENT_SETTINGS, &mode) && (mode.dmDisplayFrequency > 1))
+    auto const rate = ((::EnumDisplaySettingsW(nullptr, ENUM_CURRENT_SETTINGS, &mode) != FALSE) && (mode.dmDisplayFrequency > 1))
         ? static_cast<double>(mode.dmDisplayFrequency)
-        : _DEFAULT_REFRESH_RATE;
+        : _defaultRefreshRate;
 
     return 1.0 / rate;
 }
@@ -66,14 +66,6 @@ static void CALLBACK _OnPaintTimer(HWND, UINT, UINT_PTR, DWORD) {
     PROFILE
 
     __PaintWindows();
-}
-
-static bool _IsCoalescedMessage(MSG const& message) {
-    PROFILE
-
-    return (message.message == WM_MOUSEMOVE)
-        || (message.message == WM_MOUSEWHEEL)
-        || (message.message == WM_MOUSEHWHEEL);
 }
 
 static void _CoalesceMessage(std::vector<MSG>& held, MSG const& message) {
@@ -138,8 +130,12 @@ static bool _DrainMessages(std::vector<MSG>& held) {
     auto message = MSG{};
     auto handled = false;
 
-    while (::PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
-        if (_IsCoalescedMessage(message)) {
+    while (::PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE) != FALSE) {
+        if (
+            (message.message == WM_MOUSEMOVE) ||
+            (message.message == WM_MOUSEWHEEL) ||
+            (message.message == WM_MOUSEHWHEEL)
+        ) {
             _CoalesceMessage(held, message);
         } else {
             _DispatchHeldMessages(held);
@@ -214,7 +210,7 @@ std::string __FromWide(std::wstring_view string) {
 std::string const& __GetExecPath() {
     PROFILE
 
-    static auto const _execPath = []{
+    static auto const _execPath = [] {
         auto path = std::wstring(MAX_PATH, L'\0');
 
         for (;;) {
@@ -240,10 +236,9 @@ std::string const& __GetExecDir() {
     PROFILE
 
     static auto const _execDir = [] {
-        auto const& path = __GetExecPath();
-        auto const separator = path.find_last_of("\\/");
+        auto const separator = __GetExecPath().find_last_of("\\/");
 
-        return (separator != std::string::npos) ? _TrimSeparator(path.substr(0, separator + 1)) : std::string();
+        return (separator != std::string::npos) ? _TrimSeparator(__GetExecPath().substr(0, separator + 1)) : std::string();
     }();
 
     return _execDir;
@@ -290,7 +285,7 @@ void __Exit() {
 }
 
 void __Run(int argc, char const** argv) {
-    // PROFILE
+    PROFILE
 
     __InitWin32();
 

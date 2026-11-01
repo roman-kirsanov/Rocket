@@ -17,6 +17,7 @@ namespace Rocket {
 
 /** Successful open-dialog outcome: the absolute paths the user selected (never empty). */
 struct OpenFileDialogOkResult {
+    /** The absolute paths the user selected, never empty. */
     std::vector<std::string> paths;
 };
 

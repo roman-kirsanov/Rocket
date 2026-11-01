@@ -10,8 +10,8 @@
 #include <string>
 #include <vector>
 #include <cstdint>
-#include <Rocket/Math/Vec2.hpp>
 #include <Rocket/Base/Object.hpp>
+#include <Rocket/Math/Vec2.hpp>
 #include <Rocket/Window/Input.hpp>
 
 namespace Rocket {
@@ -217,9 +217,9 @@ public:
     /**
      * An event for the given button at the given position with the modifiers held at the time.
      *
-     * @param window    The window the event originated from.
-     * @param mouse     The mouse button that was pressed.
-     * @param position  The mouse position, in window content coordinates.
+     * @param window     The window the event originated from.
+     * @param mouse      The mouse button that was pressed.
+     * @param position   The mouse position, in window content coordinates.
      * @param modifiers  The modifier keys held at the time.
      * @param clickCount The number of consecutive clicks this press is part of (1 for a single click); default 1.
      */

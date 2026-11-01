@@ -11,15 +11,13 @@
 #include <Rocket/Window/App_Private.hpp>
 #include <Rocket/Window/Gamepad_Private.hpp>
 
-auto constexpr _APP_EVENT_TIMEOUT = 16.667;
-
-@interface __Delegate : NSObject<NSApplicationDelegate>
+@interface _Delegate : NSObject<NSApplicationDelegate>
 
 - (id)initWithOnRun:(void(^)(void))onRun onExit:(void(^)(void))onExit;
 
 @end
 
-@implementation __Delegate {
+@implementation _Delegate {
     void (^_onRun)(void);
     void (^_onExit)(void);
 }
@@ -28,7 +26,8 @@ auto constexpr _APP_EVENT_TIMEOUT = 16.667;
     PROFILE
 
     self = [super init];
-    if (self) {
+
+    if (self != nil) {
         _onRun = onRun;
         _onExit = onExit;
     }
@@ -52,6 +51,8 @@ auto constexpr _APP_EVENT_TIMEOUT = 16.667;
 
 namespace Rocket {
 namespace App {
+
+static auto constexpr _appEventTimeout = 16.667;
 
 static auto _isExited = false;
 
@@ -104,15 +105,15 @@ void __Exit() {
 }
 
 void __Run(int argc, char const** argv) {
-    // PROFILE
+    PROFILE
 
     [[NSApplication sharedApplication]
-        setDelegate: [[__Delegate alloc]
+        setDelegate: [[_Delegate alloc]
             initWithOnRun: ^{
-                id mainMenu = [[NSMenu alloc] init];
-                id appMenu = [[NSMenu alloc] init];
-                id appItem = [mainMenu addItemWithTitle: [NSString stringWithCString: "123" encoding: NSUTF8StringEncoding] action: nil keyEquivalent: @""];
-                id quitItem = [appMenu addItemWithTitle: @"Quit" action: nil keyEquivalent: @"q"];
+                auto const mainMenu = [[NSMenu alloc] init];
+                auto const appMenu = [[NSMenu alloc] init];
+                auto const appItem = [mainMenu addItemWithTitle: [NSString stringWithCString: "123" encoding: NSUTF8StringEncoding] action: nil keyEquivalent: @""];
+                auto const quitItem = [appMenu addItemWithTitle: @"Quit" action: nil keyEquivalent: @"q"];
                 [quitItem setTarget: [NSApp delegate]];
                 [quitItem setAction: @selector(exit)];
                 [appItem setSubmenu: appMenu];
@@ -131,10 +132,11 @@ void __Run(int argc, char const** argv) {
 
     for (;;) {
         @autoreleasepool {
-            NSEvent* event = [NSApp nextEventMatchingMask: NSEventMaskAny
-                                                untilDate: ((_APP_EVENT_TIMEOUT > 0) ? [NSDate dateWithTimeIntervalSinceNow: (_APP_EVENT_TIMEOUT / 1000.0)] : nil)
-                                                   inMode: NSDefaultRunLoopMode
-                                                  dequeue: YES];
+            auto const event = [NSApp nextEventMatchingMask: NSEventMaskAny
+                                                  untilDate: ((_appEventTimeout > 0.0) ? [NSDate dateWithTimeIntervalSinceNow: (_appEventTimeout / 1000.0)] : nil)
+                                                     inMode: NSDefaultRunLoopMode
+                                                    dequeue: YES];
+
             if (event != nil) {
                 [NSApp sendEvent: event];
                 [NSApp updateWindows];

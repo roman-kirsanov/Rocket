@@ -15,9 +15,7 @@ namespace Rocket {
 void __OpenFileDialog(OpenFileDialogOptions const& options, OpenFileDialogCallback const& callback) {
     PROFILE
 
-    __block auto retainedCallback = callback;
-
-    auto panel = [NSOpenPanel openPanel];
+    auto const panel = [NSOpenPanel openPanel];
     [panel setTitle: [NSString stringWithUTF8String: options.title.c_str()]];
     [panel setPrompt: [NSString stringWithUTF8String: options.action.c_str()]];
     [panel setMessage: [NSString stringWithUTF8String: options.message.c_str()]];
@@ -26,17 +24,16 @@ void __OpenFileDialog(OpenFileDialogOptions const& options, OpenFileDialogCallba
     [panel setAllowsMultipleSelection: options.multipleSelection];
 
     if (options.extensions.size() > 0) {
-        auto* array = [NSMutableArray array];
+        auto const array = [NSMutableArray array];
         for (auto const& [ description, extension ] : options.extensions) {
             [array addObject: [NSString stringWithUTF8String: extension.c_str()]];
         }
         [panel setAllowedFileTypes: array];
     }
 
-    NSWindow* previousKeyWindow = [NSApp keyWindow];
-    NSModalResponse modalResult = [panel runModal];
+    auto const previousKeyWindow = [NSApp keyWindow];
 
-    if (modalResult == NSModalResponseOK) {
+    if ([panel runModal] == NSModalResponseOK) {
         auto paths = std::vector<std::string>();
 
         for (NSURL* url in panel.URLs) {
@@ -45,13 +42,13 @@ void __OpenFileDialog(OpenFileDialogOptions const& options, OpenFileDialogCallba
 
         assert(paths.size() > 0);
 
-        retainedCallback(OpenFileDialogOkResult{ std::move(paths) });
+        callback(OpenFileDialogOkResult{ std::move(paths) });
     } else {
-        retainedCallback(OpenFileDialogCancelResult{});
+        callback(OpenFileDialogCancelResult{});
     }
 
-    if (previousKeyWindow) {
-        [previousKeyWindow makeKeyAndOrderFront: nullptr];
+    if (previousKeyWindow != nil) {
+        [previousKeyWindow makeKeyAndOrderFront: nil];
     }
 }
 

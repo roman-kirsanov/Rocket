@@ -14,7 +14,7 @@ namespace Rocket {
 std::string __GetClipboardString() {
     PROFILE
 
-    auto string = [[NSPasteboard generalPasteboard] stringForType: NSPasteboardTypeString];
+    auto const string = [[NSPasteboard generalPasteboard] stringForType: NSPasteboardTypeString];
 
     if (string != nil) {
         return [string UTF8String];

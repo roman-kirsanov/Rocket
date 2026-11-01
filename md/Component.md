@@ -4,6 +4,10 @@ This is the guide for adding a component to the declarative UI layer: how a
 component function is shaped, how it keeps state, how props flow into the
 retained `Node` tree, and which conventions the existing components follow.
 
+The examples use a `Button` component to show every pattern in one place.
+`Button` is not part of the library; `Popup` and `Splitter` in
+`src/Rocket/UI/` are the components to read alongside this guide.
+
 ## 1. The model in one paragraph
 
 A component is a plain function that is called on every render. It takes a
@@ -89,52 +93,31 @@ void Button(ButtonProps const& props, std::function<void()> const& children) {
     PROFILE
     COMPONENT
 
-    /* hooks */
-    /* derive values */
-    /* build node props */
-    /* render */
+    ...
 }
 
 } /* namespace Rocket */
 ```
 
-Include order is system headers, then `Rocket/...` headers alphabetically by
-path, then the component's own header last.
+Includes follow the order in [Code style §10](Codestyle.md#10-layout). The
+body follows the steps of section 4.
 
 ### Symbol order inside a source file
 
-Declarations in a `.cpp` appear in this fixed order, each group complete
-before the next starts:
-
-1. **Enums** private to the file.
-2. **Structs** private to the file: style and metrics records, then the
-   component state struct.
-3. **Static variables**: palette colours, lookup tables, metric constants.
-4. **Static functions**: helpers used by the component body.
-5. **Public functions**: the component function(s) declared in the header.
-
-The order is also a dependency order. Tables (3) may refer to structs (2)
-and to earlier variables, and functions (4) may refer to anything above
-them, but a table initialiser must never call a static function, because
-that function would have to be declared before the variables. If a value
-needs computing, give it its own static variable built from earlier ones
-(`_blue50050 = Vec4{ _blue500.red, _blue500.green, _blue500.blue, 0.5f }`)
-rather than a helper call.
+Declarations follow the symbol order in
+[Code style §4](Codestyle.md#4-symbol-order-in-a-source-file). In a
+component, the private structs are the style and metrics records, then the
+component state struct, and the public functions are the component
+function(s) declared in the header.
 
 ### Naming of file-private symbols
 
-Every symbol that is not declared in the header is prefixed with an
-underscore, and types carry the component name so they cannot collide when
-several components are compiled into one library:
-
-| Kind | Form | Examples |
-|---|---|---|
-| Private struct / enum | `_<Component><Role>` | `_ButtonState`, `_ButtonStyle`, `_ButtonMetrics` |
-| Static variable | `_camelCase` | `_blue500`, `_style`, `_metrics`, `_disabledOpacity` |
-| Static function | `_PascalCase` | `_GetMapped`, `_OptionalChain` |
-| Local variable | `camelCase` (no prefix) | `state`, `nodeRef`, `isHover`, `node` |
-
-Public names never carry an underscore. The state struct is
+File-private symbols are named as in
+[Code style §8](Codestyle.md#8-private-names). In a
+component, private structs and enums also carry the component name,
+`_<Component><Role>` (`_ButtonState`, `_ButtonStyle`, `_ButtonMetrics`), so
+they cannot collide when several components are compiled into one library.
+The state struct is
 `_<Component>State` and is declared at file level in the structs group, not
 inside the function. (Some older core components still declare a local
 `_State` inside the function; new code follows the file-level form.)
@@ -167,6 +150,8 @@ that are never merged, which is none of them.
 Name enums `<Component><Aspect>` and document each enumerator that is not
 self-evident. Give the default enumerator first.
 
+The comment of each field says what the default is when the field is unset.
+
 ## 4. The function body, step by step
 
 ### 4.1 Open the scope
@@ -179,7 +164,7 @@ COMPONENT
 `PROFILE` is the tracing macro used on every function in the tree.
 `COMPONENT` opens the reconciliation scope keyed by `props.key` and closes it
 when the function returns. Use `COMPONENT_NO_KEY` for app-level components
-with no props struct (see `example/BeatMaker/App/Project/Project.cpp`).
+with no props struct (see `tests/Rocket/UI/Reconciler_Test.cpp`).
 
 Matching rules you have to know:
 
@@ -194,12 +179,22 @@ Matching rules you have to know:
   needs no keys, so `Node({ .key = "nav" })` next to `Node({ .key =
   "story" })` is noise. Items rendered from an array must carry a key,
   because their number and order can change between renders and only the
-  key keeps each item's state and retained node with it. One caveat: a
-  sibling rendered conditionally in front of same-typed siblings is also
-  matched by ordinal, so when it disappears its component is reused for
-  the next sibling; that is harmless for the stateless case, but give the
-  conditional one a key if the siblings hold user state you must not mix
-  up (an input's text, a scroll position).
+  key keeps each item's state and retained node with it.
+- **Components react to their props.** A component that keeps state
+  derived from its props brings that state up to date when the props
+  change, so that it can be rendered in place of another one with
+  different props and still be right. A key is not used to make it start
+  over.
+
+  ```cpp
+  /* no: a key to throw the old highlight away */
+  StoryMenu({ .key = "story", .onPlay = onPlay });
+
+  /* yes: UseChoices brings its highlight back in range itself when the count changes */
+  if (choices.selected >= count) {
+      choices.selected = 0;
+  }
+  ```
 
 ### 4.2 Declare state
 
@@ -220,7 +215,8 @@ Members are plain values; the state struct has no constructor unless a
 member needs constructor arguments (see `Document`'s state).
 
 `UseState`, `UseRef`, `UseEffect` and `UseSubscription` are matched by
-call position, so never call them inside a branch or loop. `UseContext`
+call position, so never call them inside a branch or loop, and never return
+early before the last of them. `UseContext`
 and `UseContextIf` are plain lookups with no slot of their own and may be
 called anywhere during the render.
 
@@ -259,16 +255,8 @@ installed on the node always sees the latest closures.
 ### 4.5 Derive values
 
 Resolve defaults once with `value_or`, then compute whatever the node needs.
-Prefer a nested conditional expression over an `if` ladder for small
-mappings, laid out one case per line:
-
-```cpp
-auto const justify = (
-    alignment == ButtonAlignment::Start ? NodeJustify::Start :
-    alignment == ButtonAlignment::End ? NodeJustify::End :
-                                        NodeJustify::Center
-);
-```
+Small mappings are nested conditional expressions, laid out as in
+[Code style §10](Codestyle.md#10-layout).
 
 Anything that depends only on a few props and involves table lookups goes
 under an Effect gate (section 6). Anything that depends on hover, pressed,
@@ -303,13 +291,13 @@ two exceptions:
 
 ```cpp
 node.onEvent = [&, disabled](NodeEvent const& event) {
-    if (state.nodeOnEvent) {
+    if (state.nodeOnEvent != nullptr) {
         state.nodeOnEvent(event);
     }
 
     if (event.is<MouseClickNodeEvent>()) {
         if (disabled == false) {
-            if (state.onClick) {
+            if (state.onClick != nullptr) {
                 state.onClick();
             }
             event.stopPropagation();
@@ -366,7 +354,7 @@ with `value_or`, render. A `children` parameter is declared as
 the component's own children, so callers can nest arbitrary content.
 
 Rendering a text node: `display = NodeDisplay::Text` plus `content`. Font
-size and text colour are inherited, so set them on the wrapper when they
+size and text color are inherited, so set them on the wrapper when they
 apply to everything inside, and on the text node only when they are
 specific to it.
 
@@ -378,19 +366,18 @@ module; the component is self-contained.
 
 Conventions:
 
-- `static auto const _name = ...;` for values; names carry a leading
-  underscore and are camelCase (`_blue550`, `_borderRadius`,
+- `static auto const _name = ...;` for values (`_borderRadius`,
   `_disabledOpacity`).
-- Colours are compile-time literals, one per line, named after the palette
-  entry they come from and carrying the original hex in a trailing comment:
+- Colors are compile-time literals, one per line, named after the palette
+  entry they come from:
   `auto constexpr _blue500 = Vec4{ 59.0f / 255.0f, 130.0f / 255.0f,
-  246.0f / 255.0f, 1.0f }; /* #3b82f6 */`. A short comment above the block
-  says which stylesheet they follow (Button follows fuego's `colors.scss`).
+  246.0f / 255.0f, 1.0f };`. A `constexpr` variable at namespace scope is
+  already file-private, so it needs no `static`.
   Never `ColorFromHex` in a static: it runs at start-up and is not
   `constexpr`. Derived
   variants are their own statics built from the base one, never a second
-  hard-coded colour and never a helper call inside a table initialiser
-  (see symbol order in section 2).
+  hard-coded color and never a helper call inside a table initializer
+  (see [Code style §4](Codestyle.md#4-symbol-order-in-a-source-file)).
 - Lookups keyed by enums are `std::map<std::tuple<Kind, Intent>, Value>`
   (or `std::map<Size, Value>`), one row per entry, aligned into columns so a
   table reads like the original stylesheet.
@@ -400,8 +387,7 @@ Conventions:
   layered on in that order. This mirrors how `hover:` and `active:` classes cascade, and it
   keeps the table honest: a blank cell means "unchanged", not "transparent".
 - Metrics (padding, min height, gap, radius, font size) are in points and
-  are separate statics or a `_ButtonMetrics` struct table. Use literal
-  suffixes: `6.0f`, not `6`.
+  are separate statics or a `_ButtonMetrics` struct table.
 - Every struct, variable and function in this section is file-private,
   `static` where applicable, and `_Prefixed` (section 2).
 
@@ -428,13 +414,16 @@ struct _ButtonState {
 };
 
 if (state.shouldUpdate(props.kind, props.intent, props.size, props.narrow)) {
-    /* table lookups, scale-dependent maths, image selection */
     state.style = &_style.at({ kind, intent });
     ...
 }
 
-/* hover / pressed / disabled cascade: runs every render */
+...
 ```
+
+The gated block does the table lookups, scale-dependent math and image
+selection; the hover, pressed and disabled cascade after it runs every
+render.
 
 Guidelines:
 
@@ -470,10 +459,8 @@ auto& reconciler = UseContext<Reconciler>();
 Never reach either of them through a global, a static, or a pointer stashed
 in props; the context is what ties a component to the document and
 reconciler that are actually rendering it, which matters as soon as there
-is more than one window. `UseContext` throws when no provider is mounted,
-so a component that can render outside a `Document` uses `UseContextIf`
-and checks for `nullptr`. Neither call occupies a state slot, so unlike
-`UseState` they are not positional.
+is more than one window. A component that can render outside a `Document`
+uses `UseContextIf` and checks for `nullptr` (section 8).
 
 - Hover and pressed state live on the retained node (`isHover()`,
   `isActive()`), not in component state. The example apps re-run the
@@ -545,10 +532,6 @@ pointer, so the walk touches one record per level and nothing else.
   `Context(document, ...)` (a test-only shortcut), have no sibling
   bookkeeping and are appended to the document in mount order. Covered by
   `tests/Rocket/UI/Node_Test.cpp`.
-- **Keys and types.** Keyed components are matched by type and key; two
-  siblings with the same key under one parent throw, whatever their types.
-- **Hooks are positional.** No hook inside a branch or loop, and no early
-  return before the last hook.
 - **Handlers outlive renders.** Never capture `props`, or any other local
   of the render (a helper lambda, a loop variable by reference), in a
   lambda stored on a node, passed to a child as a callback, or given to a
@@ -557,45 +540,20 @@ pointer, so the walk touches one record per level and nothing else.
   reference through `[&]`. The failure is a crash on a
   later click, not at render time, and it can stay hidden while the dead
   stack memory happens to still hold the old values.
-- **First render has no node.** `nodeRef` is null until `Node` has mounted;
-  guard every use.
-- **Optional shorthand.** When a caller sets `padding`, the per-edge fields
-  must fall back to it before falling back to the component default.
 
 ## 10. Code style checklist
 
-- `auto` first: `auto const x = ...;`, `auto& state = UseState<_ButtonState>();`.
-  Spell the type only when it cannot be deduced.
-- Literal suffixes always: `0.0f`, `9999.0f`, `1.5f`.
-- `disabled == false`, not `!disabled`.
-- Lambdas capture by reference through `[&]` and name only what they copy:
-  `[&, disabled]`, never `[&state, disabled]`. `this` counts as a reference.
-- Braces on every `if`, even one-liners, with a blank line before an `if`
-  that follows assignments.
-- Nested ternaries are parenthesised and laid out one case per line, the
-  final fallback indented to line up with the values.
-- File-private symbols are `_Prefixed`, and private types carry the
-  component name: `_ButtonState`, `_ButtonStyle`, `_ButtonMetrics`,
-  `_style`, `_metrics`, `_GetMapped`. Nothing in a public header has an
-  underscore; an internal type that two translation units must share goes
-  in a `<Module>_Private.hpp` next to the module (see
-  `src/Rocket/UI/Node_Private.hpp`).
-- Symbol order in a `.cpp`: enums, structs, static variables, static
-  functions, public functions.
+- The general rules in [Code style](Codestyle.md): no aliases, no `!`, no
+  comments in sources and private headers, symbol order, headers with
+  implementation, exceptions, lambda captures, private names, types and
+  literals, layout.
 - One component per file; the function name equals the file name.
-- `key` only inside loops; never on a fixed sequence of siblings.
-- Doc comments on every public enum, struct, field and function, `/** ... */`
-  style, with `@param` for function parameters. Field comments say what the
-  default is when the field is unset.
-- Comments in the body explain a non-obvious decision (why outline padding
-  differs from solid by one point), not what the code does.
 
 ## 11. Adding a new component, end to end
 
 1. Create `src/Rocket/UI/X.hpp` and `X.cpp` with the license header.
 2. Define `XKind` / `XIntent` / `XSize` enums as needed, then `XProps` in
-   the order: `key`, component props, callbacks, `<role>Props`,
-   `nodeProps`. No `ref` field.
+   the field order of section 3. No `ref` field.
 3. Declare `void X(XProps const& props, std::function<void()> const& children = []{});`
    (drop `children` if the component cannot contain arbitrary content).
 4. In the `.cpp`, lay the file out in order: private enums, private structs
@@ -608,13 +566,8 @@ pointer, so the walk touches one record per level and nothing else.
 6. Add `src/Rocket/UI/X.cpp` to `ROCKET_SOURCE` in the root
    `CMakeLists.txt` and `#include <Rocket/UI/X.hpp>` to
    `src/Rocket/Rocket.hpp`.
-7. Add `tests/Rocket/UI/X_Test.cpp`, modelled on `Button_Test.cpp`: render
+7. Add `tests/Rocket/UI/X_Test.cpp`, modeled on `Popup_Test.cpp`: render
    the component under a manually provided Document, assert the computed
    node fields for each prop, and drive hover, press and click through
    `window.onEvent`.
-8. Add a story: `src/Rocket/UI/Storybook/X.hpp` declaring `_XStory()` and
-   `Storybook/X.cpp` defining it, with one state field per prop driven by
-   the `_StoryRadio` / `_StoryToggle` / `_StoryInput` controls from
-   `Storybook/_Helpers.hpp`, plus an entry in the `_stories` list in
-   `Storybook.cpp`. Add the `.cpp` to `ROCKET_SOURCE`.
-9. Build with `./make.sh --test` (`.\make.ps1 --test` on Windows).
+8. Build with `./make.sh --test` (`.\make.ps1 --test` on Windows).

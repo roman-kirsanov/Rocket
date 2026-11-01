@@ -5,12 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#pragma once
+
 #include <Rocket/Window/Clipboard.hpp>
 
 namespace Rocket {
 
 std::string __GetClipboardString();
-
 void __SetClipboardString(std::string const& string);
 
 } /* namespace Rocket */
