@@ -42,13 +42,13 @@ static id<MTLTexture> _CreateTexture(std::uint32_t width, std::uint32_t height) 
     PROFILE
 
     auto descriptor = [MTLTextureDescriptor
-        texture2DDescriptorWithPixelFormat: (MTLPixelFormat)__GetDefaultTextureFormat()
+        texture2DDescriptorWithPixelFormat: (::MTLPixelFormat)__GetDefaultTextureFormat()
                                      width: std::max(1u, width)
                                     height: std::max(1u, height)
                                  mipmapped: NO];
 
-    descriptor.usage = (MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget);
-    descriptor.storageMode = MTLStorageModePrivate;
+    descriptor.usage = (::MTLTextureUsageShaderRead | ::MTLTextureUsageRenderTarget);
+    descriptor.storageMode = ::MTLStorageModePrivate;
 
     auto texture = [_Device() newTextureWithDescriptor: descriptor];
 
@@ -67,7 +67,7 @@ static void _UploadPixels(id<MTLTexture> texture, std::uint32_t x, std::uint32_t
     }
 
     auto const dataSize = (NSUInteger)(width * height * 4);
-    auto staging = [_Device() newBufferWithBytes: pixels length: dataSize options: MTLResourceStorageModeShared];
+    auto staging = [_Device() newBufferWithBytes: pixels length: dataSize options: ::MTLResourceStorageModeShared];
 
     auto commandBuffer = [_Queue() commandBuffer];
     auto blit = [commandBuffer blitCommandEncoder];
@@ -76,11 +76,11 @@ static void _UploadPixels(id<MTLTexture> texture, std::uint32_t x, std::uint32_t
             sourceOffset: 0
        sourceBytesPerRow: (width * 4)
      sourceBytesPerImage: dataSize
-              sourceSize: MTLSizeMake(width, height, 1)
+              sourceSize: ::MTLSizeMake(width, height, 1)
                toTexture: texture
         destinationSlice: 0
         destinationLevel: 0
-       destinationOrigin: MTLOriginMake(x, y, 0)];
+       destinationOrigin: ::MTLOriginMake(x, y, 0)];
 
     [blit endEncoding];
     [commandBuffer commit];
@@ -90,7 +90,7 @@ static void _DownloadPixels(id<MTLTexture> texture, std::uint32_t width, std::ui
     PROFILE
 
     auto const dataSize = (NSUInteger)(width * height * 4);
-    auto staging = [_Device() newBufferWithLength: dataSize options: MTLResourceStorageModeShared];
+    auto staging = [_Device() newBufferWithLength: dataSize options: ::MTLResourceStorageModeShared];
 
     auto commandBuffer = [_Queue() commandBuffer];
     auto blit = [commandBuffer blitCommandEncoder];
@@ -98,8 +98,8 @@ static void _DownloadPixels(id<MTLTexture> texture, std::uint32_t width, std::ui
     [blit copyFromTexture: texture
               sourceSlice: 0
               sourceLevel: 0
-             sourceOrigin: MTLOriginMake(0, 0, 0)
-               sourceSize: MTLSizeMake(width, height, 1)
+             sourceOrigin: ::MTLOriginMake(0, 0, 0)
+               sourceSize: ::MTLSizeMake(width, height, 1)
                  toBuffer: staging
         destinationOffset: 0
    destinationBytesPerRow: (width * 4)
@@ -125,7 +125,7 @@ void Image::__init(Vec2 const& size) {
 void Image::__init(std::string const& path) {
     PROFILE
 
-    auto url = ::CFURLCreateFromFileSystemRepresentation(nullptr, (UInt8 const*)path.c_str(), (CFIndex)path.size(), false);
+    auto url = ::CFURLCreateFromFileSystemRepresentation(nullptr, (::UInt8 const*)path.c_str(), (::CFIndex)path.size(), false);
     auto source = (url != nullptr) ? ::CGImageSourceCreateWithURL(url, nullptr) : nullptr;
 
     if (url != nullptr) {
@@ -152,7 +152,7 @@ void Image::__init(std::string const& path) {
     auto colorSpace = ::CGColorSpaceCreateDeviceRGB();
     auto context = ::CGBitmapContextCreate(
         pixels.data(), width, height, 8, ((std::size_t)width * 4), colorSpace,
-        ((CGBitmapInfo)kCGImageAlphaPremultipliedLast | (CGBitmapInfo)kCGBitmapByteOrder32Big)
+        ((::CGBitmapInfo)::kCGImageAlphaPremultipliedLast | (::CGBitmapInfo)::kCGBitmapByteOrder32Big)
     );
 
     ::CGColorSpaceRelease(colorSpace);
@@ -230,12 +230,12 @@ void Image::__copyFrom(Image const& image, Vec4 const& slice, Vec2 const& positi
     [blit copyFromTexture: image._impl->texture
               sourceSlice: 0
               sourceLevel: 0
-             sourceOrigin: MTLOriginMake((NSUInteger)slice.x, (NSUInteger)slice.y, 0)
-               sourceSize: MTLSizeMake(width, height, 1)
+             sourceOrigin: ::MTLOriginMake((NSUInteger)slice.x, (NSUInteger)slice.y, 0)
+               sourceSize: ::MTLSizeMake(width, height, 1)
                 toTexture: _impl->texture
          destinationSlice: 0
          destinationLevel: 0
-        destinationOrigin: MTLOriginMake((NSUInteger)position.x, (NSUInteger)position.y, 0)];
+        destinationOrigin: ::MTLOriginMake((NSUInteger)position.x, (NSUInteger)position.y, 0)];
 
     [blit endEncoding];
     [commandBuffer commit];

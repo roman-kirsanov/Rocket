@@ -199,36 +199,36 @@ TEST(Window, InputAndCompositionEventsCarryTheirPayloads) {
 #ifdef __linux__
 
 /* Pushes an SDL event for the window, as the platform would deliver it. */
-static void _PushEvent(Window& window, SDL_Event event) {
-    event.common.timestamp = SDL_GetTicksNS();
-    SDL_PushEvent(&event);
+static void _PushEvent(Window& window, ::SDL_Event event) {
+    event.common.timestamp = ::SDL_GetTicksNS();
+    ::SDL_PushEvent(&event);
 }
 
-static void _PushMotion(Window& window, float x, float y, SDL_MouseButtonFlags state = 0) {
-    auto event = SDL_Event{};
-    event.motion.type = SDL_EVENT_MOUSE_MOTION;
+static void _PushMotion(Window& window, float x, float y, ::SDL_MouseButtonFlags state = 0) {
+    auto event = ::SDL_Event{};
+    event.motion.type = ::SDL_EVENT_MOUSE_MOTION;
     event.motion.state = state;
-    event.motion.windowID = SDL_GetWindowID(static_cast<SDL_Window*>(window.getHandle()));
+    event.motion.windowID = ::SDL_GetWindowID(static_cast<::SDL_Window*>(window.getHandle()));
     event.motion.x = x;
     event.motion.y = y;
     _PushEvent(window, event);
 }
 
 static void _PushWheel(Window& window, float x, float y) {
-    auto event = SDL_Event{};
-    event.wheel.type = SDL_EVENT_MOUSE_WHEEL;
-    event.wheel.windowID = SDL_GetWindowID(static_cast<SDL_Window*>(window.getHandle()));
+    auto event = ::SDL_Event{};
+    event.wheel.type = ::SDL_EVENT_MOUSE_WHEEL;
+    event.wheel.windowID = ::SDL_GetWindowID(static_cast<::SDL_Window*>(window.getHandle()));
     event.wheel.x = x;
     event.wheel.y = y;
     _PushEvent(window, event);
 }
 
-static void _PushButton(Window& window, SDL_EventType type, float x, float y) {
-    auto event = SDL_Event{};
+static void _PushButton(Window& window, ::SDL_EventType type, float x, float y) {
+    auto event = ::SDL_Event{};
     event.button.type = type;
-    event.button.windowID = SDL_GetWindowID(static_cast<SDL_Window*>(window.getHandle()));
+    event.button.windowID = ::SDL_GetWindowID(static_cast<::SDL_Window*>(window.getHandle()));
     event.button.button = SDL_BUTTON_LEFT;
-    event.button.down = (type == SDL_EVENT_MOUSE_BUTTON_DOWN);
+    event.button.down = (type == ::SDL_EVENT_MOUSE_BUTTON_DOWN);
     event.button.clicks = 1;
     event.button.x = x;
     event.button.y = y;
@@ -261,11 +261,11 @@ TEST(Window, MovesArrivingTogetherCoalesce) {
     for (auto i = 1; i <= 50; i++) {
         _PushMotion(window, static_cast<float>(i), 10.0f);
     }
-    _PushButton(window, SDL_EVENT_MOUSE_BUTTON_DOWN, 50.0f, 10.0f);
+    _PushButton(window, ::SDL_EVENT_MOUSE_BUTTON_DOWN, 50.0f, 10.0f);
     for (auto i = 51; i <= 100; i++) {
         _PushMotion(window, static_cast<float>(i), 10.0f, SDL_BUTTON_LMASK);
     }
-    _PushButton(window, SDL_EVENT_MOUSE_BUTTON_UP, 100.0f, 10.0f);
+    _PushButton(window, ::SDL_EVENT_MOUSE_BUTTON_UP, 100.0f, 10.0f);
 
     _RunBriefly();
 
@@ -297,17 +297,17 @@ TEST(Window, WheelTurnsArrivingTogetherSum) {
 }
 
 static void _PushText(Window& window, char const* text) {
-    auto event = SDL_Event{};
-    event.text.type = SDL_EVENT_TEXT_INPUT;
-    event.text.windowID = SDL_GetWindowID(static_cast<SDL_Window*>(window.getHandle()));
+    auto event = ::SDL_Event{};
+    event.text.type = ::SDL_EVENT_TEXT_INPUT;
+    event.text.windowID = ::SDL_GetWindowID(static_cast<::SDL_Window*>(window.getHandle()));
     event.text.text = text;
     _PushEvent(window, event);
 }
 
-static void _PushKey(Window& window, SDL_Scancode scancode) {
-    auto event = SDL_Event{};
-    event.key.type = SDL_EVENT_KEY_DOWN;
-    event.key.windowID = SDL_GetWindowID(static_cast<SDL_Window*>(window.getHandle()));
+static void _PushKey(Window& window, ::SDL_Scancode scancode) {
+    auto event = ::SDL_Event{};
+    event.key.type = ::SDL_EVENT_KEY_DOWN;
+    event.key.windowID = ::SDL_GetWindowID(static_cast<::SDL_Window*>(window.getHandle()));
     event.key.scancode = scancode;
     event.key.down = true;
     _PushEvent(window, event);
@@ -344,7 +344,7 @@ TEST(Window, MoveWithNoButtonReleasesAPress) {
             events.push_back("up");
         }
     });
-    _PushButton(window, SDL_EVENT_MOUSE_BUTTON_DOWN, 10.0f, 10.0f);
+    _PushButton(window, ::SDL_EVENT_MOUSE_BUTTON_DOWN, 10.0f, 10.0f);
     _PushMotion(window, 20.0f, 10.0f);
 
     _RunBriefly();
@@ -368,8 +368,8 @@ TEST(Window, ModalWindowTakesTheInput) {
             modal.stopModal();
         }
     });
-    _PushKey(window, SDL_SCANCODE_A);
-    _PushKey(modal, SDL_SCANCODE_A);
+    _PushKey(window, ::SDL_SCANCODE_A);
+    _PushKey(modal, ::SDL_SCANCODE_A);
 
     modal.runModal();
 
@@ -385,9 +385,9 @@ TEST(Window, PixelSizeChangeAtTheSameScaleIsNoDPIChange) {
             changes += 1;
         }
     });
-    auto event = SDL_Event{};
-    event.window.type = SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED;
-    event.window.windowID = SDL_GetWindowID(static_cast<SDL_Window*>(window.getHandle()));
+    auto event = ::SDL_Event{};
+    event.window.type = ::SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED;
+    event.window.windowID = ::SDL_GetWindowID(static_cast<::SDL_Window*>(window.getHandle()));
     _PushEvent(window, event);
 
     _RunBriefly();
@@ -398,20 +398,20 @@ TEST(Window, PixelSizeChangeAtTheSameScaleIsNoDPIChange) {
 /* Under the mouse, a window shows its cursor, created once and reused. */
 TEST(Window, CursorShowsUnderTheMouse) {
     auto window = Window();
-    auto event = SDL_Event{};
-    event.window.type = SDL_EVENT_WINDOW_MOUSE_ENTER;
-    event.window.windowID = SDL_GetWindowID(static_cast<SDL_Window*>(window.getHandle()));
+    auto event = ::SDL_Event{};
+    event.window.type = ::SDL_EVENT_WINDOW_MOUSE_ENTER;
+    event.window.windowID = ::SDL_GetWindowID(static_cast<::SDL_Window*>(window.getHandle()));
     _PushEvent(window, event);
     _RunBriefly();
 
     window.setCursor(Cursor::Pointer);
-    auto const pointer = SDL_GetCursor();
+    auto const pointer = ::SDL_GetCursor();
     window.setCursor(Cursor::Default);
     window.setCursor(Cursor::Pointer);
 
     ASSERT_TRUE(window.isHover());
-    ASSERT_TRUE(pointer != SDL_GetDefaultCursor());
-    ASSERT_TRUE(SDL_GetCursor() == pointer);
+    ASSERT_TRUE(pointer != ::SDL_GetDefaultCursor());
+    ASSERT_TRUE(::SDL_GetCursor() == pointer);
 }
 
 /* No window that is not painted counts toward the refresh rate. */
@@ -427,7 +427,7 @@ TEST(Window, RefreshRateIgnoresHiddenWindows) {
 TEST(Window, RefreshRateFollowsTheDisplayOfAShownWindow) {
     auto window = Window();
     window.setVisible(true);
-    auto const mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(static_cast<SDL_Window*>(window.getHandle())));
+    auto const mode = ::SDL_GetCurrentDisplayMode(::SDL_GetDisplayForWindow(static_cast<::SDL_Window*>(window.getHandle())));
     auto const expected = (mode != nullptr) ? mode->refresh_rate : 0.0f;
 
     auto const refreshRate = __GetRefreshRate();
@@ -441,11 +441,11 @@ TEST(Window, RefreshRateFollowsTheDisplayOfAShownWindow) {
 
 /* Posts a message to the window, as Windows would deliver it. */
 static void _PostMessage(Window& window, std::uint32_t message, std::uintptr_t wParam, std::intptr_t lParam) {
-    ::PostMessageW(static_cast<HWND>(window.getHandle()), message, wParam, lParam);
+    ::PostMessageW(static_cast<::HWND>(window.getHandle()), message, wParam, lParam);
 }
 
 /* The client-area coordinates of a point given in points. */
-static LPARAM _Point(Window& window, float x, float y) {
+static ::LPARAM _Point(Window& window, float x, float y) {
     auto const scale = window.getScale();
     return MAKELPARAM(static_cast<int>(x * scale), static_cast<int>(y * scale));
 }
@@ -512,13 +512,13 @@ TEST(Window, WheelTurnsArrivingTogetherSum) {
 }
 
 /* Sends a message to the window procedure, as Windows would deliver it, and returns its result. */
-static LRESULT _Send(Window& window, UINT message, WPARAM wParam, LPARAM lParam) {
-    return ::SendMessageW(static_cast<HWND>(window.getHandle()), message, wParam, lParam);
+static ::LRESULT _Send(Window& window, ::UINT message, ::WPARAM wParam, ::LPARAM lParam) {
+    return ::SendMessageW(static_cast<::HWND>(window.getHandle()), message, wParam, lParam);
 }
 
 /* A key message's lParam: the scan code, the extended flag and the repeat flag. */
-static LPARAM _KeyLParam(UINT scancode, bool extended, bool repeat = false) {
-    return static_cast<LPARAM>(1 | (scancode << 16) | (extended ? (1u << 24) : 0u) | (repeat ? (1u << 30) : 0u));
+static ::LPARAM _KeyLParam(::UINT scancode, bool extended, bool repeat = false) {
+    return static_cast<::LPARAM>(1 | (scancode << 16) | (extended ? (1u << 24) : 0u) | (repeat ? (1u << 30) : 0u));
 }
 
 /* Presses of one button at one place count up; a press elsewhere starts over. */
@@ -688,17 +688,17 @@ TEST(Window, DroppedFilesArriveTogether) {
     paths.push_back(L'\0');
 
     auto const scale = window.getScale();
-    auto const memory = ::GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, sizeof(DROPFILES) + (paths.size() * sizeof(wchar_t)));
-    auto const header = static_cast<DROPFILES*>(::GlobalLock(memory));
+    auto const memory = ::GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, sizeof(::DROPFILES) + (paths.size() * sizeof(wchar_t)));
+    auto const header = static_cast<::DROPFILES*>(::GlobalLock(memory));
 
-    header->pFiles = sizeof(DROPFILES);
-    header->pt = POINT{ static_cast<LONG>(30.0f * scale), static_cast<LONG>(40.0f * scale) };
+    header->pFiles = sizeof(::DROPFILES);
+    header->pt = ::POINT{ static_cast<::LONG>(30.0f * scale), static_cast<::LONG>(40.0f * scale) };
     header->fNC = FALSE;
     header->fWide = TRUE;
-    std::memcpy(reinterpret_cast<std::uint8_t*>(header) + sizeof(DROPFILES), paths.data(), (paths.size() * sizeof(wchar_t)));
+    std::memcpy(reinterpret_cast<std::uint8_t*>(header) + sizeof(::DROPFILES), paths.data(), (paths.size() * sizeof(wchar_t)));
     ::GlobalUnlock(memory);
 
-    _Send(window, WM_DROPFILES, reinterpret_cast<WPARAM>(memory), 0); /* the window frees it */
+    _Send(window, WM_DROPFILES, reinterpret_cast<::WPARAM>(memory), 0); /* the window frees it */
 
     ASSERT_TRUE(drops.size() == 1);
     ASSERT_TRUE(drops.at(0).first == std::vector<std::string>({ "C:\\one.png", "C:\\\xD0\xB4\xD0\xB2\xD0\xB0.png" }));
@@ -722,14 +722,14 @@ TEST(Window, CloseFollowsClosable) {
     window.setClosable(true);
     _Send(window, WM_SYSCOMMAND, SC_CLOSE, 0);
     ASSERT_TRUE(closes == 1);
-    ASSERT_TRUE(::IsWindow(static_cast<HWND>(window.getHandle())));
+    ASSERT_TRUE(::IsWindow(static_cast<::HWND>(window.getHandle())));
 }
 
 /* The flags become the window's frame, and the content keeps its size
    through every change. */
 TEST(Window, FrameFollowsFlagsAndKeepsTheSize) {
     auto window = Window();
-    auto const hwnd = static_cast<HWND>(window.getHandle());
+    auto const hwnd = static_cast<::HWND>(window.getHandle());
     auto const style = [&]() { return ::GetWindowLongPtrW(hwnd, GWL_STYLE); };
 
     window.setSize({ 400.0f, 300.0f });

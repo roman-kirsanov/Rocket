@@ -12,7 +12,7 @@
 
 namespace Rocket {
 
-bool __IsGamepadEvent(SDL_Event const& event);
-void __HandleGamepadEvent(SDL_Event const& event);
+bool __IsGamepadEvent(::SDL_Event const& event);
+void __HandleGamepadEvent(::SDL_Event const& event);
 
 } /* namespace Rocket */

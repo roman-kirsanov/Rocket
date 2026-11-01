@@ -39,7 +39,7 @@ using Microsoft::WRL::ComPtr;
 
 namespace Rocket {
 
-static auto constexpr _BUFFER_DURATION = REFERENCE_TIME(200000); // 20 ms, in 100 ns units
+static auto constexpr _BUFFER_DURATION = ::REFERENCE_TIME(200000); // 20 ms, in 100 ns units
 
 /* Without a device the mixer still runs, on a clock at this rate. */
 static auto constexpr _SILENT_RATE = 48000;
@@ -76,16 +76,16 @@ struct _Voice {
 struct Sound::_Sound : _Voice {};
 
 /** Its calls come on a thread of their own and must not block. */
-class _DeviceNotifications final : public IMMNotificationClient {
+class _DeviceNotifications final : public ::IMMNotificationClient {
 public:
-    explicit _DeviceNotifications(HANDLE event) : _event(event) {}
+    explicit _DeviceNotifications(::HANDLE event) : _event(event) {}
 
-    ULONG STDMETHODCALLTYPE AddRef() override { return 1; }
-    ULONG STDMETHODCALLTYPE Release() override { return 1; }
+    ::ULONG STDMETHODCALLTYPE AddRef() override { return 1; }
+    ::ULONG STDMETHODCALLTYPE Release() override { return 1; }
 
-    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id, void** object) override {
-        if ((id == __uuidof(IUnknown)) || (id == __uuidof(IMMNotificationClient))) {
-            *object = static_cast<IMMNotificationClient*>(this);
+    ::HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id, void** object) override {
+        if ((id == __uuidof(::IUnknown)) || (id == __uuidof(::IMMNotificationClient))) {
+            *object = static_cast<::IMMNotificationClient*>(this);
             return S_OK;
         }
 
@@ -93,34 +93,34 @@ public:
         return E_NOINTERFACE;
     }
 
-    HRESULT STDMETHODCALLTYPE OnDefaultDeviceChanged(EDataFlow flow, ERole role, LPCWSTR) override {
-        if ((flow == eRender) && (role == eConsole)) {
+    ::HRESULT STDMETHODCALLTYPE OnDefaultDeviceChanged(::EDataFlow flow, ::ERole role, ::LPCWSTR) override {
+        if ((flow == ::eRender) && (role == ::eConsole)) {
             ::SetEvent(_event);
         }
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE OnDeviceStateChanged(LPCWSTR, DWORD) override { return S_OK; }
-    HRESULT STDMETHODCALLTYPE OnDeviceAdded(LPCWSTR) override { return S_OK; }
-    HRESULT STDMETHODCALLTYPE OnDeviceRemoved(LPCWSTR) override { return S_OK; }
-    HRESULT STDMETHODCALLTYPE OnPropertyValueChanged(LPCWSTR, PROPERTYKEY const) override { return S_OK; }
+    ::HRESULT STDMETHODCALLTYPE OnDeviceStateChanged(::LPCWSTR, ::DWORD) override { return S_OK; }
+    ::HRESULT STDMETHODCALLTYPE OnDeviceAdded(::LPCWSTR) override { return S_OK; }
+    ::HRESULT STDMETHODCALLTYPE OnDeviceRemoved(::LPCWSTR) override { return S_OK; }
+    ::HRESULT STDMETHODCALLTYPE OnPropertyValueChanged(::LPCWSTR, ::PROPERTYKEY const) override { return S_OK; }
 
 private:
-    HANDLE _event;
+    ::HANDLE _event;
 };
 
 struct _Mixer {
     std::mutex mutex;
     std::vector<_Voice*> voices;
     std::thread thread;
-    HANDLE quit = nullptr;
-    HANDLE deviceChanged = nullptr;
+    ::HANDLE quit = nullptr;
+    ::HANDLE deviceChanged = nullptr;
     std::atomic<std::int32_t> rate = _SILENT_RATE;
     std::vector<float> scratch;
 
     void mix(float* output, std::uint32_t frames, std::int32_t outputRate);
     void run();
-    bool render(IMMDeviceEnumerator* enumerator);
+    bool render(::IMMDeviceEnumerator* enumerator);
     void renderSilently();
 };
 
@@ -200,17 +200,17 @@ void _Mixer::mix(float* output, std::uint32_t frames, std::int32_t outputRate) {
 
 /* Plays through the default device until it goes away or changes; false
    when there is none to play through. */
-bool _Mixer::render(IMMDeviceEnumerator* enumerator) {
+bool _Mixer::render(::IMMDeviceEnumerator* enumerator) {
     PROFILE
 
-    auto device = ComPtr<IMMDevice>();
-    auto client = ComPtr<IAudioClient>();
-    auto renderClient = ComPtr<IAudioRenderClient>();
-    auto mixFormat = static_cast<WAVEFORMATEX*>(nullptr);
+    auto device = ComPtr<::IMMDevice>();
+    auto client = ComPtr<::IAudioClient>();
+    auto renderClient = ComPtr<::IAudioRenderClient>();
+    auto mixFormat = static_cast<::WAVEFORMATEX*>(nullptr);
 
     if (
-        FAILED(enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &device)) ||
-        FAILED(device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, &client)) ||
+        FAILED(enumerator->GetDefaultAudioEndpoint(::eRender, ::eConsole, &device)) ||
+        FAILED(device->Activate(__uuidof(::IAudioClient), CLSCTX_ALL, nullptr, &client)) ||
         FAILED(client->GetMixFormat(&mixFormat))
     ) {
         return false;
@@ -221,21 +221,21 @@ bool _Mixer::render(IMMDeviceEnumerator* enumerator) {
     auto const deviceRate = static_cast<std::int32_t>(mixFormat->nSamplesPerSec);
     ::CoTaskMemFree(mixFormat);
 
-    auto format = WAVEFORMATEX{};
+    auto format = ::WAVEFORMATEX{};
     format.wFormatTag = WAVE_FORMAT_IEEE_FLOAT;
     format.nChannels = 2;
-    format.nSamplesPerSec = static_cast<DWORD>(deviceRate);
+    format.nSamplesPerSec = static_cast<::DWORD>(deviceRate);
     format.wBitsPerSample = 32;
-    format.nBlockAlign = static_cast<WORD>((format.nChannels * format.wBitsPerSample) / 8);
+    format.nBlockAlign = static_cast<::WORD>((format.nChannels * format.wBitsPerSample) / 8);
     format.nAvgBytesPerSec = (format.nSamplesPerSec * format.nBlockAlign);
     format.cbSize = 0;
 
     auto const flags = (AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY);
     auto const ready = ::CreateEventW(nullptr, FALSE, FALSE, nullptr);
-    auto bufferFrames = UINT32(0);
+    auto bufferFrames = ::UINT32(0);
 
     if (
-        FAILED(client->Initialize(AUDCLNT_SHAREMODE_SHARED, flags, _BUFFER_DURATION, 0, &format, nullptr)) ||
+        FAILED(client->Initialize(::AUDCLNT_SHAREMODE_SHARED, flags, _BUFFER_DURATION, 0, &format, nullptr)) ||
         FAILED(client->SetEventHandle(ready)) ||
         FAILED(client->GetBufferSize(&bufferFrames)) ||
         FAILED(client->GetService(IID_PPV_ARGS(&renderClient))) ||
@@ -247,7 +247,7 @@ bool _Mixer::render(IMMDeviceEnumerator* enumerator) {
 
     rate = deviceRate;
 
-    HANDLE const handles[] = { ready, quit, deviceChanged };
+    ::HANDLE const handles[] = { ready, quit, deviceChanged };
 
     for (;;) {
         auto const signaled = ::WaitForMultipleObjects(3, handles, FALSE, 1000);
@@ -260,14 +260,14 @@ bool _Mixer::render(IMMDeviceEnumerator* enumerator) {
             break; /* opened again on the new default device */
         }
 
-        auto padding = UINT32(0);
+        auto padding = ::UINT32(0);
 
         if (FAILED(client->GetCurrentPadding(&padding))) {
             break; /* the device went away: opened again */
         }
 
         auto const frames = (bufferFrames - padding);
-        auto data = static_cast<BYTE*>(nullptr);
+        auto data = static_cast<::BYTE*>(nullptr);
 
         if ((frames == 0) || FAILED(renderClient->GetBuffer(frames, &data))) {
             continue;
@@ -290,18 +290,18 @@ void _Mixer::renderSilently() {
     PROFILE
 
     auto const timer = ::CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
-    auto frequency = LARGE_INTEGER{};
-    auto last = LARGE_INTEGER{};
+    auto frequency = ::LARGE_INTEGER{};
+    auto last = ::LARGE_INTEGER{};
 
     ::QueryPerformanceFrequency(&frequency);
     ::QueryPerformanceCounter(&last);
 
     rate = _SILENT_RATE;
 
-    auto due = LARGE_INTEGER{ .QuadPart = -static_cast<LONGLONG>(_SILENT_PERIOD_MS) * 10000 };
+    auto due = ::LARGE_INTEGER{ .QuadPart = -static_cast<::LONGLONG>(_SILENT_PERIOD_MS) * 10000 };
     ::SetWaitableTimer(timer, &due, _SILENT_PERIOD_MS, nullptr, nullptr, FALSE);
 
-    HANDLE const handles[] = { timer, quit, deviceChanged };
+    ::HANDLE const handles[] = { timer, quit, deviceChanged };
     auto pending = 0.0;
 
     for (;;) {
@@ -312,7 +312,7 @@ void _Mixer::renderSilently() {
         }
 
         /* the frames that real time has played since the last turn */
-        auto now = LARGE_INTEGER{};
+        auto now = ::LARGE_INTEGER{};
         ::QueryPerformanceCounter(&now);
 
         pending += (static_cast<double>(now.QuadPart - last.QuadPart) / static_cast<double>(frequency.QuadPart)) * _SILENT_RATE;
@@ -333,15 +333,15 @@ void _Mixer::renderSilently() {
 void _Mixer::run() {
     PROFILE
 
-    ::CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    ::CoInitializeEx(nullptr, ::COINIT_MULTITHREADED);
 
-    auto task = DWORD(0);
+    auto task = ::DWORD(0);
     auto const priority = ::AvSetMmThreadCharacteristicsW(L"Games", &task);
 
-    auto enumerator = ComPtr<IMMDeviceEnumerator>();
+    auto enumerator = ComPtr<::IMMDeviceEnumerator>();
     auto notifications = _DeviceNotifications(deviceChanged);
 
-    if (SUCCEEDED(::CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&enumerator)))) {
+    if (SUCCEEDED(::CoCreateInstance(__uuidof(::MMDeviceEnumerator), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&enumerator)))) {
         enumerator->RegisterEndpointNotificationCallback(&notifications);
     }
 
@@ -387,7 +387,7 @@ static void _StartMediaFoundation() {
     PROFILE
 
     static auto const _started = [] {
-        ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+        ::CoInitializeEx(nullptr, ::COINIT_APARTMENTTHREADED);
         return SUCCEEDED(::MFStartup(MF_VERSION, MFSTARTUP_LITE));
     }();
 
@@ -578,61 +578,61 @@ static void _DecodeMediaFoundation(_DecodedAudio& audio, std::vector<std::uint8_
     auto const loadFailed = [&]() { return std::runtime_error("Failed to load audio: " + name); };
     auto const decodeFailed = [&]() { return std::runtime_error("Failed to decode audio: " + name); };
 
-    auto const memory = ComPtr<IStream>(::SHCreateMemStream(bytes.data(), static_cast<UINT>(bytes.size())));
-    auto stream = ComPtr<IMFByteStream>();
-    auto reader = ComPtr<IMFSourceReader>();
+    auto const memory = ComPtr<::IStream>(::SHCreateMemStream(bytes.data(), static_cast<::UINT>(bytes.size())));
+    auto stream = ComPtr<::IMFByteStream>();
+    auto reader = ComPtr<::IMFSourceReader>();
 
     if ((memory == nullptr) || FAILED(::MFCreateMFByteStreamOnStream(memory.Get(), &stream))) {
         throw loadFailed();
     }
 
     auto const contentType = _GetContentType(bytes);
-    auto attributes = ComPtr<IMFAttributes>();
+    auto attributes = ComPtr<::IMFAttributes>();
 
     if ((contentType.empty() == false) && SUCCEEDED(stream.As(&attributes))) {
-        attributes->SetString(MF_BYTESTREAM_CONTENT_TYPE, contentType.c_str());
+        attributes->SetString(::MF_BYTESTREAM_CONTENT_TYPE, contentType.c_str());
     }
 
     if (FAILED(::MFCreateSourceReaderFromByteStream(stream.Get(), nullptr, &reader))) {
         throw loadFailed();
     }
 
-    auto constexpr streamIndex = static_cast<DWORD>(MF_SOURCE_READER_FIRST_AUDIO_STREAM);
+    auto constexpr streamIndex = static_cast<::DWORD>(::MF_SOURCE_READER_FIRST_AUDIO_STREAM);
 
-    reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS), FALSE);
+    reader->SetStreamSelection(static_cast<::DWORD>(::MF_SOURCE_READER_ALL_STREAMS), FALSE);
     reader->SetStreamSelection(streamIndex, TRUE);
 
     /* float32 at the clip's own rate; 16-bit PCM where a decoder offers no float */
-    auto const request = [&](GUID const& subtype) {
-        auto type = ComPtr<IMFMediaType>();
+    auto const request = [&](::GUID const& subtype) {
+        auto type = ComPtr<::IMFMediaType>();
 
         return SUCCEEDED(::MFCreateMediaType(&type))
-            && SUCCEEDED(type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio))
-            && SUCCEEDED(type->SetGUID(MF_MT_SUBTYPE, subtype))
+            && SUCCEEDED(type->SetGUID(::MF_MT_MAJOR_TYPE, ::MFMediaType_Audio))
+            && SUCCEEDED(type->SetGUID(::MF_MT_SUBTYPE, subtype))
             && SUCCEEDED(reader->SetCurrentMediaType(streamIndex, nullptr, type.Get()));
     };
 
-    auto const floating = request(MFAudioFormat_Float);
+    auto const floating = request(::MFAudioFormat_Float);
 
-    if ((floating == false) && (request(MFAudioFormat_PCM) == false)) {
+    if ((floating == false) && (request(::MFAudioFormat_PCM) == false)) {
         throw decodeFailed();
     }
 
-    auto current = ComPtr<IMFMediaType>();
-    auto channelCount = UINT32(0);
-    auto rate = UINT32(0);
-    auto bits = UINT32(0);
+    auto current = ComPtr<::IMFMediaType>();
+    auto channelCount = ::UINT32(0);
+    auto rate = ::UINT32(0);
+    auto bits = ::UINT32(0);
 
     if (
         FAILED(reader->GetCurrentMediaType(streamIndex, &current)) ||
-        FAILED(current->GetUINT32(MF_MT_AUDIO_NUM_CHANNELS, &channelCount)) ||
-        FAILED(current->GetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND, &rate)) ||
+        FAILED(current->GetUINT32(::MF_MT_AUDIO_NUM_CHANNELS, &channelCount)) ||
+        FAILED(current->GetUINT32(::MF_MT_AUDIO_SAMPLES_PER_SECOND, &rate)) ||
         (channelCount == 0) || (rate == 0)
     ) {
         throw decodeFailed();
     }
 
-    current->GetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, &bits);
+    current->GetUINT32(::MF_MT_AUDIO_BITS_PER_SAMPLE, &bits);
 
     if ((floating == false) && (bits != 16)) {
         throw decodeFailed();
@@ -641,14 +641,14 @@ static void _DecodeMediaFoundation(_DecodedAudio& audio, std::vector<std::uint8_
     auto interleaved = std::vector<float>();
 
     for (;;) {
-        auto flags = DWORD(0);
-        auto sample = ComPtr<IMFSample>();
+        auto flags = ::DWORD(0);
+        auto sample = ComPtr<::IMFSample>();
 
         if (FAILED(reader->ReadSample(streamIndex, 0, nullptr, &flags, nullptr, &sample))) {
             throw decodeFailed();
         }
 
-        if ((flags & MF_SOURCE_READERF_ENDOFSTREAM) != 0) {
+        if ((flags & ::MF_SOURCE_READERF_ENDOFSTREAM) != 0) {
             break;
         }
 
@@ -656,9 +656,9 @@ static void _DecodeMediaFoundation(_DecodedAudio& audio, std::vector<std::uint8_
             continue;
         }
 
-        auto buffer = ComPtr<IMFMediaBuffer>();
-        auto data = static_cast<BYTE*>(nullptr);
-        auto length = DWORD(0);
+        auto buffer = ComPtr<::IMFMediaBuffer>();
+        auto data = static_cast<::BYTE*>(nullptr);
+        auto length = ::DWORD(0);
 
         if (FAILED(sample->ConvertToContiguousBuffer(&buffer)) || FAILED(buffer->Lock(&data, nullptr, &length))) {
             throw decodeFailed();
@@ -670,7 +670,7 @@ static void _DecodeMediaFoundation(_DecodedAudio& audio, std::vector<std::uint8_
         } else {
             auto const values = reinterpret_cast<std::int16_t const*>(data);
 
-            for (auto i = DWORD(0); i < (length / sizeof(std::int16_t)); i++) {
+            for (auto i = ::DWORD(0); i < (length / sizeof(std::int16_t)); i++) {
                 interleaved.push_back(static_cast<float>(values[i]) / 32768.0f);
             }
         }
@@ -684,7 +684,7 @@ static void _DecodeMediaFoundation(_DecodedAudio& audio, std::vector<std::uint8_
     audio.channels.assign(channelCount, std::vector<float>(static_cast<std::size_t>(audio.frameCount)));
 
     for (auto frame = std::int64_t(0); frame < audio.frameCount; frame++) {
-        for (auto channel = UINT32(0); channel < channelCount; channel++) {
+        for (auto channel = ::UINT32(0); channel < channelCount; channel++) {
             audio.channels[channel][static_cast<std::size_t>(frame)] = interleaved[static_cast<std::size_t>((frame * channelCount) + channel)];
         }
     }

@@ -98,7 +98,7 @@ void Sound::_Sound::scheduleFrom(bool loop, float from) {
 
     auto buffer = activeSegment();
     auto const rate = (float)buffer.format.sampleRate;
-    auto startFrame = (AVAudioFrameCount)(from * rate);
+    auto startFrame = (::AVAudioFrameCount)(from * rate);
 
     if (startFrame >= buffer.frameLength) {
         startFrame = 0;
@@ -121,7 +121,7 @@ void Sound::_Sound::scheduleFrom(bool loop, float from) {
 
         assert(tail != nil);
 
-        for (AVAudioChannelCount channel = 0; channel < buffer.format.channelCount; channel++) {
+        for (::AVAudioChannelCount channel = 0; channel < buffer.format.channelCount; channel++) {
             std::memcpy(
                 tail.floatChannelData[channel],
                 (buffer.floatChannelData[channel] + startFrame),
@@ -141,7 +141,7 @@ void Sound::_Sound::scheduleFrom(bool loop, float from) {
 
         [node scheduleBuffer: buffer
                       atTime: nil
-                     options: AVAudioPlayerNodeBufferLoops
+                     options: ::AVAudioPlayerNodeBufferLoops
            completionHandler: nil];
     } else {
         auto done = [[__AudioFlag alloc] init];
@@ -151,8 +151,8 @@ void Sound::_Sound::scheduleFrom(bool loop, float from) {
         [node scheduleBuffer: head
                       atTime: nil
                      options: 0
-      completionCallbackType: AVAudioPlayerNodeCompletionDataRendered
-           completionHandler: ^(AVAudioPlayerNodeCompletionCallbackType type) {
+      completionCallbackType: ::AVAudioPlayerNodeCompletionDataRendered
+           completionHandler: ^(::AVAudioPlayerNodeCompletionCallbackType type) {
                (void)type;
                done->finished = true;
            }];
@@ -172,7 +172,7 @@ void Audio::__init(std::string const& path) {
 
     auto buffer = [[AVAudioPCMBuffer alloc]
         initWithPCMFormat: file.processingFormat
-            frameCapacity: (AVAudioFrameCount)file.length];
+            frameCapacity: (::AVAudioFrameCount)file.length];
 
     assert(buffer != nil);
 
@@ -189,8 +189,8 @@ void Audio::__init(std::uint8_t const* data, std::size_t size) {
 
     // AVAudioFile has no in-memory API, so the bytes take a round trip
     // through a temporary file.
-    auto path = [NSTemporaryDirectory() stringByAppendingPathComponent:
-        [NSString stringWithFormat: @"rocket-audio-%d-%p.bin", getpid(), (void const*)data]];
+    auto path = [::NSTemporaryDirectory() stringByAppendingPathComponent:
+        [NSString stringWithFormat: @"rocket-audio-%d-%p.bin", ::getpid(), (void const*)data]];
     auto contents = [NSData dataWithBytes: data length: size];
 
     if ([contents writeToFile: path atomically: YES] == NO) {
@@ -255,9 +255,9 @@ void Sound::__init(float start, float length) {
 
     auto source = _audio->_impl->buffer;
     auto const rate = (float)source.format.sampleRate;
-    auto const startFrame = (AVAudioFrameCount)(start * rate);
+    auto const startFrame = (::AVAudioFrameCount)(start * rate);
     auto const frameCount = std::min(
-        (AVAudioFrameCount)(length * rate),
+        (::AVAudioFrameCount)(length * rate),
         (source.frameLength - startFrame));
 
     AVAudioPCMBuffer* segment = nil;
@@ -271,7 +271,7 @@ void Sound::__init(float start, float length) {
 
         assert(segment != nil);
 
-        for (AVAudioChannelCount channel = 0; channel < source.format.channelCount; channel++) {
+        for (::AVAudioChannelCount channel = 0; channel < source.format.channelCount; channel++) {
             std::memcpy(
                 segment.floatChannelData[channel],
                 (source.floatChannelData[channel] + startFrame),
@@ -387,7 +387,7 @@ void Sound::__setDecay(float decay) {
 
     auto segment = _impl->segment;
     auto const rate = (float)segment.format.sampleRate;
-    auto const decayFrames = std::max((AVAudioFrameCount)(decay * rate), 1u);
+    auto const decayFrames = std::max((::AVAudioFrameCount)(decay * rate), 1u);
     auto const frameCount = std::min(decayFrames, segment.frameLength);
     auto shaped = [[AVAudioPCMBuffer alloc]
         initWithPCMFormat: segment.format
@@ -395,11 +395,11 @@ void Sound::__setDecay(float decay) {
 
     assert(shaped != nil);
 
-    for (AVAudioChannelCount channel = 0; channel < segment.format.channelCount; channel++) {
+    for (::AVAudioChannelCount channel = 0; channel < segment.format.channelCount; channel++) {
         auto const input = segment.floatChannelData[channel];
         auto const output = shaped.floatChannelData[channel];
 
-        for (AVAudioFrameCount frame = 0; frame < frameCount; frame++) {
+        for (::AVAudioFrameCount frame = 0; frame < frameCount; frame++) {
             auto const gain = (1.0f - ((float)frame / (float)decayFrames));
 
             output[frame] = (input[frame] * gain * gain);

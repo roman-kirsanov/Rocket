@@ -20,21 +20,21 @@
 
 namespace Rocket {
 
-static std::vector<std::string> _GetPaths(IShellItemArray* items) {
+static std::vector<std::string> _GetPaths(::IShellItemArray* items) {
     PROFILE
 
     auto paths = std::vector<std::string>();
-    auto count = DWORD(0);
+    auto count = ::DWORD(0);
 
     items->GetCount(&count);
 
-    for (auto i = DWORD(0); i < count; i++) {
-        auto item = static_cast<IShellItem*>(nullptr);
+    for (auto i = ::DWORD(0); i < count; i++) {
+        auto item = static_cast<::IShellItem*>(nullptr);
 
         if (SUCCEEDED(items->GetItemAt(i, &item))) {
-            auto path = PWSTR(nullptr);
+            auto path = ::PWSTR(nullptr);
 
-            if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
+            if (SUCCEEDED(item->GetDisplayName(::SIGDN_FILESYSPATH, &path))) {
                 paths.push_back(App::__FromWide(path));
                 ::CoTaskMemFree(path);
             }
@@ -52,21 +52,21 @@ void __OpenFileDialog(OpenFileDialogOptions const& options, OpenFileDialogCallba
     App::__InitWin32();
 
     auto paths = std::vector<std::string>();
-    auto dialog = static_cast<IFileOpenDialog*>(nullptr);
+    auto dialog = static_cast<::IFileOpenDialog*>(nullptr);
     auto const previousWindow = Window::GetFocusedWindow();
 
-    if (SUCCEEDED(::CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog)))) {
-        auto flags = FILEOPENDIALOGOPTIONS(0);
+    if (SUCCEEDED(::CoCreateInstance(::CLSID_FileOpenDialog, nullptr, ::CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog)))) {
+        auto flags = ::FILEOPENDIALOGOPTIONS(0);
         dialog->GetOptions(&flags);
 
-        flags |= (FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_FILEMUSTEXIST);
+        flags |= (::FOS_FORCEFILESYSTEM | ::FOS_PATHMUSTEXIST | ::FOS_FILEMUSTEXIST);
 
         if (options.directorySelection) {
-            flags |= FOS_PICKFOLDERS;
+            flags |= ::FOS_PICKFOLDERS;
         }
 
         if (options.multipleSelection) {
-            flags |= FOS_ALLOWMULTISELECT;
+            flags |= ::FOS_ALLOWMULTISELECT;
         }
 
         dialog->SetOptions(flags);
@@ -83,7 +83,7 @@ void __OpenFileDialog(OpenFileDialogOptions const& options, OpenFileDialogCallba
 
         auto names = std::vector<std::wstring>();
         auto patterns = std::vector<std::wstring>();
-        auto filters = std::vector<COMDLG_FILTERSPEC>();
+        auto filters = std::vector<::COMDLG_FILTERSPEC>();
 
         for (auto const& [ description, extension ] : options.extensions) {
             auto pattern = std::wstring();
@@ -104,21 +104,21 @@ void __OpenFileDialog(OpenFileDialogOptions const& options, OpenFileDialogCallba
         }
 
         for (auto i = std::size_t(0); i < names.size(); i++) {
-            filters.push_back(COMDLG_FILTERSPEC{ names[i].c_str(), patterns[i].c_str() });
+            filters.push_back(::COMDLG_FILTERSPEC{ names[i].c_str(), patterns[i].c_str() });
         }
 
         if ((filters.empty() == false) && (options.directorySelection == false)) {
-            dialog->SetFileTypes(static_cast<UINT>(filters.size()), filters.data());
+            dialog->SetFileTypes(static_cast<::UINT>(filters.size()), filters.data());
         }
 
-        auto const owner = (previousWindow != nullptr) ? static_cast<HWND>(previousWindow->getHandle()) : nullptr;
+        auto const owner = (previousWindow != nullptr) ? static_cast<::HWND>(previousWindow->getHandle()) : nullptr;
 
         App::__SetTimerPainting(true);
         auto const shown = dialog->Show(owner);
         App::__SetTimerPainting(false);
 
         if (SUCCEEDED(shown)) {
-            auto items = static_cast<IShellItemArray*>(nullptr);
+            auto items = static_cast<::IShellItemArray*>(nullptr);
 
             if (SUCCEEDED(dialog->GetResults(&items))) {
                 paths = _GetPaths(items);

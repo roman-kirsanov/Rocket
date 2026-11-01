@@ -57,15 +57,15 @@ static auto constexpr _appEventTimeout = 16.667;
 static auto _isExited = false;
 
 static auto _execPath = std::string(
-    [[[NSBundle mainBundle] executablePath] cStringUsingEncoding: NSUTF8StringEncoding]
+    [[[NSBundle mainBundle] executablePath] cStringUsingEncoding: ::NSUTF8StringEncoding]
 );
 
 static auto _execDir = std::string(
-    [[[[NSBundle mainBundle] executablePath] stringByDeletingLastPathComponent] cStringUsingEncoding: NSUTF8StringEncoding]
+    [[[[NSBundle mainBundle] executablePath] stringByDeletingLastPathComponent] cStringUsingEncoding: ::NSUTF8StringEncoding]
 );
 
 static auto _workDir = std::string(
-    [[[NSFileManager defaultManager] currentDirectoryPath] cStringUsingEncoding: NSUTF8StringEncoding]
+    [[[NSFileManager defaultManager] currentDirectoryPath] cStringUsingEncoding: ::NSUTF8StringEncoding]
 );
 
 std::string const& __GetExecPath() {
@@ -83,7 +83,7 @@ std::string const& __GetExecDir() {
 std::string const& __GetWorkDir() {
     PROFILE
 
-    _workDir = std::string([[[NSFileManager defaultManager] currentDirectoryPath] cStringUsingEncoding: NSUTF8StringEncoding]);
+    _workDir = std::string([[[NSFileManager defaultManager] currentDirectoryPath] cStringUsingEncoding: ::NSUTF8StringEncoding]);
 
     return _workDir;
 }
@@ -92,7 +92,7 @@ std::string const& __GetUserDir() {
     PROFILE
 
     static auto const _userDir = std::string(
-        [[NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES) firstObject] cStringUsingEncoding: NSUTF8StringEncoding]
+        [[::NSSearchPathForDirectoriesInDomains(::NSApplicationSupportDirectory, ::NSUserDomainMask, YES) firstObject] cStringUsingEncoding: ::NSUTF8StringEncoding]
     );
 
     return _userDir;
@@ -112,13 +112,13 @@ void __Run(int argc, char const** argv) {
             initWithOnRun: ^{
                 auto const mainMenu = [[NSMenu alloc] init];
                 auto const appMenu = [[NSMenu alloc] init];
-                auto const appItem = [mainMenu addItemWithTitle: [NSString stringWithCString: "123" encoding: NSUTF8StringEncoding] action: nil keyEquivalent: @""];
+                auto const appItem = [mainMenu addItemWithTitle: [NSString stringWithCString: "123" encoding: ::NSUTF8StringEncoding] action: nil keyEquivalent: @""];
                 auto const quitItem = [appMenu addItemWithTitle: @"Quit" action: nil keyEquivalent: @"q"];
                 [quitItem setTarget: [NSApp delegate]];
                 [quitItem setAction: @selector(exit)];
                 [appItem setSubmenu: appMenu];
                 [NSApp setMainMenu: mainMenu];
-                [NSApp setActivationPolicy: NSApplicationActivationPolicyRegular];
+                [NSApp setActivationPolicy: ::NSApplicationActivationPolicyRegular];
                 [NSApp activateIgnoringOtherApps: YES];
             }
             onExit: ^{
@@ -132,9 +132,9 @@ void __Run(int argc, char const** argv) {
 
     for (;;) {
         @autoreleasepool {
-            auto const event = [NSApp nextEventMatchingMask: NSEventMaskAny
+            auto const event = [NSApp nextEventMatchingMask: ::NSEventMaskAny
                                                   untilDate: ((_appEventTimeout > 0.0) ? [NSDate dateWithTimeIntervalSinceNow: (_appEventTimeout / 1000.0)] : nil)
-                                                     inMode: NSDefaultRunLoopMode
+                                                     inMode: ::NSDefaultRunLoopMode
                                                     dequeue: YES];
 
             if (event != nil) {

@@ -21,29 +21,29 @@
 namespace Rocket {
 
 struct Image::_Image {
-    SDL_GPUTexture* texture = nullptr;
+    ::SDL_GPUTexture* texture = nullptr;
     std::uint32_t width = 0;
     std::uint32_t height = 0;
 };
 
-static SDL_GPUDevice* _Device() {
+static ::SDL_GPUDevice* _Device() {
     PROFILE
 
-    return static_cast<SDL_GPUDevice*>(__GetDefaultGPUDevice());
+    return static_cast<::SDL_GPUDevice*>(__GetDefaultGPUDevice());
 }
 
-static SDL_GPUTexture* _CreateTexture(std::uint32_t width, std::uint32_t height) {
+static ::SDL_GPUTexture* _CreateTexture(std::uint32_t width, std::uint32_t height) {
     PROFILE
 
-    auto info = SDL_GPUTextureCreateInfo{};
-    info.type = SDL_GPU_TEXTURETYPE_2D;
-    info.format = (SDL_GPUTextureFormat)__GetDefaultTextureFormat();
+    auto info = ::SDL_GPUTextureCreateInfo{};
+    info.type = ::SDL_GPU_TEXTURETYPE_2D;
+    info.format = (::SDL_GPUTextureFormat)__GetDefaultTextureFormat();
     info.usage = (SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET);
     info.width = std::max(1u, width);
     info.height = std::max(1u, height);
     info.layer_count_or_depth = 1;
     info.num_levels = 1;
-    info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+    info.sample_count = ::SDL_GPU_SAMPLECOUNT_1;
 
     auto texture = ::SDL_CreateGPUTexture(_Device(), &info);
 
@@ -54,7 +54,7 @@ static SDL_GPUTexture* _CreateTexture(std::uint32_t width, std::uint32_t height)
     return texture;
 }
 
-static SDL_GPUCommandBuffer* _AcquireCommandBuffer() {
+static ::SDL_GPUCommandBuffer* _AcquireCommandBuffer() {
     PROFILE
 
     auto commandBuffer = ::SDL_AcquireGPUCommandBuffer(_Device());
@@ -66,7 +66,7 @@ static SDL_GPUCommandBuffer* _AcquireCommandBuffer() {
     return commandBuffer;
 }
 
-static void _UploadPixels(SDL_GPUTexture* texture, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, std::uint8_t const* pixels) {
+static void _UploadPixels(::SDL_GPUTexture* texture, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, std::uint8_t const* pixels) {
     PROFILE
 
     if ((width == 0) || (height == 0)) {
@@ -74,7 +74,7 @@ static void _UploadPixels(SDL_GPUTexture* texture, std::uint32_t x, std::uint32_
     }
 
     auto const dataSize = (std::uint32_t)(width * height * 4);
-    auto const bufferInfo = SDL_GPUTransferBufferCreateInfo{ SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD, dataSize, 0 };
+    auto const bufferInfo = ::SDL_GPUTransferBufferCreateInfo{ ::SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD, dataSize, 0 };
     auto staging = ::SDL_CreateGPUTransferBuffer(_Device(), &bufferInfo);
 
     if (staging == nullptr) {
@@ -84,8 +84,8 @@ static void _UploadPixels(SDL_GPUTexture* texture, std::uint32_t x, std::uint32_
     std::memcpy(::SDL_MapGPUTransferBuffer(_Device(), staging, false), pixels, dataSize);
     ::SDL_UnmapGPUTransferBuffer(_Device(), staging);
 
-    auto const source = SDL_GPUTextureTransferInfo{ staging, 0, width, height };
-    auto destination = SDL_GPUTextureRegion{};
+    auto const source = ::SDL_GPUTextureTransferInfo{ staging, 0, width, height };
+    auto destination = ::SDL_GPUTextureRegion{};
     destination.texture = texture;
     destination.x = x;
     destination.y = y;
@@ -102,23 +102,23 @@ static void _UploadPixels(SDL_GPUTexture* texture, std::uint32_t x, std::uint32_
     ::SDL_ReleaseGPUTransferBuffer(_Device(), staging); /* released once the upload is done */
 }
 
-static void _DownloadPixels(SDL_GPUTexture* texture, std::uint32_t width, std::uint32_t height, std::vector<std::uint8_t>& pixels) {
+static void _DownloadPixels(::SDL_GPUTexture* texture, std::uint32_t width, std::uint32_t height, std::vector<std::uint8_t>& pixels) {
     PROFILE
 
     auto const dataSize = (std::uint32_t)(width * height * 4);
-    auto const bufferInfo = SDL_GPUTransferBufferCreateInfo{ SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD, dataSize, 0 };
+    auto const bufferInfo = ::SDL_GPUTransferBufferCreateInfo{ ::SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD, dataSize, 0 };
     auto staging = ::SDL_CreateGPUTransferBuffer(_Device(), &bufferInfo);
 
     if (staging == nullptr) {
         throw std::runtime_error(std::format("Failed to create a GPU transfer buffer: {}", ::SDL_GetError()));
     }
 
-    auto source = SDL_GPUTextureRegion{};
+    auto source = ::SDL_GPUTextureRegion{};
     source.texture = texture;
     source.w = width;
     source.h = height;
     source.d = 1;
-    auto const destination = SDL_GPUTextureTransferInfo{ staging, 0, width, height };
+    auto const destination = ::SDL_GPUTextureTransferInfo{ staging, 0, width, height };
 
     auto commandBuffer = _AcquireCommandBuffer();
     auto copy = ::SDL_BeginGPUCopyPass(commandBuffer);
@@ -157,7 +157,7 @@ void Image::__init(std::string const& path) {
         throw std::runtime_error("Failed to open image: " + path);
     }
 
-    auto surface = ::SDL_ConvertSurface(loaded, SDL_PIXELFORMAT_RGBA32);
+    auto surface = ::SDL_ConvertSurface(loaded, ::SDL_PIXELFORMAT_RGBA32);
     ::SDL_DestroySurface(loaded);
 
     if (surface == nullptr) {
@@ -242,8 +242,8 @@ void Image::__copyFrom(Image const& image, Vec4 const& slice, Vec2 const& positi
         return;
     }
 
-    auto const source = SDL_GPUTextureLocation{ image._impl->texture, 0, 0, (std::uint32_t)slice.x, (std::uint32_t)slice.y, 0 };
-    auto const destination = SDL_GPUTextureLocation{ _impl->texture, 0, 0, (std::uint32_t)position.x, (std::uint32_t)position.y, 0 };
+    auto const source = ::SDL_GPUTextureLocation{ image._impl->texture, 0, 0, (std::uint32_t)slice.x, (std::uint32_t)slice.y, 0 };
+    auto const destination = ::SDL_GPUTextureLocation{ _impl->texture, 0, 0, (std::uint32_t)position.x, (std::uint32_t)position.y, 0 };
 
     auto commandBuffer = _AcquireCommandBuffer();
     auto copy = ::SDL_BeginGPUCopyPass(commandBuffer);

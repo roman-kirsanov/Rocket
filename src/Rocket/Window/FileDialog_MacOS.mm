@@ -33,7 +33,7 @@ void __OpenFileDialog(OpenFileDialogOptions const& options, OpenFileDialogCallba
 
     auto const previousKeyWindow = [NSApp keyWindow];
 
-    if ([panel runModal] == NSModalResponseOK) {
+    if ([panel runModal] == ::NSModalResponseOK) {
         auto paths = std::vector<std::string>();
 
         for (NSURL* url in panel.URLs) {

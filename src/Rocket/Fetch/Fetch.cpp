@@ -34,7 +34,7 @@ struct _Fetch {
     std::string pending;
     std::size_t pendingOffset = 0;
     bool done = false;
-    ::CURLcode result = CURLE_OK;
+    ::CURLcode result = ::CURLE_OK;
 
     bool streamed = false;
     std::size_t streamOffset = 0;
@@ -285,7 +285,7 @@ std::size_t Fetch::_onHeader(char* data, std::size_t size, std::size_t count, vo
         fetch._impl->blockHasLocation = false;
     } else if (line.empty()) {
         auto code = 0l;
-        ::curl_easy_getinfo(fetch._impl->easy, CURLINFO_RESPONSE_CODE, &code);
+        ::curl_easy_getinfo(fetch._impl->easy, ::CURLINFO_RESPONSE_CODE, &code);
 
         auto followed = fetch._impl->options.followRedirects && code >= 300 && code < 400 && fetch._impl->blockHasLocation;
 
@@ -330,7 +330,7 @@ void Fetch::_open(FetchOptions const& options) {
 
     static auto const init = ::curl_global_init(CURL_GLOBAL_DEFAULT);
 
-    if (init != CURLE_OK) {
+    if (init != ::CURLE_OK) {
         throw FetchError(::curl_easy_strerror(init));
     }
 
@@ -348,20 +348,20 @@ void Fetch::_open(FetchOptions const& options) {
         throw FetchError("Failed to create a libcurl handle");
     }
 
-    ::curl_easy_setopt(_impl->easy, CURLOPT_URL, _impl->options.url.c_str());
-    ::curl_easy_setopt(_impl->easy, CURLOPT_PROTOCOLS_STR, "http,https");
-    ::curl_easy_setopt(_impl->easy, CURLOPT_REDIR_PROTOCOLS_STR, "http,https");
-    ::curl_easy_setopt(_impl->easy, CURLOPT_FOLLOWLOCATION, options.followRedirects ? CURLFOLLOW_OBEYCODE : 0l);
-    ::curl_easy_setopt(_impl->easy, CURLOPT_MAXREDIRS, 20l);
-    ::curl_easy_setopt(_impl->easy, CURLOPT_ERRORBUFFER, _impl->errorBuffer);
-    ::curl_easy_setopt(_impl->easy, CURLOPT_NOSIGNAL, 1l);
-    ::curl_easy_setopt(_impl->easy, CURLOPT_ACCEPT_ENCODING, "");
-    ::curl_easy_setopt(_impl->easy, CURLOPT_SUPPRESS_CONNECT_HEADERS, 1l);
-    ::curl_easy_setopt(_impl->easy, CURLOPT_TIMEOUT_MS, static_cast<long>(options.timeout.count()));
-    ::curl_easy_setopt(_impl->easy, CURLOPT_HEADERFUNCTION, _onHeader);
-    ::curl_easy_setopt(_impl->easy, CURLOPT_HEADERDATA, this);
-    ::curl_easy_setopt(_impl->easy, CURLOPT_WRITEFUNCTION, _onWrite);
-    ::curl_easy_setopt(_impl->easy, CURLOPT_WRITEDATA, this);
+    ::curl_easy_setopt(_impl->easy, ::CURLOPT_URL, _impl->options.url.c_str());
+    ::curl_easy_setopt(_impl->easy, ::CURLOPT_PROTOCOLS_STR, "http,https");
+    ::curl_easy_setopt(_impl->easy, ::CURLOPT_REDIR_PROTOCOLS_STR, "http,https");
+    ::curl_easy_setopt(_impl->easy, ::CURLOPT_FOLLOWLOCATION, options.followRedirects ? CURLFOLLOW_OBEYCODE : 0l);
+    ::curl_easy_setopt(_impl->easy, ::CURLOPT_MAXREDIRS, 20l);
+    ::curl_easy_setopt(_impl->easy, ::CURLOPT_ERRORBUFFER, _impl->errorBuffer);
+    ::curl_easy_setopt(_impl->easy, ::CURLOPT_NOSIGNAL, 1l);
+    ::curl_easy_setopt(_impl->easy, ::CURLOPT_ACCEPT_ENCODING, "");
+    ::curl_easy_setopt(_impl->easy, ::CURLOPT_SUPPRESS_CONNECT_HEADERS, 1l);
+    ::curl_easy_setopt(_impl->easy, ::CURLOPT_TIMEOUT_MS, static_cast<long>(options.timeout.count()));
+    ::curl_easy_setopt(_impl->easy, ::CURLOPT_HEADERFUNCTION, _onHeader);
+    ::curl_easy_setopt(_impl->easy, ::CURLOPT_HEADERDATA, this);
+    ::curl_easy_setopt(_impl->easy, ::CURLOPT_WRITEFUNCTION, _onWrite);
+    ::curl_easy_setopt(_impl->easy, ::CURLOPT_WRITEDATA, this);
 
     auto hasContentType = false;
     auto hasExpect = false;
@@ -392,20 +392,20 @@ void Fetch::_open(FetchOptions const& options) {
         addHeader("Expect:");
     }
 
-    ::curl_easy_setopt(_impl->easy, CURLOPT_HTTPHEADER, _impl->requestHeaders);
+    ::curl_easy_setopt(_impl->easy, ::CURLOPT_HTTPHEADER, _impl->requestHeaders);
 
     if (_impl->options.body.has_value()) {
-        ::curl_easy_setopt(_impl->easy, CURLOPT_POSTFIELDSIZE_LARGE, static_cast<::curl_off_t>(_impl->options.body->size()));
-        ::curl_easy_setopt(_impl->easy, CURLOPT_POSTFIELDS, _impl->options.body->data());
+        ::curl_easy_setopt(_impl->easy, ::CURLOPT_POSTFIELDSIZE_LARGE, static_cast<::curl_off_t>(_impl->options.body->size()));
+        ::curl_easy_setopt(_impl->easy, ::CURLOPT_POSTFIELDS, _impl->options.body->data());
     } else if (options.method == "POST") {
-        ::curl_easy_setopt(_impl->easy, CURLOPT_POSTFIELDSIZE_LARGE, static_cast<::curl_off_t>(0));
-        ::curl_easy_setopt(_impl->easy, CURLOPT_POSTFIELDS, "");
+        ::curl_easy_setopt(_impl->easy, ::CURLOPT_POSTFIELDSIZE_LARGE, static_cast<::curl_off_t>(0));
+        ::curl_easy_setopt(_impl->easy, ::CURLOPT_POSTFIELDS, "");
     }
 
     if (options.method == "HEAD") {
-        ::curl_easy_setopt(_impl->easy, CURLOPT_NOBODY, 1l);
+        ::curl_easy_setopt(_impl->easy, ::CURLOPT_NOBODY, 1l);
     } else if (options.method != "GET" && options.method != "POST") {
-        ::curl_easy_setopt(_impl->easy, CURLOPT_CUSTOMREQUEST, _impl->options.method.c_str());
+        ::curl_easy_setopt(_impl->easy, ::CURLOPT_CUSTOMREQUEST, _impl->options.method.c_str());
     }
 
     ::curl_multi_add_handle(_impl->multi, _impl->easy);
@@ -419,8 +419,8 @@ void Fetch::_finishHeaders() const {
     auto code = 0l;
     char* url = nullptr;
 
-    ::curl_easy_getinfo(_impl->easy, CURLINFO_RESPONSE_CODE, &code);
-    ::curl_easy_getinfo(_impl->easy, CURLINFO_EFFECTIVE_URL, &url);
+    ::curl_easy_getinfo(_impl->easy, ::CURLINFO_RESPONSE_CODE, &code);
+    ::curl_easy_getinfo(_impl->easy, ::CURLINFO_EFFECTIVE_URL, &url);
 
     _impl->status = static_cast<int>(code);
     _impl->url = (url != nullptr) ? url : _impl->options.url;
@@ -445,14 +445,14 @@ void Fetch::_pump(Until const& until) const {
         auto running = 0;
         auto code = ::curl_multi_perform(_impl->multi, &running);
 
-        if (code != CURLM_OK) {
+        if (code != ::CURLM_OK) {
             throw FetchError(::curl_multi_strerror(code));
         }
 
         auto queued = 0;
 
         while (auto message = ::curl_multi_info_read(_impl->multi, &queued)) {
-            if (message->msg == CURLMSG_DONE) {
+            if (message->msg == ::CURLMSG_DONE) {
                 _impl->done = true;
                 _impl->result = message->data.result;
             }
@@ -464,7 +464,7 @@ void Fetch::_pump(Until const& until) const {
     }
 
     if (_impl->done) {
-        if (_impl->result != CURLE_OK) {
+        if (_impl->result != ::CURLE_OK) {
             throw FetchError((_impl->errorBuffer[0] != '\0') ? _impl->errorBuffer : ::curl_easy_strerror(_impl->result));
         }
 

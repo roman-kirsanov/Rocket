@@ -19,17 +19,17 @@
 namespace Rocket {
 
 struct _DecodedAudio {
-    SDL_AudioSpec spec = {};
+    ::SDL_AudioSpec spec = {};
     std::int64_t frameCount = 0;
     std::vector<std::vector<float>> channels;
-    MIX_Audio* audio = nullptr;
+    ::MIX_Audio* audio = nullptr;
 };
 
 struct Audio::_Audio : _DecodedAudio {};
 
 struct Sound::_Sound {
-    MIX_Track* track = nullptr;
-    MIX_Audio* shaped = nullptr;     /* the decay envelope over the range, when set */
+    ::MIX_Track* track = nullptr;
+    ::MIX_Audio* shaped = nullptr;     /* the decay envelope over the range, when set */
     std::int64_t shapedFrames = 0;
     std::int64_t rangeStart = 0;     /* the range within the clip, in frames */
     std::int64_t rangeFrames = 0;
@@ -39,53 +39,53 @@ struct Sound::_Sound {
     float position = 0.0f;           /* kept while paused, in seconds from the range start */
     bool stopped = true;
 
-    float scheduleFrom(MIX_Audio* clip, bool loop, float from);
+    float scheduleFrom(::MIX_Audio* clip, bool loop, float from);
 };
 
-static MIX_Mixer* _mixer = nullptr;
+static ::MIX_Mixer* _mixer = nullptr;
 
-static MIX_Mixer* _Mixer() {
+static ::MIX_Mixer* _Mixer() {
     PROFILE
 
     if (_mixer == nullptr) {
-        if (MIX_Init() == false) {
-            throw std::runtime_error(SDL_GetError());
+        if (::MIX_Init() == false) {
+            throw std::runtime_error(::SDL_GetError());
         }
 
-        _mixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
+        _mixer = ::MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
 
         if (_mixer == nullptr) {
-            throw std::runtime_error(SDL_GetError());
+            throw std::runtime_error(::SDL_GetError());
         }
     }
 
     return _mixer;
 }
 
-static void _Decode(_DecodedAudio& audio, MIX_AudioDecoder* decoder, std::string const& name) {
+static void _Decode(_DecodedAudio& audio, ::MIX_AudioDecoder* decoder, std::string const& name) {
     PROFILE
 
     if (decoder == nullptr) {
-        throw std::runtime_error("Failed to load audio: " + name + ": " + SDL_GetError());
+        throw std::runtime_error("Failed to load audio: " + name + ": " + ::SDL_GetError());
     }
 
-    auto spec = SDL_AudioSpec{};
+    auto spec = ::SDL_AudioSpec{};
 
-    if (MIX_GetAudioDecoderFormat(decoder, &spec) == false) {
-        MIX_DestroyAudioDecoder(decoder);
+    if (::MIX_GetAudioDecoderFormat(decoder, &spec) == false) {
+        ::MIX_DestroyAudioDecoder(decoder);
         throw std::runtime_error("Failed to decode audio: " + name);
     }
 
-    spec.format = SDL_AUDIO_F32;
+    spec.format = ::SDL_AUDIO_F32;
 
     auto interleaved = std::vector<float>();
     auto chunk = std::vector<float>(static_cast<std::size_t>(spec.channels) * 4096);
 
     for (;;) {
-        auto const bytes = MIX_DecodeAudio(decoder, chunk.data(), static_cast<int>(chunk.size() * sizeof(float)), &spec);
+        auto const bytes = ::MIX_DecodeAudio(decoder, chunk.data(), static_cast<int>(chunk.size() * sizeof(float)), &spec);
 
         if (bytes < 0) {
-            MIX_DestroyAudioDecoder(decoder);
+            ::MIX_DestroyAudioDecoder(decoder);
             throw std::runtime_error("Failed to decode audio: " + name);
         }
 
@@ -96,7 +96,7 @@ static void _Decode(_DecodedAudio& audio, MIX_AudioDecoder* decoder, std::string
         interleaved.insert(interleaved.end(), chunk.begin(), (chunk.begin() + (bytes / static_cast<int>(sizeof(float)))));
     }
 
-    MIX_DestroyAudioDecoder(decoder);
+    ::MIX_DestroyAudioDecoder(decoder);
 
     audio.spec = spec;
     audio.frameCount = static_cast<std::int64_t>(interleaved.size() / static_cast<std::size_t>(spec.channels));
@@ -108,7 +108,7 @@ static void _Decode(_DecodedAudio& audio, MIX_AudioDecoder* decoder, std::string
         }
     }
 
-    audio.audio = MIX_LoadRawAudio(_Mixer(), interleaved.data(), (interleaved.size() * sizeof(float)), &spec);
+    audio.audio = ::MIX_LoadRawAudio(_Mixer(), interleaved.data(), (interleaved.size() * sizeof(float)), &spec);
 
     if (audio.audio == nullptr) {
         throw std::runtime_error("Failed to load audio: " + name);
@@ -116,7 +116,7 @@ static void _Decode(_DecodedAudio& audio, MIX_AudioDecoder* decoder, std::string
 }
 
 /* One past the end starts over. */
-float Sound::_Sound::scheduleFrom(MIX_Audio* clip, bool loop, float from) {
+float Sound::_Sound::scheduleFrom(::MIX_Audio* clip, bool loop, float from) {
     PROFILE
 
     auto const audio = (shaped != nullptr) ? shaped : clip;
@@ -130,17 +130,17 @@ float Sound::_Sound::scheduleFrom(MIX_Audio* clip, bool loop, float from) {
         startFrame = 0;
     }
 
-    MIX_SetTrackAudio(track, audio);
+    ::MIX_SetTrackAudio(track, audio);
 
-    auto const options = SDL_CreateProperties();
+    auto const options = ::SDL_CreateProperties();
 
-    SDL_SetNumberProperty(options, MIX_PROP_PLAY_START_FRAME_NUMBER, (activeStart + startFrame));
-    SDL_SetNumberProperty(options, MIX_PROP_PLAY_MAX_FRAME_NUMBER, (activeStart + activeFrames));
-    SDL_SetNumberProperty(options, MIX_PROP_PLAY_LOOP_START_FRAME_NUMBER, activeStart);
-    SDL_SetNumberProperty(options, MIX_PROP_PLAY_LOOPS_NUMBER, (loop ? -1 : 0));
+    ::SDL_SetNumberProperty(options, MIX_PROP_PLAY_START_FRAME_NUMBER, (activeStart + startFrame));
+    ::SDL_SetNumberProperty(options, MIX_PROP_PLAY_MAX_FRAME_NUMBER, (activeStart + activeFrames));
+    ::SDL_SetNumberProperty(options, MIX_PROP_PLAY_LOOP_START_FRAME_NUMBER, activeStart);
+    ::SDL_SetNumberProperty(options, MIX_PROP_PLAY_LOOPS_NUMBER, (loop ? -1 : 0));
 
-    MIX_PlayTrack(track, options);
-    SDL_DestroyProperties(options);
+    ::MIX_PlayTrack(track, options);
+    ::SDL_DestroyProperties(options);
 
     stopped = false;
 
@@ -155,7 +155,7 @@ void Audio::__init(std::string const& path) {
     _impl = new _Audio{};
 
     try {
-        _Decode(*_impl, MIX_CreateAudioDecoder(path.c_str(), 0), path);
+        _Decode(*_impl, ::MIX_CreateAudioDecoder(path.c_str(), 0), path);
     } catch (...) {
         delete _impl;
         _impl = nullptr;
@@ -171,7 +171,7 @@ void Audio::__init(std::uint8_t const* data, std::size_t size) {
     _impl = new _Audio{};
 
     try {
-        _Decode(*_impl, MIX_CreateAudioDecoder_IO(SDL_IOFromConstMem(data, size), true, 0), "audio data");
+        _Decode(*_impl, ::MIX_CreateAudioDecoder_IO(::SDL_IOFromConstMem(data, size), true, 0), "audio data");
     } catch (...) {
         delete _impl;
         _impl = nullptr;
@@ -183,7 +183,7 @@ void Audio::__done() {
     PROFILE
 
     if (_impl != nullptr) {
-        MIX_DestroyAudio(_impl->audio);
+        ::MIX_DestroyAudio(_impl->audio);
         delete _impl;
         _impl = nullptr;
     }
@@ -226,10 +226,10 @@ void Sound::__init(float start, float length) {
     auto const rate = static_cast<float>(clip.spec.freq);
     auto const rangeStart = std::min(static_cast<std::int64_t>(start * rate), clip.frameCount);
     auto const rangeFrames = std::min(static_cast<std::int64_t>(length * rate), (clip.frameCount - rangeStart));
-    auto const track = MIX_CreateTrack(_Mixer());
+    auto const track = ::MIX_CreateTrack(_Mixer());
 
     if (track == nullptr) {
-        throw std::runtime_error(SDL_GetError());
+        throw std::runtime_error(::SDL_GetError());
     }
 
     _impl = new _Sound{};
@@ -245,8 +245,8 @@ void Sound::__done() {
     PROFILE
 
     if (_impl != nullptr) {
-        MIX_DestroyTrack(_impl->track);
-        MIX_DestroyAudio(_impl->shaped);
+        ::MIX_DestroyTrack(_impl->track);
+        ::MIX_DestroyAudio(_impl->shaped);
         delete _impl;
         _impl = nullptr;
     }
@@ -266,7 +266,7 @@ void Sound::__pause() {
 
     _impl->position = __getPosition();
 
-    MIX_PauseTrack(_impl->track);
+    ::MIX_PauseTrack(_impl->track);
 
     _paused = true;
 }
@@ -283,7 +283,7 @@ void Sound::__resume() {
 void Sound::__stop() {
     PROFILE
 
-    MIX_StopTrack(_impl->track, 0);
+    ::MIX_StopTrack(_impl->track, 0);
 
     _paused = false;
     _impl->stopped = true;
@@ -293,7 +293,7 @@ void Sound::__stop() {
 void Sound::__setVolume(float volume) {
     PROFILE
 
-    MIX_SetTrackGain(_impl->track, volume);
+    ::MIX_SetTrackGain(_impl->track, volume);
 }
 
 void Sound::__setPan(float pan) {
@@ -302,14 +302,14 @@ void Sound::__setPan(float pan) {
     /* A balance: the side panned away from fades out, the other stays at
        full gain, so the center leaves the sound as it is. */
     if (pan == 0.0f) {
-        MIX_SetTrackStereo(_impl->track, nullptr);
+        ::MIX_SetTrackStereo(_impl->track, nullptr);
     } else {
-        auto const gains = MIX_StereoGains{
+        auto const gains = ::MIX_StereoGains{
             .left = std::min(1.0f, (1.0f - pan)),
             .right = std::min(1.0f, (1.0f + pan))
         };
 
-        MIX_SetTrackStereo(_impl->track, &gains);
+        ::MIX_SetTrackStereo(_impl->track, &gains);
     }
 }
 
@@ -317,13 +317,13 @@ void Sound::__setPitch(float pitch) {
     PROFILE
 
     /* the frequency ratio shifts speed and pitch together, as macOS's varispeed does */
-    MIX_SetTrackFrequencyRatio(_impl->track, std::clamp(std::pow(2.0f, (pitch / 12.0f)), 0.01f, 100.0f));
+    ::MIX_SetTrackFrequencyRatio(_impl->track, std::clamp(std::pow(2.0f, (pitch / 12.0f)), 0.01f, 100.0f));
 }
 
 void Sound::__setDecay(float decay) {
     PROFILE
 
-    MIX_DestroyAudio(_impl->shaped); /* a track still playing it keeps it until it stops */
+    ::MIX_DestroyAudio(_impl->shaped); /* a track still playing it keeps it until it stops */
 
     _impl->shaped = nullptr;
     _impl->shapedFrames = 0;
@@ -348,7 +348,7 @@ void Sound::__setDecay(float decay) {
         }
     }
 
-    _impl->shaped = MIX_LoadRawAudio(_Mixer(), shaped.data(), (shaped.size() * sizeof(float)), &clip.spec);
+    _impl->shaped = ::MIX_LoadRawAudio(_Mixer(), shaped.data(), (shaped.size() * sizeof(float)), &clip.spec);
     _impl->shapedFrames = ((_impl->shaped != nullptr) ? frameCount : 0);
 }
 
@@ -359,15 +359,15 @@ void Sound::__setPosition(float position) {
 
     /* a sound that is not playing starts paused at the position: the mixer is
        locked so that none of it is mixed in between */
-    MIX_LockMixer(_Mixer());
+    ::MIX_LockMixer(_Mixer());
 
     _impl->position = _impl->scheduleFrom(_audio->_impl->audio, _loop, position);
 
     if (playing == false) {
-        MIX_PauseTrack(_impl->track);
+        ::MIX_PauseTrack(_impl->track);
     }
 
-    MIX_UnlockMixer(_Mixer());
+    ::MIX_UnlockMixer(_Mixer());
 
     if (playing == false) {
         _paused = true;
@@ -386,7 +386,7 @@ float Sound::__getPosition() const {
     }
 
     /* the track's position counts frames of the clip itself, before the frequency ratio */
-    auto const frames = (MIX_GetTrackPlaybackPosition(_impl->track) - _impl->activeStart);
+    auto const frames = (::MIX_GetTrackPlaybackPosition(_impl->track) - _impl->activeStart);
 
     return (static_cast<float>(std::clamp(frames, std::int64_t(0), _impl->activeFrames)) / _impl->rate);
 }
@@ -398,7 +398,7 @@ bool Sound::__isPlaying() const {
         return false;
     }
 
-    return MIX_TrackPlaying(_impl->track);
+    return ::MIX_TrackPlaying(_impl->track);
 }
 
 } /* namespace Rocket */

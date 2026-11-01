@@ -12,7 +12,7 @@
 
 namespace Rocket {
 
-void __HandleEvent(SDL_Event const& event);
+void __HandleEvent(::SDL_Event const& event);
 float __GetRefreshRate();
 void __PaintWindows();
 

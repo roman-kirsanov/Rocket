@@ -158,75 +158,75 @@ static_assert(offsetof(_ShadowFilterUniforms, invert) == 56);
 static_assert(offsetof(_ShadowFilterFieldUniforms, invert) == 32);
 
 struct _GL {
-    PFNGLACTIVETEXTUREPROC ActiveTexture = nullptr;
-    PFNGLATTACHSHADERPROC AttachShader = nullptr;
-    PFNGLBINDBUFFERPROC BindBuffer = nullptr;
-    PFNGLBINDBUFFERRANGEPROC BindBufferRange = nullptr;
-    PFNGLBINDFRAMEBUFFERPROC BindFramebuffer = nullptr;
-    PFNGLBINDSAMPLERPROC BindSampler = nullptr;
-    PFNGLBINDTEXTUREPROC BindTexture = nullptr;
-    PFNGLBINDVERTEXARRAYPROC BindVertexArray = nullptr;
-    PFNGLBLENDFUNCSEPARATEPROC BlendFuncSeparate = nullptr;
-    PFNGLBLITFRAMEBUFFERPROC BlitFramebuffer = nullptr;
-    PFNGLBUFFERDATAPROC BufferData = nullptr;
-    PFNGLCHECKFRAMEBUFFERSTATUSPROC CheckFramebufferStatus = nullptr;
-    PFNGLCLEARPROC Clear = nullptr;
-    PFNGLCLEARCOLORPROC ClearColor = nullptr;
-    PFNGLCOMPILESHADERPROC CompileShader = nullptr;
-    PFNGLCREATEPROGRAMPROC CreateProgram = nullptr;
-    PFNGLCREATESHADERPROC CreateShader = nullptr;
-    PFNGLDELETEFRAMEBUFFERSPROC DeleteFramebuffers = nullptr;
-    PFNGLDELETESHADERPROC DeleteShader = nullptr;
-    PFNGLDELETETEXTURESPROC DeleteTextures = nullptr;
-    PFNGLDISABLEPROC Disable = nullptr;
-    PFNGLDRAWARRAYSPROC DrawArrays = nullptr;
-    PFNGLENABLEPROC Enable = nullptr;
-    PFNGLFRAMEBUFFERTEXTURE2DPROC FramebufferTexture2D = nullptr;
-    PFNGLGENBUFFERSPROC GenBuffers = nullptr;
-    PFNGLGENFRAMEBUFFERSPROC GenFramebuffers = nullptr;
-    PFNGLGENSAMPLERSPROC GenSamplers = nullptr;
-    PFNGLGENTEXTURESPROC GenTextures = nullptr;
-    PFNGLGENVERTEXARRAYSPROC GenVertexArrays = nullptr;
-    PFNGLGETINTEGERVPROC GetIntegerv = nullptr;
-    PFNGLGETPROGRAMINFOLOGPROC GetProgramInfoLog = nullptr;
-    PFNGLGETPROGRAMIVPROC GetProgramiv = nullptr;
-    PFNGLGETSHADERINFOLOGPROC GetShaderInfoLog = nullptr;
-    PFNGLGETSHADERIVPROC GetShaderiv = nullptr;
-    PFNGLGETUNIFORMBLOCKINDEXPROC GetUniformBlockIndex = nullptr;
-    PFNGLGETUNIFORMLOCATIONPROC GetUniformLocation = nullptr;
-    PFNGLLINKPROGRAMPROC LinkProgram = nullptr;
-    PFNGLPIXELSTOREIPROC PixelStorei = nullptr;
-    PFNGLREADPIXELSPROC ReadPixels = nullptr;
-    PFNGLSAMPLERPARAMETERIPROC SamplerParameteri = nullptr;
-    PFNGLSCISSORPROC Scissor = nullptr;
-    PFNGLSHADERSOURCEPROC ShaderSource = nullptr;
-    PFNGLTEXPARAMETERIPROC TexParameteri = nullptr;
-    PFNGLTEXSTORAGE2DPROC TexStorage2D = nullptr;
-    PFNGLTEXSUBIMAGE2DPROC TexSubImage2D = nullptr;
-    PFNGLUNIFORM1IPROC Uniform1i = nullptr;
-    PFNGLUNIFORMBLOCKBINDINGPROC UniformBlockBinding = nullptr;
-    PFNGLUSEPROGRAMPROC UseProgram = nullptr;
-    PFNGLVIEWPORTPROC Viewport = nullptr;
+    ::PFNGLACTIVETEXTUREPROC ActiveTexture = nullptr;
+    ::PFNGLATTACHSHADERPROC AttachShader = nullptr;
+    ::PFNGLBINDBUFFERPROC BindBuffer = nullptr;
+    ::PFNGLBINDBUFFERRANGEPROC BindBufferRange = nullptr;
+    ::PFNGLBINDFRAMEBUFFERPROC BindFramebuffer = nullptr;
+    ::PFNGLBINDSAMPLERPROC BindSampler = nullptr;
+    ::PFNGLBINDTEXTUREPROC BindTexture = nullptr;
+    ::PFNGLBINDVERTEXARRAYPROC BindVertexArray = nullptr;
+    ::PFNGLBLENDFUNCSEPARATEPROC BlendFuncSeparate = nullptr;
+    ::PFNGLBLITFRAMEBUFFERPROC BlitFramebuffer = nullptr;
+    ::PFNGLBUFFERDATAPROC BufferData = nullptr;
+    ::PFNGLCHECKFRAMEBUFFERSTATUSPROC CheckFramebufferStatus = nullptr;
+    ::PFNGLCLEARPROC Clear = nullptr;
+    ::PFNGLCLEARCOLORPROC ClearColor = nullptr;
+    ::PFNGLCOMPILESHADERPROC CompileShader = nullptr;
+    ::PFNGLCREATEPROGRAMPROC CreateProgram = nullptr;
+    ::PFNGLCREATESHADERPROC CreateShader = nullptr;
+    ::PFNGLDELETEFRAMEBUFFERSPROC DeleteFramebuffers = nullptr;
+    ::PFNGLDELETESHADERPROC DeleteShader = nullptr;
+    ::PFNGLDELETETEXTURESPROC DeleteTextures = nullptr;
+    ::PFNGLDISABLEPROC Disable = nullptr;
+    ::PFNGLDRAWARRAYSPROC DrawArrays = nullptr;
+    ::PFNGLENABLEPROC Enable = nullptr;
+    ::PFNGLFRAMEBUFFERTEXTURE2DPROC FramebufferTexture2D = nullptr;
+    ::PFNGLGENBUFFERSPROC GenBuffers = nullptr;
+    ::PFNGLGENFRAMEBUFFERSPROC GenFramebuffers = nullptr;
+    ::PFNGLGENSAMPLERSPROC GenSamplers = nullptr;
+    ::PFNGLGENTEXTURESPROC GenTextures = nullptr;
+    ::PFNGLGENVERTEXARRAYSPROC GenVertexArrays = nullptr;
+    ::PFNGLGETINTEGERVPROC GetIntegerv = nullptr;
+    ::PFNGLGETPROGRAMINFOLOGPROC GetProgramInfoLog = nullptr;
+    ::PFNGLGETPROGRAMIVPROC GetProgramiv = nullptr;
+    ::PFNGLGETSHADERINFOLOGPROC GetShaderInfoLog = nullptr;
+    ::PFNGLGETSHADERIVPROC GetShaderiv = nullptr;
+    ::PFNGLGETUNIFORMBLOCKINDEXPROC GetUniformBlockIndex = nullptr;
+    ::PFNGLGETUNIFORMLOCATIONPROC GetUniformLocation = nullptr;
+    ::PFNGLLINKPROGRAMPROC LinkProgram = nullptr;
+    ::PFNGLPIXELSTOREIPROC PixelStorei = nullptr;
+    ::PFNGLREADPIXELSPROC ReadPixels = nullptr;
+    ::PFNGLSAMPLERPARAMETERIPROC SamplerParameteri = nullptr;
+    ::PFNGLSCISSORPROC Scissor = nullptr;
+    ::PFNGLSHADERSOURCEPROC ShaderSource = nullptr;
+    ::PFNGLTEXPARAMETERIPROC TexParameteri = nullptr;
+    ::PFNGLTEXSTORAGE2DPROC TexStorage2D = nullptr;
+    ::PFNGLTEXSUBIMAGE2DPROC TexSubImage2D = nullptr;
+    ::PFNGLUNIFORM1IPROC Uniform1i = nullptr;
+    ::PFNGLUNIFORMBLOCKBINDINGPROC UniformBlockBinding = nullptr;
+    ::PFNGLUSEPROGRAMPROC UseProgram = nullptr;
+    ::PFNGLVIEWPORTPROC Viewport = nullptr;
 };
 
 struct _Context {
-    SDL_Window* window = nullptr;
-    SDL_GLContext context = nullptr;
-    GLuint vertexArray = 0;
-    GLuint uniformBuffer = 0;
+    ::SDL_Window* window = nullptr;
+    ::SDL_GLContext context = nullptr;
+    ::GLuint vertexArray = 0;
+    ::GLuint uniformBuffer = 0;
     std::size_t uniformAlignment = 16;
 };
 
 struct _Texture {
-    GLuint texture = 0;
-    GLuint framebuffer = 0;
+    ::GLuint texture = 0;
+    ::GLuint framebuffer = 0;
     std::uint32_t width = 0;
     std::uint32_t height = 0;
 };
 
 struct _Target {
     _Texture* texture = nullptr;
-    SDL_WindowID window = 0;
+    ::SDL_WindowID window = 0;
     std::uint32_t width = 0;
     std::uint32_t height = 0;
 
@@ -242,9 +242,9 @@ struct _Draw {
     _Target target;
     _Fragment fragment = _Fragment::ColorBrush;
     Blend blend = Blend::Over;
-    std::array<GLint, 4> scissor = {};
+    std::array<::GLint, 4> scissor = {};
     _Texture* texture = nullptr;
-    GLuint sampler = 0;
+    ::GLuint sampler = 0;
     _UniformRange state;
     _UniformRange shape;
     _UniformRange brush;
@@ -271,7 +271,7 @@ struct Painter::_Painter {
     std::stack<std::optional<_Target>> passStack;
     std::vector<_Command> commands;
     std::vector<std::uint8_t> uniforms;
-    std::vector<SDL_WindowID> windows;
+    std::vector<::SDL_WindowID> windows;
     std::map<std::uint64_t, _FilterTextures> filterTextures;
     std::uint64_t filterTexturesUse = 0;
     _FilterTextures& getFilterTextures(std::uint32_t width, std::uint32_t height);
@@ -364,13 +364,13 @@ static void _SetBlend(Blend blend) {
     }
 }
 
-static std::array<GLint, 4> _GetScissor(_Target const& target, std::optional<Vec4> const& scissor) {
+static std::array<::GLint, 4> _GetScissor(_Target const& target, std::optional<Vec4> const& scissor) {
     PROFILE
 
     auto const passWidth = static_cast<int>(target.width);
     auto const passHeight = static_cast<int>(target.height);
 
-    auto rect = std::array<GLint, 4>{ 0, 0, passWidth, passHeight };
+    auto rect = std::array<::GLint, 4>{ 0, 0, passWidth, passHeight };
 
     if (scissor.has_value()) {
         auto const left = std::max(0, static_cast<int>(std::roundf(scissor->x)));
@@ -533,12 +533,12 @@ static _Context& _GetContext() {
 
         /* The attributes are set before any window exists: SDL picks a window's
            GL configuration when it creates the window. */
-        ::SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-        ::SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-        ::SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-        ::SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-        ::SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
-        ::SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 0);
+        ::SDL_GL_SetAttribute(::SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+        ::SDL_GL_SetAttribute(::SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        ::SDL_GL_SetAttribute(::SDL_GL_CONTEXT_MINOR_VERSION, 0);
+        ::SDL_GL_SetAttribute(::SDL_GL_DOUBLEBUFFER, 1);
+        ::SDL_GL_SetAttribute(::SDL_GL_DEPTH_SIZE, 0);
+        ::SDL_GL_SetAttribute(::SDL_GL_STENCIL_SIZE, 0);
 
         auto context = _Context{};
 
@@ -561,7 +561,7 @@ static _Context& _GetContext() {
 
         _LoadFunctions();
 
-        auto alignment = GLint{ 0 };
+        auto alignment = ::GLint{ 0 };
         _gl.GetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &alignment);
         context.uniformAlignment = static_cast<std::size_t>(std::max(alignment, 16));
 
@@ -595,7 +595,7 @@ static _Context& _MakeCurrent() {
     return context;
 }
 
-static GLuint _GetFramebuffer(_Texture& texture) {
+static ::GLuint _GetFramebuffer(_Texture& texture) {
     PROFILE
 
     if (texture.framebuffer == 0) {
@@ -640,7 +640,7 @@ static void _EndRecording() {
     }
 }
 
-static GLuint _CompileShader(GLenum stage, unsigned char const* code, unsigned int size) {
+static ::GLuint _CompileShader(::GLenum stage, unsigned char const* code, unsigned int size) {
     PROFILE
 
     static auto constexpr _header = "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\n";
@@ -653,24 +653,24 @@ static GLuint _CompileShader(GLenum stage, unsigned char const* code, unsigned i
         reinterpret_cast<char const*>(Rocket_GLES_Painter),
         reinterpret_cast<char const*>(code)
     };
-    GLint const lengths[] = {
+    ::GLint const lengths[] = {
         -1,
         -1,
-        static_cast<GLint>(Rocket_GLES_Painter_len),
-        static_cast<GLint>(size)
+        static_cast<::GLint>(Rocket_GLES_Painter_len),
+        static_cast<::GLint>(size)
     };
 
     auto shader = _gl.CreateShader(stage);
     _gl.ShaderSource(shader, 4, strings, lengths);
     _gl.CompileShader(shader);
 
-    auto compiled = GLint{ GL_FALSE };
+    auto compiled = ::GLint{ GL_FALSE };
     _gl.GetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
 
     if (compiled == GL_FALSE) {
         auto log = std::string(1024, '\0');
-        auto length = GLsizei{ 0 };
-        _gl.GetShaderInfoLog(shader, static_cast<GLsizei>(log.size()), &length, log.data());
+        auto length = ::GLsizei{ 0 };
+        _gl.GetShaderInfoLog(shader, static_cast<::GLsizei>(log.size()), &length, log.data());
         log.resize(static_cast<std::size_t>(length));
         _gl.DeleteShader(shader);
         throw std::runtime_error("Failed to compile a painter shader: " + log);
@@ -679,7 +679,7 @@ static GLuint _CompileShader(GLenum stage, unsigned char const* code, unsigned i
     return shader;
 }
 
-static GLuint _GetVertexShader() {
+static ::GLuint _GetVertexShader() {
     PROFILE
 
     static auto const _shader = _CompileShader(GL_VERTEX_SHADER, Rocket_GLES_QuadVertex, Rocket_GLES_QuadVertex_len);
@@ -687,7 +687,7 @@ static GLuint _GetVertexShader() {
     return _shader;
 }
 
-static GLuint _CreateProgram(unsigned char const* code, unsigned int size) {
+static ::GLuint _CreateProgram(unsigned char const* code, unsigned int size) {
     PROFILE
 
     auto fragment = _CompileShader(GL_FRAGMENT_SHADER, code, size);
@@ -698,20 +698,20 @@ static GLuint _CreateProgram(unsigned char const* code, unsigned int size) {
     _gl.LinkProgram(program);
     _gl.DeleteShader(fragment); /* deleted once the program goes */
 
-    auto linked = GLint{ GL_FALSE };
+    auto linked = ::GLint{ GL_FALSE };
     _gl.GetProgramiv(program, GL_LINK_STATUS, &linked);
 
     if (linked == GL_FALSE) {
         auto log = std::string(1024, '\0');
-        auto length = GLsizei{ 0 };
-        _gl.GetProgramInfoLog(program, static_cast<GLsizei>(log.size()), &length, log.data());
+        auto length = ::GLsizei{ 0 };
+        _gl.GetProgramInfoLog(program, static_cast<::GLsizei>(log.size()), &length, log.data());
         log.resize(static_cast<std::size_t>(length));
         throw std::runtime_error("Failed to link a painter shader: " + log);
     }
 
     /* GLSL ES 3.00 has no binding layouts: blocks and the sampler are bound by
        name, every brush and filter block at the brush binding. */
-    static auto constexpr _blocks = std::array<std::tuple<char const*, GLuint>, 8>{{
+    static auto constexpr _blocks = std::array<std::tuple<char const*, ::GLuint>, 8>{{
         { "StateUniforms",             _stateUniformsBinding },
         { "ShapeUniforms",             _shapeUniformsBinding },
         { "ColorBrushUniforms",        _brushUniformsBinding },
@@ -740,10 +740,10 @@ static GLuint _CreateProgram(unsigned char const* code, unsigned int size) {
     return program;
 }
 
-static GLuint _GetProgram(_Fragment fragment) {
+static ::GLuint _GetProgram(_Fragment fragment) {
     PROFILE
 
-    static auto _programs = std::map<_Fragment, GLuint>();
+    static auto _programs = std::map<_Fragment, ::GLuint>();
 
     auto it = _programs.find(fragment);
 
@@ -751,7 +751,7 @@ static GLuint _GetProgram(_Fragment fragment) {
         return it->second;
     }
 
-    auto program = GLuint{ 0 };
+    auto program = ::GLuint{ 0 };
 
     switch (fragment) {
         case _Fragment::ColorBrush:            program = _CreateProgram(Rocket_GLES_ColorBrush, Rocket_GLES_ColorBrush_len); break;
@@ -769,10 +769,10 @@ static GLuint _GetProgram(_Fragment fragment) {
     return program;
 }
 
-static GLuint _CreateSampler(GLint minFilter, GLint magFilter) {
+static ::GLuint _CreateSampler(::GLint minFilter, ::GLint magFilter) {
     PROFILE
 
-    auto sampler = GLuint{ 0 };
+    auto sampler = ::GLuint{ 0 };
 
     _gl.GenSamplers(1, &sampler);
     _gl.SamplerParameteri(sampler, GL_TEXTURE_MIN_FILTER, minFilter);
@@ -784,7 +784,7 @@ static GLuint _CreateSampler(GLint minFilter, GLint magFilter) {
     return sampler;
 }
 
-static GLuint _GetLinLinSampler() {
+static ::GLuint _GetLinLinSampler() {
     PROFILE
 
     static auto const _sampler = _CreateSampler(GL_LINEAR, GL_LINEAR);
@@ -792,7 +792,7 @@ static GLuint _GetLinLinSampler() {
     return _sampler;
 }
 
-static GLuint _GetNerNerSampler() {
+static ::GLuint _GetNerNerSampler() {
     PROFILE
 
     static auto const _sampler = _CreateSampler(GL_NEAREST, GL_NEAREST);
@@ -800,7 +800,7 @@ static GLuint _GetNerNerSampler() {
     return _sampler;
 }
 
-static GLuint _GetLinNerSampler() {
+static ::GLuint _GetLinNerSampler() {
     PROFILE
 
     static auto const _sampler = _CreateSampler(GL_LINEAR, GL_NEAREST);
@@ -808,7 +808,7 @@ static GLuint _GetLinNerSampler() {
     return _sampler;
 }
 
-static GLuint _GetNerLinSampler() {
+static ::GLuint _GetNerLinSampler() {
     PROFILE
 
     static auto const _sampler = _CreateSampler(GL_NEAREST, GL_LINEAR);
@@ -976,7 +976,7 @@ static _ImageBrushUniforms _MakeImageBrushUniforms(ImageBrush const& imageBrush,
     };
 }
 
-static GLuint _GetImageSampler(ImageBrush const& imageBrush) {
+static ::GLuint _GetImageSampler(ImageBrush const& imageBrush) {
     PROFILE
 
     auto const filterMin = imageBrush.filterMin.value_or(ImageFilter::Nearest);
@@ -1097,7 +1097,7 @@ static bool _BindTarget(_Context const& context, _Target const& target) {
         _gl.BindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
-    _gl.Viewport(0, 0, static_cast<GLsizei>(target.width), static_cast<GLsizei>(target.height));
+    _gl.Viewport(0, 0, static_cast<::GLsizei>(target.width), static_cast<::GLsizei>(target.height));
 
     return true;
 }
@@ -1109,9 +1109,9 @@ static void _RunDraw(_Context const& context, _Draw const& draw) {
     _SetBlend(draw.blend);
     _gl.Enable(GL_SCISSOR_TEST);
     _gl.Scissor(draw.scissor[0], draw.scissor[1], draw.scissor[2], draw.scissor[3]);
-    _gl.BindBufferRange(GL_UNIFORM_BUFFER, _stateUniformsBinding, context.uniformBuffer, static_cast<GLintptr>(draw.state.offset), static_cast<GLsizeiptr>(draw.state.size));
-    _gl.BindBufferRange(GL_UNIFORM_BUFFER, _shapeUniformsBinding, context.uniformBuffer, static_cast<GLintptr>(draw.shape.offset), static_cast<GLsizeiptr>(draw.shape.size));
-    _gl.BindBufferRange(GL_UNIFORM_BUFFER, _brushUniformsBinding, context.uniformBuffer, static_cast<GLintptr>(draw.brush.offset), static_cast<GLsizeiptr>(draw.brush.size));
+    _gl.BindBufferRange(GL_UNIFORM_BUFFER, _stateUniformsBinding, context.uniformBuffer, static_cast<::GLintptr>(draw.state.offset), static_cast<::GLsizeiptr>(draw.state.size));
+    _gl.BindBufferRange(GL_UNIFORM_BUFFER, _shapeUniformsBinding, context.uniformBuffer, static_cast<::GLintptr>(draw.shape.offset), static_cast<::GLsizeiptr>(draw.shape.size));
+    _gl.BindBufferRange(GL_UNIFORM_BUFFER, _brushUniformsBinding, context.uniformBuffer, static_cast<::GLintptr>(draw.brush.offset), static_cast<::GLsizeiptr>(draw.brush.size));
 
     if (draw.texture != nullptr) {
         _gl.ActiveTexture(GL_TEXTURE0);
@@ -1130,10 +1130,10 @@ static void _RunClear(_Clear const& clear) {
     _gl.Clear(GL_COLOR_BUFFER_BIT);
 }
 
-static void _Present(SDL_Window* window) {
+static void _Present(::SDL_Window* window) {
     PROFILE
 
-    static auto _synced = std::vector<SDL_WindowID>();
+    static auto _synced = std::vector<::SDL_WindowID>();
 
     auto const id = ::SDL_GetWindowID(window);
 
@@ -1207,7 +1207,7 @@ void Painter::_Painter::replay() {
 
     if (commands.empty() == false) {
         _gl.BindBuffer(GL_UNIFORM_BUFFER, context.uniformBuffer);
-        _gl.BufferData(GL_UNIFORM_BUFFER, static_cast<GLsizeiptr>(uniforms.size()), uniforms.data(), GL_STREAM_DRAW);
+        _gl.BufferData(GL_UNIFORM_BUFFER, static_cast<::GLsizeiptr>(uniforms.size()), uniforms.data(), GL_STREAM_DRAW);
 
         auto bound = std::optional<_Target>();
         auto skipped = false;
@@ -1271,13 +1271,13 @@ std::uint64_t __GetWindowFlags() {
     return SDL_WINDOW_OPENGL;
 }
 
-bool __ClaimWindow(SDL_Window*) {
+bool __ClaimWindow(::SDL_Window*) {
     PROFILE
 
     return true;
 }
 
-void __ReleaseWindow(SDL_Window* window) {
+void __ReleaseWindow(::SDL_Window* window) {
     PROFILE
 
     auto& context = _GetContext();
@@ -1299,7 +1299,7 @@ void* __CreateTexture(std::uint32_t width, std::uint32_t height) {
 
     _gl.GenTextures(1, &texture->texture);
     _gl.BindTexture(GL_TEXTURE_2D, texture->texture);
-    _gl.TexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, static_cast<GLsizei>(width), static_cast<GLsizei>(height));
+    _gl.TexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, static_cast<::GLsizei>(width), static_cast<::GLsizei>(height));
     _gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     _gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
@@ -1336,7 +1336,7 @@ void __DownloadTexture(void* texture, std::vector<std::uint8_t>& pixels) {
     pixels.resize(static_cast<std::size_t>(source.width) * source.height * 4);
 
     _gl.BindFramebuffer(GL_FRAMEBUFFER, _GetFramebuffer(source));
-    _gl.ReadPixels(0, 0, static_cast<GLsizei>(source.width), static_cast<GLsizei>(source.height), GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+    _gl.ReadPixels(0, 0, static_cast<::GLsizei>(source.width), static_cast<::GLsizei>(source.height), GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
 }
 
 void __UploadTexture(void* texture, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, std::uint8_t const* pixels) {
@@ -1349,7 +1349,7 @@ void __UploadTexture(void* texture, std::uint32_t x, std::uint32_t y, std::uint3
     _MakeCurrent();
 
     _gl.BindTexture(GL_TEXTURE_2D, static_cast<_Texture*>(texture)->texture);
-    _gl.TexSubImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(x), static_cast<GLint>(y), static_cast<GLsizei>(width), static_cast<GLsizei>(height), GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    _gl.TexSubImage2D(GL_TEXTURE_2D, 0, static_cast<::GLint>(x), static_cast<::GLint>(y), static_cast<::GLsizei>(width), static_cast<::GLsizei>(height), GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 }
 
 void __CopyTexture(void* source, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, void* destination, std::uint32_t toX, std::uint32_t toY) {
@@ -1368,8 +1368,8 @@ void __CopyTexture(void* source, std::uint32_t x, std::uint32_t y, std::uint32_t
     _gl.BindFramebuffer(GL_READ_FRAMEBUFFER, from);
     _gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, to);
     _gl.BlitFramebuffer(
-        static_cast<GLint>(x), static_cast<GLint>(y), static_cast<GLint>(x + width), static_cast<GLint>(y + height),
-        static_cast<GLint>(toX), static_cast<GLint>(toY), static_cast<GLint>(toX + width), static_cast<GLint>(toY + height),
+        static_cast<::GLint>(x), static_cast<::GLint>(y), static_cast<::GLint>(x + width), static_cast<::GLint>(y + height),
+        static_cast<::GLint>(toX), static_cast<::GLint>(toY), static_cast<::GLint>(toX + width), static_cast<::GLint>(toY + height),
         GL_COLOR_BUFFER_BIT, GL_NEAREST
     );
 }
@@ -1450,7 +1450,7 @@ void Painter::__beginPaint(PaintTarget const& target) {
         [&](WindowPaintTarget const& windowTarget) {
             assert(windowTarget.window.getHandle() != nullptr);
 
-            auto window = static_cast<SDL_Window*>(windowTarget.window.getHandle());
+            auto window = static_cast<::SDL_Window*>(windowTarget.window.getHandle());
             auto width = 0;
             auto height = 0;
 
@@ -1516,7 +1516,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
     auto const blurFilter = options.filter.has_value() ? options.filter->as<BlurFilter>() : nullptr;
     auto const blend = options.blend.value_or(Blend::Over);
 
-    auto const record = [&](_Target const& pass, _Fragment fragment, Blend mode, std::optional<Vec4> const& scissor, _Texture* texture, GLuint sampler, Mat3 const& transform, float opacity, Shape const& quad, Vec2 const& expand, _UniformRange const& brushUniforms) {
+    auto const record = [&](_Target const& pass, _Fragment fragment, Blend mode, std::optional<Vec4> const& scissor, _Texture* texture, ::GLuint sampler, Mat3 const& transform, float opacity, Shape const& quad, Vec2 const& expand, _UniformRange const& brushUniforms) {
         _impl->commands.emplace_back(_Draw{
             .target   = pass,
             .fragment = fragment,
@@ -1535,7 +1535,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         auto fragment = _Fragment::ColorBrush;
         auto brushUniforms = _UniformRange{};
         auto texture = static_cast<_Texture*>(nullptr);
-        auto sampler = GLuint{ 0 };
+        auto sampler = ::GLuint{ 0 };
 
         if (colorBrush != nullptr) {
             fragment = _Fragment::ColorBrush;

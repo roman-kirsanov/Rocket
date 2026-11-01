@@ -30,15 +30,15 @@ struct Image::_Image {
     std::uint32_t height = 0;
 };
 
-static IWICImagingFactory* _GetImagingFactory() {
+static ::IWICImagingFactory* _GetImagingFactory() {
     PROFILE
 
     App::__InitWin32();
 
     static auto const _factory = [] {
-        auto factory = ComPtr<IWICImagingFactory>();
+        auto factory = ComPtr<::IWICImagingFactory>();
 
-        if (FAILED(::CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory)))) {
+        if (FAILED(::CoCreateInstance(::CLSID_WICImagingFactory, nullptr, ::CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory)))) {
             throw std::runtime_error("Failed to create the WIC imaging factory");
         }
 
@@ -61,11 +61,11 @@ void Image::__init(std::string const& path) {
     PROFILE
 
     auto const factory = _GetImagingFactory();
-    auto decoder = ComPtr<IWICBitmapDecoder>();
-    auto frame = ComPtr<IWICBitmapFrameDecode>();
-    auto converter = ComPtr<IWICFormatConverter>();
+    auto decoder = ComPtr<::IWICBitmapDecoder>();
+    auto frame = ComPtr<::IWICBitmapFrameDecode>();
+    auto converter = ComPtr<::IWICFormatConverter>();
 
-    if (FAILED(factory->CreateDecoderFromFilename(App::__ToWide(path).c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand, &decoder))) {
+    if (FAILED(factory->CreateDecoderFromFilename(App::__ToWide(path).c_str(), nullptr, GENERIC_READ, ::WICDecodeMetadataCacheOnDemand, &decoder))) {
         throw std::runtime_error("Failed to open image: " + path);
     }
 
@@ -77,18 +77,18 @@ void Image::__init(std::string const& path) {
     // way it does every other image's pixels.
     if (
         FAILED(factory->CreateFormatConverter(&converter)) ||
-        FAILED(converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom))
+        FAILED(converter->Initialize(frame.Get(), ::GUID_WICPixelFormat32bppRGBA, ::WICBitmapDitherTypeNone, nullptr, 0.0, ::WICBitmapPaletteTypeCustom))
     ) {
         throw std::runtime_error("Failed to convert image: " + path);
     }
 
-    auto width = UINT(0);
-    auto height = UINT(0);
+    auto width = ::UINT(0);
+    auto height = ::UINT(0);
     converter->GetSize(&width, &height);
 
     auto pixels = std::vector<std::uint8_t>((std::size_t)width * height * 4);
 
-    if (FAILED(converter->CopyPixels(nullptr, (width * 4), static_cast<UINT>(pixels.size()), pixels.data()))) {
+    if (FAILED(converter->CopyPixels(nullptr, (width * 4), static_cast<::UINT>(pixels.size()), pixels.data()))) {
         throw std::runtime_error("Failed to decode image: " + path);
     }
 

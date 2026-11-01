@@ -66,20 +66,20 @@ TEST(App, RunLoopEventsTimersAndExecPaths) {
 
 /* A gamepad plugged in while the app runs is announced, and so is its removal. */
 TEST(App, PublishesGamepadConnectAndDisconnect) {
-    auto id = SDL_JoystickID(0);
+    auto id = ::SDL_JoystickID(0);
     auto events = std::vector<std::string>();
     auto sub = Sub(App::OnEvent, [&](AppEvent const& event) {
         if (event.is<ReadyAppEvent>()) {
-            auto desc = SDL_VirtualJoystickDesc();
+            auto desc = ::SDL_VirtualJoystickDesc();
             SDL_INIT_INTERFACE(&desc);
-            desc.type = SDL_JOYSTICK_TYPE_GAMEPAD;
-            desc.naxes = SDL_GAMEPAD_AXIS_COUNT;
-            desc.nbuttons = SDL_GAMEPAD_BUTTON_COUNT;
-            id = SDL_AttachVirtualJoystick(&desc);
+            desc.type = ::SDL_JOYSTICK_TYPE_GAMEPAD;
+            desc.naxes = ::SDL_GAMEPAD_AXIS_COUNT;
+            desc.nbuttons = ::SDL_GAMEPAD_BUTTON_COUNT;
+            id = ::SDL_AttachVirtualJoystick(&desc);
             App::SetTimeout([] { App::Exit(); }, 5000.0);
         } else if (auto connect = event.as<GamepadConnectAppEvent>(); connect != nullptr && connect->getGamepad() == id) {
             events.push_back("connect");
-            SDL_DetachVirtualJoystick(id);
+            ::SDL_DetachVirtualJoystick(id);
         } else if (auto disconnect = event.as<GamepadDisconnectAppEvent>(); disconnect != nullptr && disconnect->getGamepad() == id) {
             events.push_back("disconnect");
             App::Exit();
@@ -88,30 +88,30 @@ TEST(App, PublishesGamepadConnectAndDisconnect) {
 
     App::Run(0, nullptr);
 
-    EXPECT_NE(id, SDL_JoystickID(0));
+    EXPECT_NE(id, ::SDL_JoystickID(0));
     EXPECT_EQ(events, std::vector<std::string>({ "connect", "disconnect" }));
 }
 
 /* A connected gamepad is listed with its name until it is removed. */
 TEST(App, ListsConnectedGamepadsWithTheirNames) {
-    auto id = SDL_JoystickID(0);
+    auto id = ::SDL_JoystickID(0);
     auto listed = false;
     auto name = std::string();
     auto listedAfterRemoval = true;
     auto sub = Sub(App::OnEvent, [&](AppEvent const& event) {
         if (event.is<ReadyAppEvent>()) {
-            auto desc = SDL_VirtualJoystickDesc();
+            auto desc = ::SDL_VirtualJoystickDesc();
             SDL_INIT_INTERFACE(&desc);
-            desc.type = SDL_JOYSTICK_TYPE_GAMEPAD;
-            desc.naxes = SDL_GAMEPAD_AXIS_COUNT;
-            desc.nbuttons = SDL_GAMEPAD_BUTTON_COUNT;
+            desc.type = ::SDL_JOYSTICK_TYPE_GAMEPAD;
+            desc.naxes = ::SDL_GAMEPAD_AXIS_COUNT;
+            desc.nbuttons = ::SDL_GAMEPAD_BUTTON_COUNT;
             desc.name = "Rocket Test Pad";
-            id = SDL_AttachVirtualJoystick(&desc);
+            id = ::SDL_AttachVirtualJoystick(&desc);
             App::SetTimeout([] { App::Exit(); }, 5000.0);
         } else if (auto connect = event.as<GamepadConnectAppEvent>(); connect != nullptr && connect->getGamepad() == id) {
             listed = std::ranges::contains(GetGamepads(), id);
             name = GetGamepadName(id);
-            SDL_DetachVirtualJoystick(id);
+            ::SDL_DetachVirtualJoystick(id);
         } else if (auto disconnect = event.as<GamepadDisconnectAppEvent>(); disconnect != nullptr && disconnect->getGamepad() == id) {
             listedAfterRemoval = std::ranges::contains(GetGamepads(), id);
             App::Exit();

@@ -42,7 +42,7 @@ void Image::__init(std::string const& path) {
         throw std::runtime_error("Failed to open image: " + path);
     }
 
-    auto surface = ::SDL_ConvertSurface(loaded, SDL_PIXELFORMAT_RGBA32);
+    auto surface = ::SDL_ConvertSurface(loaded, ::SDL_PIXELFORMAT_RGBA32);
     ::SDL_DestroySurface(loaded);
 
     if (surface == nullptr) {

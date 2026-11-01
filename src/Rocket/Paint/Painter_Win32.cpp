@@ -70,7 +70,7 @@ enum class _ShapeType : std::int32_t {
     EllipseOutline
 };
 
-enum _RootParameter : UINT {
+enum _RootParameter : ::UINT {
     _StateVertexParameter = 0,
     _ShapeVertexParameter,
     _StatePixelParameter,
@@ -81,7 +81,7 @@ enum _RootParameter : UINT {
     _RootParameterCount
 };
 
-enum _Sampler : UINT {
+enum _Sampler : ::UINT {
     _NerNerSampler = 0,
     _LinLinSampler,
     _LinNerSampler,
@@ -184,57 +184,57 @@ static_assert(offsetof(_ShadowFilterUniforms, invert) == 56);
 static_assert(offsetof(_ShadowFilterFieldUniforms, invert) == 32);
 
 struct _Texture {
-    ComPtr<ID3D12Resource> resource;
-    UINT srv = 0;
-    UINT rtv = 0;
+    ComPtr<::ID3D12Resource> resource;
+    ::UINT srv = 0;
+    ::UINT rtv = 0;
     std::uint32_t width = 0;
     std::uint32_t height = 0;
 };
 
 struct _UploadPage {
-    ComPtr<ID3D12Resource> buffer;
+    ComPtr<::ID3D12Resource> buffer;
     std::uint8_t* cpu = nullptr;
-    D3D12_GPU_VIRTUAL_ADDRESS gpu = 0;
+    ::D3D12_GPU_VIRTUAL_ADDRESS gpu = 0;
     std::uint64_t size = 0;
     std::uint64_t used = 0;
 };
 
 struct _UploadAllocation {
-    ID3D12Resource* buffer = nullptr;
+    ::ID3D12Resource* buffer = nullptr;
     std::uint64_t offset = 0;
     std::uint8_t* cpu = nullptr;
-    D3D12_GPU_VIRTUAL_ADDRESS gpu = 0;
+    ::D3D12_GPU_VIRTUAL_ADDRESS gpu = 0;
 };
 
 struct _Bindings {
-    ID3D12PipelineState* pipeline = nullptr;
-    std::optional<D3D12_RECT> scissor;
-    std::optional<D3D12_VIEWPORT> viewport;
-    UINT srv = UINT_MAX;
-    UINT sampler = UINT_MAX;
-    D3D12_GPU_VIRTUAL_ADDRESS parameters[_RootParameterCount] = {};
+    ::ID3D12PipelineState* pipeline = nullptr;
+    std::optional<::D3D12_RECT> scissor;
+    std::optional<::D3D12_VIEWPORT> viewport;
+    ::UINT srv = UINT_MAX;
+    ::UINT sampler = UINT_MAX;
+    ::D3D12_GPU_VIRTUAL_ADDRESS parameters[_RootParameterCount] = {};
     std::vector<std::uint8_t> uploadedUniforms[_RootParameterCount];
 };
 
 struct _Recording {
-    ComPtr<ID3D12GraphicsCommandList> list;
-    ComPtr<ID3D12CommandAllocator> allocator;
+    ComPtr<::ID3D12GraphicsCommandList> list;
+    ComPtr<::ID3D12CommandAllocator> allocator;
     std::vector<_UploadPage> pages;
     _Bindings bindings;
     bool open = false;
 };
 
 struct _Swapchain {
-    ComPtr<IDXGISwapChain3> swapchain;
-    ComPtr<ID3D12Resource> buffers[2];
-    UINT rtvs[2] = { 0, 0 };
+    ComPtr<::IDXGISwapChain3> swapchain;
+    ComPtr<::ID3D12Resource> buffers[2];
+    ::UINT rtvs[2] = { 0, 0 };
     std::uint64_t fenceValues[2] = { 0, 0 };
     std::uint32_t width = 0;
     std::uint32_t height = 0;
     int references = 0;
-    HANDLE frameWait = nullptr;
+    ::HANDLE frameWait = nullptr;
     bool waiting = false;
-    ULONGLONG presentTime = 0;
+    ::ULONGLONG presentTime = 0;
 };
 
 struct _Deferred {
@@ -245,10 +245,10 @@ struct _Deferred {
 struct _RenderPass {
     std::uint32_t width = 0;
     std::uint32_t height = 0;
-    DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
-    ID3D12Resource* texture = nullptr;
-    D3D12_CPU_DESCRIPTOR_HANDLE rtv = {};
-    D3D12_RESOURCE_STATES restState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    ::DXGI_FORMAT format = ::DXGI_FORMAT_UNKNOWN;
+    ::ID3D12Resource* texture = nullptr;
+    ::D3D12_CPU_DESCRIPTOR_HANDLE rtv = {};
+    ::D3D12_RESOURCE_STATES restState = ::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     _Recording* recording = nullptr;
     bool open = false;
     bool commit = false;
@@ -266,7 +266,7 @@ struct _FilterTextures {
 
 struct Painter::_Painter {
     _Recording recording;
-    std::vector<std::pair<ComPtr<ID3D12CommandAllocator>, std::uint64_t>> allocators;
+    std::vector<std::pair<ComPtr<::ID3D12CommandAllocator>, std::uint64_t>> allocators;
     std::vector<_Swapchain*> presents;
     std::stack<std::optional<_RenderPass>> renderPassStack;
     std::map<std::uint64_t, _FilterTextures> filterTextures;
@@ -276,44 +276,44 @@ struct Painter::_Painter {
 };
 
 struct _Context {
-    ComPtr<IDXGIFactory4> factory;
-    ComPtr<ID3D12Device> device;
-    ComPtr<ID3D12CommandQueue> queue;
-    ComPtr<ID3D12Fence> fence;
-    HANDLE fenceEvent = nullptr;
+    ComPtr<::IDXGIFactory4> factory;
+    ComPtr<::ID3D12Device> device;
+    ComPtr<::ID3D12CommandQueue> queue;
+    ComPtr<::ID3D12Fence> fence;
+    ::HANDLE fenceEvent = nullptr;
     std::uint64_t fenceValue = 0;
-    ComPtr<ID3D12RootSignature> rootSignature;
-    ComPtr<ID3D12DescriptorHeap> srvHeap;
-    ComPtr<ID3D12DescriptorHeap> samplerHeap;
-    ComPtr<ID3D12DescriptorHeap> rtvHeap;
-    UINT srvSize = 0;
-    UINT samplerSize = 0;
-    UINT rtvSize = 0;
-    std::vector<UINT> freeSrvs;
-    std::vector<UINT> freeRtvs;
-    UINT nextSrv = 0;
-    UINT nextRtv = 0;
-    std::map<std::uint64_t, ComPtr<ID3D12PipelineState>> pipelines;
+    ComPtr<::ID3D12RootSignature> rootSignature;
+    ComPtr<::ID3D12DescriptorHeap> srvHeap;
+    ComPtr<::ID3D12DescriptorHeap> samplerHeap;
+    ComPtr<::ID3D12DescriptorHeap> rtvHeap;
+    ::UINT srvSize = 0;
+    ::UINT samplerSize = 0;
+    ::UINT rtvSize = 0;
+    std::vector<::UINT> freeSrvs;
+    std::vector<::UINT> freeRtvs;
+    ::UINT nextSrv = 0;
+    ::UINT nextRtv = 0;
+    std::map<std::uint64_t, ComPtr<::ID3D12PipelineState>> pipelines;
     std::vector<std::pair<_UploadPage, std::uint64_t>> freePages;
     _Recording transfer;
-    std::vector<std::pair<ComPtr<ID3D12CommandAllocator>, std::uint64_t>> transferAllocators;
+    std::vector<std::pair<ComPtr<::ID3D12CommandAllocator>, std::uint64_t>> transferAllocators;
     int openRecordings = 0;
     std::vector<std::function<void()>> waiting;
     std::vector<_Deferred> deferred;
-    std::map<HWND, _Swapchain*> swapchains;
+    std::map<::HWND, _Swapchain*> swapchains;
 };
 
 static auto constexpr _blurTapMax = 64;
 static auto constexpr _filterTextureCacheMax = 8;
-static auto constexpr _srvCapacity = UINT(65536);
-static auto constexpr _rtvCapacity = UINT(65536);
+static auto constexpr _srvCapacity = ::UINT(65536);
+static auto constexpr _rtvCapacity = ::UINT(65536);
 static auto constexpr _uploadPageSize = std::uint64_t(1) << 20;
-static auto constexpr _textureFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
-static auto constexpr _swapchainBuffers = UINT(2);
-static auto constexpr _swapchainFlags = UINT(DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT);
-static auto constexpr _frameWaitMaxMs = ULONGLONG(100);
+static auto constexpr _textureFormat = ::DXGI_FORMAT_R8G8B8A8_UNORM;
+static auto constexpr _swapchainBuffers = ::UINT(2);
+static auto constexpr _swapchainFlags = ::UINT(::DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT);
+static auto constexpr _frameWaitMaxMs = ::ULONGLONG(100);
 
-static void _Check(HRESULT result, char const* what) {
+static void _Check(::HRESULT result, char const* what) {
     PROFILE
 
     if (FAILED(result)) {
@@ -379,45 +379,45 @@ static Vec2 _EdgeExpansion(Mat3 const& transform) {
     };
 }
 
-static D3D12_RENDER_TARGET_BLEND_DESC _GetBlend(Blend blend) {
+static ::D3D12_RENDER_TARGET_BLEND_DESC _GetBlend(Blend blend) {
     PROFILE
 
-    auto state = D3D12_RENDER_TARGET_BLEND_DESC{};
+    auto state = ::D3D12_RENDER_TARGET_BLEND_DESC{};
     state.BlendEnable = TRUE;
     state.LogicOpEnable = FALSE;
-    state.BlendOp = D3D12_BLEND_OP_ADD;
-    state.BlendOpAlpha = D3D12_BLEND_OP_ADD;
-    state.LogicOp = D3D12_LOGIC_OP_NOOP;
-    state.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    state.BlendOp = ::D3D12_BLEND_OP_ADD;
+    state.BlendOpAlpha = ::D3D12_BLEND_OP_ADD;
+    state.LogicOp = ::D3D12_LOGIC_OP_NOOP;
+    state.RenderTargetWriteMask = ::D3D12_COLOR_WRITE_ENABLE_ALL;
 
     switch (blend) {
         case Blend::Over:
             /* dst = src + dst * (1 - srcA) */
-            state.SrcBlend = D3D12_BLEND_ONE;
-            state.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-            state.SrcBlendAlpha = D3D12_BLEND_ONE;
-            state.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+            state.SrcBlend = ::D3D12_BLEND_ONE;
+            state.DestBlend = ::D3D12_BLEND_INV_SRC_ALPHA;
+            state.SrcBlendAlpha = ::D3D12_BLEND_ONE;
+            state.DestBlendAlpha = ::D3D12_BLEND_INV_SRC_ALPHA;
             break;
         case Blend::Add:
             /* dst = src + dst; the target's alpha is kept */
-            state.SrcBlend = D3D12_BLEND_ONE;
-            state.DestBlend = D3D12_BLEND_ONE;
-            state.SrcBlendAlpha = D3D12_BLEND_ZERO;
-            state.DestBlendAlpha = D3D12_BLEND_ONE;
+            state.SrcBlend = ::D3D12_BLEND_ONE;
+            state.DestBlend = ::D3D12_BLEND_ONE;
+            state.SrcBlendAlpha = ::D3D12_BLEND_ZERO;
+            state.DestBlendAlpha = ::D3D12_BLEND_ONE;
             break;
         case Blend::Multiply:
             /* dst = src * dst + dst * (1 - srcA): where the source is transparent the target stays */
-            state.SrcBlend = D3D12_BLEND_DEST_COLOR;
-            state.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-            state.SrcBlendAlpha = D3D12_BLEND_ZERO;
-            state.DestBlendAlpha = D3D12_BLEND_ONE;
+            state.SrcBlend = ::D3D12_BLEND_DEST_COLOR;
+            state.DestBlend = ::D3D12_BLEND_INV_SRC_ALPHA;
+            state.SrcBlendAlpha = ::D3D12_BLEND_ZERO;
+            state.DestBlendAlpha = ::D3D12_BLEND_ONE;
             break;
         case Blend::Screen:
             /* dst = src + dst * (1 - src) */
-            state.SrcBlend = D3D12_BLEND_ONE;
-            state.DestBlend = D3D12_BLEND_INV_SRC_COLOR;
-            state.SrcBlendAlpha = D3D12_BLEND_ZERO;
-            state.DestBlendAlpha = D3D12_BLEND_ONE;
+            state.SrcBlend = ::D3D12_BLEND_ONE;
+            state.DestBlend = ::D3D12_BLEND_INV_SRC_COLOR;
+            state.SrcBlendAlpha = ::D3D12_BLEND_ZERO;
+            state.DestBlendAlpha = ::D3D12_BLEND_ONE;
             break;
     }
 
@@ -490,7 +490,7 @@ static int _GetGaussianTaps(float extent) {
     return std::clamp(static_cast<int>(std::ceil(extent)), 0, _blurTapMax);
 }
 
-static ComPtr<IDXGIAdapter1> _GetAdapter(IDXGIFactory4* factory) {
+static ComPtr<::IDXGIAdapter1> _GetAdapter(::IDXGIFactory4* factory) {
     PROFILE
 
     /* ROCKET_D3D12_ADAPTER=warp picks the software rasterizer, as the tests can */
@@ -498,92 +498,92 @@ static ComPtr<IDXGIAdapter1> _GetAdapter(IDXGIFactory4* factory) {
     auto const warp = (requested != nullptr) && (std::string(requested) == "warp");
 
     if (warp == false) {
-        auto factory6 = ComPtr<IDXGIFactory6>();
+        auto factory6 = ComPtr<::IDXGIFactory6>();
 
         if (SUCCEEDED(factory->QueryInterface(IID_PPV_ARGS(&factory6)))) {
-            for (auto index = UINT(0); ; index++) {
-                auto adapter = ComPtr<IDXGIAdapter1>();
+            for (auto index = ::UINT(0); ; index++) {
+                auto adapter = ComPtr<::IDXGIAdapter1>();
 
-                if (factory6->EnumAdapterByGpuPreference(index, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&adapter)) == DXGI_ERROR_NOT_FOUND) {
+                if (factory6->EnumAdapterByGpuPreference(index, ::DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&adapter)) == DXGI_ERROR_NOT_FOUND) {
                     break;
                 }
 
-                auto description = DXGI_ADAPTER_DESC1{};
+                auto description = ::DXGI_ADAPTER_DESC1{};
                 adapter->GetDesc1(&description);
 
                 /* the Basic Render Driver is the software rasterizer under
                    another name; a GPU without a driver lists it as hardware */
-                auto const software = ((description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0)
+                auto const software = ((description.Flags & ::DXGI_ADAPTER_FLAG_SOFTWARE) != 0)
                     || ((description.VendorId == 0x1414) && (description.DeviceId == 0x8C));
 
-                if ((software == false) && SUCCEEDED(::D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, __uuidof(ID3D12Device), nullptr))) {
+                if ((software == false) && SUCCEEDED(::D3D12CreateDevice(adapter.Get(), ::D3D_FEATURE_LEVEL_11_0, __uuidof(::ID3D12Device), nullptr))) {
                     return adapter;
                 }
             }
         }
     }
 
-    auto adapter = ComPtr<IDXGIAdapter1>();
+    auto adapter = ComPtr<::IDXGIAdapter1>();
     _Check(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter)), "get the WARP adapter");
 
     return adapter;
 }
 
-static ComPtr<ID3D12RootSignature> _CreateRootSignature(ID3D12Device* device) {
+static ComPtr<::ID3D12RootSignature> _CreateRootSignature(::ID3D12Device* device) {
     PROFILE
 
-    auto const srvRange = D3D12_DESCRIPTOR_RANGE{ D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 2, 0 };
-    auto const samplerRange = D3D12_DESCRIPTOR_RANGE{ D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 0, 2, 0 };
+    auto const srvRange = ::D3D12_DESCRIPTOR_RANGE{ ::D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 2, 0 };
+    auto const samplerRange = ::D3D12_DESCRIPTOR_RANGE{ ::D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 0, 2, 0 };
 
-    auto const constantBuffer = [](UINT reg, UINT space, D3D12_SHADER_VISIBILITY visibility) {
-        auto parameter = D3D12_ROOT_PARAMETER{};
-        parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-        parameter.Descriptor = D3D12_ROOT_DESCRIPTOR{ reg, space };
+    auto const constantBuffer = [](::UINT reg, ::UINT space, ::D3D12_SHADER_VISIBILITY visibility) {
+        auto parameter = ::D3D12_ROOT_PARAMETER{};
+        parameter.ParameterType = ::D3D12_ROOT_PARAMETER_TYPE_CBV;
+        parameter.Descriptor = ::D3D12_ROOT_DESCRIPTOR{ reg, space };
         parameter.ShaderVisibility = visibility;
         return parameter;
     };
 
-    auto const table = [](D3D12_DESCRIPTOR_RANGE const* range) {
-        auto parameter = D3D12_ROOT_PARAMETER{};
-        parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        parameter.DescriptorTable = D3D12_ROOT_DESCRIPTOR_TABLE{ 1, range };
-        parameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    auto const table = [](::D3D12_DESCRIPTOR_RANGE const* range) {
+        auto parameter = ::D3D12_ROOT_PARAMETER{};
+        parameter.ParameterType = ::D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        parameter.DescriptorTable = ::D3D12_ROOT_DESCRIPTOR_TABLE{ 1, range };
+        parameter.ShaderVisibility = ::D3D12_SHADER_VISIBILITY_PIXEL;
         return parameter;
     };
 
-    D3D12_ROOT_PARAMETER const parameters[_RootParameterCount] = {
-        constantBuffer(0, 1, D3D12_SHADER_VISIBILITY_VERTEX),
-        constantBuffer(1, 1, D3D12_SHADER_VISIBILITY_VERTEX),
-        constantBuffer(0, 3, D3D12_SHADER_VISIBILITY_PIXEL),
-        constantBuffer(1, 3, D3D12_SHADER_VISIBILITY_PIXEL),
-        constantBuffer(2, 3, D3D12_SHADER_VISIBILITY_PIXEL),
+    ::D3D12_ROOT_PARAMETER const parameters[_RootParameterCount] = {
+        constantBuffer(0, 1, ::D3D12_SHADER_VISIBILITY_VERTEX),
+        constantBuffer(1, 1, ::D3D12_SHADER_VISIBILITY_VERTEX),
+        constantBuffer(0, 3, ::D3D12_SHADER_VISIBILITY_PIXEL),
+        constantBuffer(1, 3, ::D3D12_SHADER_VISIBILITY_PIXEL),
+        constantBuffer(2, 3, ::D3D12_SHADER_VISIBILITY_PIXEL),
         table(&srvRange),
         table(&samplerRange)
     };
 
-    auto const description = D3D12_ROOT_SIGNATURE_DESC{ _RootParameterCount, parameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_NONE };
-    auto blob = ComPtr<ID3DBlob>();
-    auto error = ComPtr<ID3DBlob>();
+    auto const description = ::D3D12_ROOT_SIGNATURE_DESC{ _RootParameterCount, parameters, 0, nullptr, ::D3D12_ROOT_SIGNATURE_FLAG_NONE };
+    auto blob = ComPtr<::ID3DBlob>();
+    auto error = ComPtr<::ID3DBlob>();
 
-    _Check(::D3D12SerializeRootSignature(&description, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error), "serialize the root signature");
+    _Check(::D3D12SerializeRootSignature(&description, ::D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error), "serialize the root signature");
 
-    auto signature = ComPtr<ID3D12RootSignature>();
+    auto signature = ComPtr<::ID3D12RootSignature>();
     _Check(device->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&signature)), "create the root signature");
 
     return signature;
 }
 
-static ComPtr<ID3D12DescriptorHeap> _CreateHeap(ID3D12Device* device, D3D12_DESCRIPTOR_HEAP_TYPE type, UINT count, bool shaderVisible) {
+static ComPtr<::ID3D12DescriptorHeap> _CreateHeap(::ID3D12Device* device, ::D3D12_DESCRIPTOR_HEAP_TYPE type, ::UINT count, bool shaderVisible) {
     PROFILE
 
-    auto const description = D3D12_DESCRIPTOR_HEAP_DESC{
+    auto const description = ::D3D12_DESCRIPTOR_HEAP_DESC{
         type,
         count,
-        (shaderVisible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE),
+        (shaderVisible ? ::D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : ::D3D12_DESCRIPTOR_HEAP_FLAG_NONE),
         0
     };
 
-    auto heap = ComPtr<ID3D12DescriptorHeap>();
+    auto heap = ComPtr<::ID3D12DescriptorHeap>();
     _Check(device->CreateDescriptorHeap(&description, IID_PPV_ARGS(&heap)), "create a descriptor heap");
 
     return heap;
@@ -592,22 +592,22 @@ static ComPtr<ID3D12DescriptorHeap> _CreateHeap(ID3D12Device* device, D3D12_DESC
 static void _CreateSamplers(_Context& context) {
     PROFILE
 
-    auto filters = std::array<D3D12_FILTER, _SamplerCount>{};
-    filters[_NerNerSampler] = D3D12_FILTER_MIN_MAG_MIP_POINT;
-    filters[_LinLinSampler] = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
-    filters[_LinNerSampler] = D3D12_FILTER_MIN_LINEAR_MAG_MIP_POINT;
-    filters[_NerLinSampler] = D3D12_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT;
+    auto filters = std::array<::D3D12_FILTER, _SamplerCount>{};
+    filters[_NerNerSampler] = ::D3D12_FILTER_MIN_MAG_MIP_POINT;
+    filters[_LinLinSampler] = ::D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+    filters[_LinNerSampler] = ::D3D12_FILTER_MIN_LINEAR_MAG_MIP_POINT;
+    filters[_NerLinSampler] = ::D3D12_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT;
 
     auto handle = context.samplerHeap->GetCPUDescriptorHandleForHeapStart();
 
     for (auto const filter : filters) {
-        auto description = D3D12_SAMPLER_DESC{};
+        auto description = ::D3D12_SAMPLER_DESC{};
         description.Filter = filter;
-        description.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-        description.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-        description.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        description.AddressU = ::D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        description.AddressV = ::D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        description.AddressW = ::D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
         description.MaxAnisotropy = 1;
-        description.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+        description.ComparisonFunc = ::D3D12_COMPARISON_FUNC_NEVER;
         description.MinLOD = 0.0f;
         description.MaxLOD = D3D12_FLOAT32_MAX;
 
@@ -627,20 +627,20 @@ static _Context& _GetContext() {
         _Check(::CreateDXGIFactory2(0, IID_PPV_ARGS(&context->factory)), "create the DXGI factory");
 
         auto const adapter = _GetAdapter(context->factory.Get());
-        _Check(::D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&context->device)), "create the D3D12 device");
+        _Check(::D3D12CreateDevice(adapter.Get(), ::D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&context->device)), "create the D3D12 device");
 
-        auto const queueDescription = D3D12_COMMAND_QUEUE_DESC{ D3D12_COMMAND_LIST_TYPE_DIRECT, 0, D3D12_COMMAND_QUEUE_FLAG_NONE, 0 };
+        auto const queueDescription = ::D3D12_COMMAND_QUEUE_DESC{ ::D3D12_COMMAND_LIST_TYPE_DIRECT, 0, ::D3D12_COMMAND_QUEUE_FLAG_NONE, 0 };
         _Check(context->device->CreateCommandQueue(&queueDescription, IID_PPV_ARGS(&context->queue)), "create the command queue");
-        _Check(context->device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&context->fence)), "create the fence");
+        _Check(context->device->CreateFence(0, ::D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&context->fence)), "create the fence");
 
         context->fenceEvent = ::CreateEventW(nullptr, FALSE, FALSE, nullptr);
         context->rootSignature = _CreateRootSignature(context->device.Get());
-        context->srvHeap = _CreateHeap(context->device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, _srvCapacity, true);
-        context->samplerHeap = _CreateHeap(context->device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, _SamplerCount, true);
-        context->rtvHeap = _CreateHeap(context->device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, _rtvCapacity, false);
-        context->srvSize = context->device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        context->samplerSize = context->device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
-        context->rtvSize = context->device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+        context->srvHeap = _CreateHeap(context->device.Get(), ::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, _srvCapacity, true);
+        context->samplerHeap = _CreateHeap(context->device.Get(), ::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, _SamplerCount, true);
+        context->rtvHeap = _CreateHeap(context->device.Get(), ::D3D12_DESCRIPTOR_HEAP_TYPE_RTV, _rtvCapacity, false);
+        context->srvSize = context->device->GetDescriptorHandleIncrementSize(::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        context->samplerSize = context->device->GetDescriptorHandleIncrementSize(::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+        context->rtvSize = context->device->GetDescriptorHandleIncrementSize(::D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
         _CreateSamplers(*context);
 
@@ -724,7 +724,7 @@ static void _Defer(std::function<void()> release) {
     _CollectDeferred();
 }
 
-static UINT _AllocateSlot(std::vector<UINT>& freeSlots, UINT& next, UINT capacity) {
+static ::UINT _AllocateSlot(std::vector<::UINT>& freeSlots, ::UINT& next, ::UINT capacity) {
     PROFILE
 
     if (freeSlots.empty() == false) {
@@ -740,58 +740,58 @@ static UINT _AllocateSlot(std::vector<UINT>& freeSlots, UINT& next, UINT capacit
     return next++;
 }
 
-static D3D12_CPU_DESCRIPTOR_HANDLE _GetRtv(UINT slot) {
+static ::D3D12_CPU_DESCRIPTOR_HANDLE _GetRtv(::UINT slot) {
     PROFILE
 
     auto& context = _GetContext();
     auto handle = context.rtvHeap->GetCPUDescriptorHandleForHeapStart();
-    handle.ptr += static_cast<SIZE_T>(slot) * context.rtvSize;
+    handle.ptr += static_cast<::SIZE_T>(slot) * context.rtvSize;
 
     return handle;
 }
 
-static D3D12_CPU_DESCRIPTOR_HANDLE _GetSrvCpu(UINT slot) {
+static ::D3D12_CPU_DESCRIPTOR_HANDLE _GetSrvCpu(::UINT slot) {
     PROFILE
 
     auto& context = _GetContext();
     auto handle = context.srvHeap->GetCPUDescriptorHandleForHeapStart();
-    handle.ptr += static_cast<SIZE_T>(slot) * context.srvSize;
+    handle.ptr += static_cast<::SIZE_T>(slot) * context.srvSize;
 
     return handle;
 }
 
-static D3D12_GPU_DESCRIPTOR_HANDLE _GetSrvGpu(UINT slot) {
+static ::D3D12_GPU_DESCRIPTOR_HANDLE _GetSrvGpu(::UINT slot) {
     PROFILE
 
     auto& context = _GetContext();
     auto handle = context.srvHeap->GetGPUDescriptorHandleForHeapStart();
-    handle.ptr += static_cast<UINT64>(slot) * context.srvSize;
+    handle.ptr += static_cast<::UINT64>(slot) * context.srvSize;
 
     return handle;
 }
 
-static D3D12_GPU_DESCRIPTOR_HANDLE _GetSamplerGpu(_Sampler sampler) {
+static ::D3D12_GPU_DESCRIPTOR_HANDLE _GetSamplerGpu(_Sampler sampler) {
     PROFILE
 
     auto& context = _GetContext();
     auto handle = context.samplerHeap->GetGPUDescriptorHandleForHeapStart();
-    handle.ptr += static_cast<UINT64>(sampler) * context.samplerSize;
+    handle.ptr += static_cast<::UINT64>(sampler) * context.samplerSize;
 
     return handle;
 }
 
-static ComPtr<ID3D12Resource> _CreateBuffer(D3D12_HEAP_TYPE type, std::uint64_t size, D3D12_RESOURCE_STATES state) {
+static ComPtr<::ID3D12Resource> _CreateBuffer(::D3D12_HEAP_TYPE type, std::uint64_t size, ::D3D12_RESOURCE_STATES state) {
     PROFILE
 
-    auto const heap = D3D12_HEAP_PROPERTIES{ type, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 0, 0 };
-    auto const description = D3D12_RESOURCE_DESC{
-        D3D12_RESOURCE_DIMENSION_BUFFER, 0, size, 1, 1, 1,
-        DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC{ 1, 0 },
-        D3D12_TEXTURE_LAYOUT_ROW_MAJOR, D3D12_RESOURCE_FLAG_NONE
+    auto const heap = ::D3D12_HEAP_PROPERTIES{ type, ::D3D12_CPU_PAGE_PROPERTY_UNKNOWN, ::D3D12_MEMORY_POOL_UNKNOWN, 0, 0 };
+    auto const description = ::D3D12_RESOURCE_DESC{
+        ::D3D12_RESOURCE_DIMENSION_BUFFER, 0, size, 1, 1, 1,
+        ::DXGI_FORMAT_UNKNOWN, ::DXGI_SAMPLE_DESC{ 1, 0 },
+        ::D3D12_TEXTURE_LAYOUT_ROW_MAJOR, ::D3D12_RESOURCE_FLAG_NONE
     };
 
-    auto buffer = ComPtr<ID3D12Resource>();
-    _Check(_GetContext().device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &description, state, nullptr, IID_PPV_ARGS(&buffer)), "create a buffer");
+    auto buffer = ComPtr<::ID3D12Resource>();
+    _Check(_GetContext().device->CreateCommittedResource(&heap, ::D3D12_HEAP_FLAG_NONE, &description, state, nullptr, IID_PPV_ARGS(&buffer)), "create a buffer");
 
     return buffer;
 }
@@ -827,11 +827,11 @@ static _UploadAllocation _Allocate(_Recording& recording, std::uint64_t size, st
         page = std::move(found->first);
         context.freePages.erase(found);
     } else {
-        page.buffer = _CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, needed, D3D12_RESOURCE_STATE_GENERIC_READ);
+        page.buffer = _CreateBuffer(::D3D12_HEAP_TYPE_UPLOAD, needed, ::D3D12_RESOURCE_STATE_GENERIC_READ);
         page.size = needed;
         page.gpu = page.buffer->GetGPUVirtualAddress();
 
-        auto const range = D3D12_RANGE{ 0, 0 };
+        auto const range = ::D3D12_RANGE{ 0, 0 };
         _Check(page.buffer->Map(0, &range, reinterpret_cast<void**>(&page.cpu)), "map an upload page");
     }
 
@@ -859,7 +859,7 @@ static void _RecyclePages(_Recording& recording, std::uint64_t fence) {
     recording.pages.clear();
 }
 
-static ComPtr<ID3D12CommandAllocator> _GetAllocator(std::vector<std::pair<ComPtr<ID3D12CommandAllocator>, std::uint64_t>>& allocators) {
+static ComPtr<::ID3D12CommandAllocator> _GetAllocator(std::vector<std::pair<ComPtr<::ID3D12CommandAllocator>, std::uint64_t>>& allocators) {
     PROFILE
 
     auto& context = _GetContext();
@@ -873,14 +873,14 @@ static ComPtr<ID3D12CommandAllocator> _GetAllocator(std::vector<std::pair<ComPtr
         }
     }
 
-    auto allocator = ComPtr<ID3D12CommandAllocator>();
-    _Check(context.device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&allocator)), "create a command allocator");
+    auto allocator = ComPtr<::ID3D12CommandAllocator>();
+    _Check(context.device->CreateCommandAllocator(::D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&allocator)), "create a command allocator");
     allocators.emplace_back(allocator, UINT64_MAX);
 
     return allocator;
 }
 
-static void _ReturnAllocator(std::vector<std::pair<ComPtr<ID3D12CommandAllocator>, std::uint64_t>>& allocators, ID3D12CommandAllocator* allocator, std::uint64_t fence) {
+static void _ReturnAllocator(std::vector<std::pair<ComPtr<::ID3D12CommandAllocator>, std::uint64_t>>& allocators, ::ID3D12CommandAllocator* allocator, std::uint64_t fence) {
     PROFILE
 
     for (auto& [ candidate, candidateFence ] : allocators) {
@@ -890,7 +890,7 @@ static void _ReturnAllocator(std::vector<std::pair<ComPtr<ID3D12CommandAllocator
     }
 }
 
-static void _OpenRecording(_Recording& recording, std::vector<std::pair<ComPtr<ID3D12CommandAllocator>, std::uint64_t>>& allocators) {
+static void _OpenRecording(_Recording& recording, std::vector<std::pair<ComPtr<::ID3D12CommandAllocator>, std::uint64_t>>& allocators) {
     PROFILE
 
     auto& context = _GetContext();
@@ -900,12 +900,12 @@ static void _OpenRecording(_Recording& recording, std::vector<std::pair<ComPtr<I
     recording.allocator = _GetAllocator(allocators);
 
     if (recording.list == nullptr) {
-        _Check(context.device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, recording.allocator.Get(), nullptr, IID_PPV_ARGS(&recording.list)), "create a command list");
+        _Check(context.device->CreateCommandList(0, ::D3D12_COMMAND_LIST_TYPE_DIRECT, recording.allocator.Get(), nullptr, IID_PPV_ARGS(&recording.list)), "create a command list");
     } else {
         _Check(recording.list->Reset(recording.allocator.Get(), nullptr), "reset a command list");
     }
 
-    ID3D12DescriptorHeap* const heaps[] = { context.srvHeap.Get(), context.samplerHeap.Get() };
+    ::ID3D12DescriptorHeap* const heaps[] = { context.srvHeap.Get(), context.samplerHeap.Get() };
     recording.list->SetDescriptorHeaps(2, heaps);
     recording.list->SetGraphicsRootSignature(context.rootSignature.Get());
     recording.bindings = _Bindings{}; /* a reset list has nothing bound */
@@ -913,7 +913,7 @@ static void _OpenRecording(_Recording& recording, std::vector<std::pair<ComPtr<I
     context.openRecordings++;
 }
 
-static std::uint64_t _SubmitRecording(_Recording& recording, std::vector<std::pair<ComPtr<ID3D12CommandAllocator>, std::uint64_t>>& allocators) {
+static std::uint64_t _SubmitRecording(_Recording& recording, std::vector<std::pair<ComPtr<::ID3D12CommandAllocator>, std::uint64_t>>& allocators) {
     PROFILE
 
     auto& context = _GetContext();
@@ -922,7 +922,7 @@ static std::uint64_t _SubmitRecording(_Recording& recording, std::vector<std::pa
 
     _Check(recording.list->Close(), "close a command list");
 
-    ID3D12CommandList* const lists[] = { recording.list.Get() };
+    ::ID3D12CommandList* const lists[] = { recording.list.Get() };
     context.queue->ExecuteCommandLists(1, lists);
 
     auto const fence = _Signal();
@@ -937,7 +937,7 @@ static std::uint64_t _SubmitRecording(_Recording& recording, std::vector<std::pa
     return fence;
 }
 
-static void _DiscardRecording(_Recording& recording, std::vector<std::pair<ComPtr<ID3D12CommandAllocator>, std::uint64_t>>& allocators) {
+static void _DiscardRecording(_Recording& recording, std::vector<std::pair<ComPtr<::ID3D12CommandAllocator>, std::uint64_t>>& allocators) {
     PROFILE
 
     assert(recording.open);
@@ -976,15 +976,15 @@ static void _FlushTransfer() {
     }
 }
 
-static void _Barrier(ID3D12GraphicsCommandList* list, ID3D12Resource* resource, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after) {
+static void _Barrier(::ID3D12GraphicsCommandList* list, ::ID3D12Resource* resource, ::D3D12_RESOURCE_STATES before, ::D3D12_RESOURCE_STATES after) {
     PROFILE
 
     if (before == after) {
         return;
     }
 
-    auto barrier = D3D12_RESOURCE_BARRIER{};
-    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    auto barrier = ::D3D12_RESOURCE_BARRIER{};
+    barrier.Type = ::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barrier.Transition.pResource = resource;
     barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     barrier.Transition.StateBefore = before;
@@ -993,7 +993,7 @@ static void _Barrier(ID3D12GraphicsCommandList* list, ID3D12Resource* resource, 
     list->ResourceBarrier(1, &barrier);
 }
 
-static D3D12_SHADER_BYTECODE _GetPixelShader(_Fragment fragment) {
+static ::D3D12_SHADER_BYTECODE _GetPixelShader(_Fragment fragment) {
     PROFILE
 
     switch (fragment) {
@@ -1010,34 +1010,34 @@ static D3D12_SHADER_BYTECODE _GetPixelShader(_Fragment fragment) {
     return {};
 }
 
-static ComPtr<ID3D12PipelineState> _CreatePipeline(_Fragment fragment, DXGI_FORMAT format, Blend blend) {
+static ComPtr<::ID3D12PipelineState> _CreatePipeline(_Fragment fragment, ::DXGI_FORMAT format, Blend blend) {
     PROFILE
 
     auto& context = _GetContext();
-    auto description = D3D12_GRAPHICS_PIPELINE_STATE_DESC{};
+    auto description = ::D3D12_GRAPHICS_PIPELINE_STATE_DESC{};
 
     description.pRootSignature = context.rootSignature.Get();
-    description.VS = D3D12_SHADER_BYTECODE{ Rocket_DXIL_QuadVertex, Rocket_DXIL_QuadVertex_len };
+    description.VS = ::D3D12_SHADER_BYTECODE{ Rocket_DXIL_QuadVertex, Rocket_DXIL_QuadVertex_len };
     description.PS = _GetPixelShader(fragment);
     description.BlendState.RenderTarget[0] = _GetBlend(blend);
     description.SampleMask = UINT_MAX;
-    description.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-    description.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+    description.RasterizerState.FillMode = ::D3D12_FILL_MODE_SOLID;
+    description.RasterizerState.CullMode = ::D3D12_CULL_MODE_NONE;
     description.RasterizerState.DepthClipEnable = TRUE;
     description.DepthStencilState.DepthEnable = FALSE;
     description.DepthStencilState.StencilEnable = FALSE;
-    description.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    description.PrimitiveTopologyType = ::D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     description.NumRenderTargets = 1;
     description.RTVFormats[0] = format;
-    description.SampleDesc = DXGI_SAMPLE_DESC{ 1, 0 };
+    description.SampleDesc = ::DXGI_SAMPLE_DESC{ 1, 0 };
 
-    auto pipeline = ComPtr<ID3D12PipelineState>();
+    auto pipeline = ComPtr<::ID3D12PipelineState>();
     _Check(context.device->CreateGraphicsPipelineState(&description, IID_PPV_ARGS(&pipeline)), "create a pipeline");
 
     return pipeline;
 }
 
-static ID3D12PipelineState* _GetPipeline(_Fragment fragment, DXGI_FORMAT format, Blend blend) {
+static ::ID3D12PipelineState* _GetPipeline(_Fragment fragment, ::DXGI_FORMAT format, Blend blend) {
     PROFILE
 
     auto& context = _GetContext();
@@ -1051,7 +1051,7 @@ static ID3D12PipelineState* _GetPipeline(_Fragment fragment, DXGI_FORMAT format,
     return it->second.Get();
 }
 
-static ID3D12GraphicsCommandList* _GetList(_RenderPass const& renderPass) {
+static ::ID3D12GraphicsCommandList* _GetList(_RenderPass const& renderPass) {
     PROFILE
 
     assert(renderPass.recording != nullptr);
@@ -1066,7 +1066,7 @@ static void _SetScissor(_RenderPass const& renderPass, std::optional<Vec4> const
     auto const passWidth = static_cast<int>(renderPass.width);
     auto const passHeight = static_cast<int>(renderPass.height);
 
-    auto rect = D3D12_RECT{ 0, 0, passWidth, passHeight };
+    auto rect = ::D3D12_RECT{ 0, 0, passWidth, passHeight };
 
     if (scissor.has_value()) {
         auto const left = std::max(0, static_cast<int>(std::roundf(scissor->x)));
@@ -1095,7 +1095,7 @@ static void _SetScissor(_RenderPass const& renderPass, std::optional<Vec4> const
 static void _SetViewport(_RenderPass const& renderPass, Vec4 const& viewport) {
     PROFILE
 
-    auto const viewportInfo = D3D12_VIEWPORT{
+    auto const viewportInfo = ::D3D12_VIEWPORT{
         viewport.x,
         viewport.y,
         viewport.width,
@@ -1106,14 +1106,14 @@ static void _SetViewport(_RenderPass const& renderPass, Vec4 const& viewport) {
 
     if (
         (renderPass.recording->bindings.viewport.has_value() == false) ||
-        (std::memcmp(&*renderPass.recording->bindings.viewport, &viewportInfo, sizeof(D3D12_VIEWPORT)) != 0)
+        (std::memcmp(&*renderPass.recording->bindings.viewport, &viewportInfo, sizeof(::D3D12_VIEWPORT)) != 0)
     ) {
         _GetList(renderPass)->RSSetViewports(1, &viewportInfo);
         renderPass.recording->bindings.viewport = viewportInfo;
     }
 }
 
-static void _SetPipeline(_RenderPass const& renderPass, ID3D12PipelineState* pipeline) {
+static void _SetPipeline(_RenderPass const& renderPass, ::ID3D12PipelineState* pipeline) {
     PROFILE
 
     if (renderPass.recording->bindings.pipeline != pipeline) {
@@ -1140,7 +1140,7 @@ static void _BindTexture(_RenderPass const& renderPass, _Texture const* texture,
     }
 }
 
-static void _BindUniforms(_RenderPass const& renderPass, D3D12_GPU_VIRTUAL_ADDRESS address, std::initializer_list<UINT> parameters) {
+static void _BindUniforms(_RenderPass const& renderPass, ::D3D12_GPU_VIRTUAL_ADDRESS address, std::initializer_list<::UINT> parameters) {
     PROFILE
 
     for (auto const parameter : parameters) {
@@ -1152,7 +1152,7 @@ static void _BindUniforms(_RenderPass const& renderPass, D3D12_GPU_VIRTUAL_ADDRE
 }
 
 template <typename Uniforms>
-static void _PushUniforms(_RenderPass const& renderPass, Uniforms const& uniforms, std::initializer_list<UINT> parameters) {
+static void _PushUniforms(_RenderPass const& renderPass, Uniforms const& uniforms, std::initializer_list<::UINT> parameters) {
     PROFILE
 
     auto const bytes = reinterpret_cast<std::uint8_t const*>(&uniforms);
@@ -1163,7 +1163,7 @@ static void _PushUniforms(_RenderPass const& renderPass, Uniforms const& uniform
     auto const same =
         (renderPass.recording->bindings.uploadedUniforms[first].size() == sizeof(Uniforms)) &&
         (std::memcmp(renderPass.recording->bindings.uploadedUniforms[first].data(), bytes, sizeof(Uniforms)) == 0) &&
-        std::ranges::all_of(parameters, [&](UINT parameter) {
+        std::ranges::all_of(parameters, [&](::UINT parameter) {
             return renderPass.recording->bindings.parameters[parameter] == renderPass.recording->bindings.parameters[first];
         });
 
@@ -1181,9 +1181,9 @@ static void _PushUniforms(_RenderPass const& renderPass, Uniforms const& uniform
 static void _OpenRenderPass(_RenderPass& renderPass, std::optional<Vec4> const& clear) {
     PROFILE
 
-    _Barrier(renderPass.recording->list.Get(), renderPass.texture, renderPass.restState, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    _Barrier(renderPass.recording->list.Get(), renderPass.texture, renderPass.restState, ::D3D12_RESOURCE_STATE_RENDER_TARGET);
     renderPass.recording->list->OMSetRenderTargets(1, &renderPass.rtv, FALSE, nullptr);
-    renderPass.recording->list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    renderPass.recording->list->IASetPrimitiveTopology(::D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 
     if (clear.has_value()) {
         /* the target is premultiplied; the clear color is straight RGBA */
@@ -1203,7 +1203,7 @@ static void _OpenRenderPass(_RenderPass& renderPass, std::optional<Vec4> const& 
 static void _CloseRenderPass(_RenderPass& renderPass) {
     PROFILE
 
-    _Barrier(renderPass.recording->list.Get(), renderPass.texture, D3D12_RESOURCE_STATE_RENDER_TARGET, renderPass.restState);
+    _Barrier(renderPass.recording->list.Get(), renderPass.texture, ::D3D12_RESOURCE_STATE_RENDER_TARGET, renderPass.restState);
     renderPass.open = false;
 }
 
@@ -1218,7 +1218,7 @@ static void _BeginRenderPass(_RenderPass& renderPass, _Recording& recording, _Te
     renderPass.format = _textureFormat;
     renderPass.texture = texture->resource.Get();
     renderPass.rtv = _GetRtv(texture->rtv);
-    renderPass.restState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    renderPass.restState = ::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     renderPass.recording = &recording;
 
     _OpenRenderPass(renderPass, clear);
@@ -1235,7 +1235,7 @@ static void _EndRenderPass(_RenderPass& renderPass) {
     renderPass.height = 0;
     renderPass.texture = nullptr;
     renderPass.recording = nullptr;
-    renderPass.format = DXGI_FORMAT_UNKNOWN;
+    renderPass.format = ::DXGI_FORMAT_UNKNOWN;
 }
 
 static void _SuspendRenderPass(_RenderPass& renderPass) {
@@ -1524,7 +1524,7 @@ static void _ReleaseSwapchainBuffers(_Swapchain& swapchain) {
 
     _WaitForFence(_GetContext().fenceValue);
 
-    for (auto i = UINT(0); i < _swapchainBuffers; i++) {
+    for (auto i = ::UINT(0); i < _swapchainBuffers; i++) {
         swapchain.buffers[i].Reset();
         swapchain.fenceValues[i] = 0;
     }
@@ -1535,17 +1535,17 @@ static void _AcquireSwapchainBuffers(_Swapchain& swapchain) {
 
     auto& context = _GetContext();
 
-    for (auto i = UINT(0); i < _swapchainBuffers; i++) {
+    for (auto i = ::UINT(0); i < _swapchainBuffers; i++) {
         _Check(swapchain.swapchain->GetBuffer(i, IID_PPV_ARGS(&swapchain.buffers[i])), "get a swapchain buffer");
         context.device->CreateRenderTargetView(swapchain.buffers[i].Get(), nullptr, _GetRtv(swapchain.rtvs[i]));
     }
 }
 
-static _Swapchain* _GetSwapchain(HWND hwnd) {
+static _Swapchain* _GetSwapchain(::HWND hwnd) {
     PROFILE
 
     auto& context = _GetContext();
-    auto client = RECT{};
+    auto client = ::RECT{};
 
     ::GetClientRect(hwnd, &client);
 
@@ -1560,12 +1560,12 @@ static _Swapchain* _GetSwapchain(HWND hwnd) {
 
     if (it == context.swapchains.end()) {
         auto swapchain = new _Swapchain{};
-        auto const description = DXGI_SWAP_CHAIN_DESC1{
-            width, height, _textureFormat, FALSE, DXGI_SAMPLE_DESC{ 1, 0 },
-            DXGI_USAGE_RENDER_TARGET_OUTPUT, _swapchainBuffers, DXGI_SCALING_STRETCH,
-            DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_ALPHA_MODE_IGNORE, _swapchainFlags
+        auto const description = ::DXGI_SWAP_CHAIN_DESC1{
+            width, height, _textureFormat, FALSE, ::DXGI_SAMPLE_DESC{ 1, 0 },
+            DXGI_USAGE_RENDER_TARGET_OUTPUT, _swapchainBuffers, ::DXGI_SCALING_STRETCH,
+            ::DXGI_SWAP_EFFECT_FLIP_DISCARD, ::DXGI_ALPHA_MODE_IGNORE, _swapchainFlags
         };
-        auto swapchain1 = ComPtr<IDXGISwapChain1>();
+        auto swapchain1 = ComPtr<::IDXGISwapChain1>();
 
         _Check(context.factory->CreateSwapChainForHwnd(context.queue.Get(), hwnd, &description, nullptr, nullptr, &swapchain1), "create the swapchain");
         _Check(swapchain1.As(&swapchain->swapchain), "get the IDXGISwapChain3 interface of the swapchain");
@@ -1578,7 +1578,7 @@ static _Swapchain* _GetSwapchain(HWND hwnd) {
         /* the window decides about full screen itself */
         context.factory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER);
 
-        for (auto i = UINT(0); i < _swapchainBuffers; i++) {
+        for (auto i = ::UINT(0); i < _swapchainBuffers; i++) {
             swapchain->rtvs[i] = _AllocateSlot(context.freeRtvs, context.nextRtv, _rtvCapacity);
         }
 
@@ -1625,15 +1625,15 @@ void* __CreateTexture(std::uint32_t width, std::uint32_t height) {
     texture->width = std::max(1u, width);
     texture->height = std::max(1u, height);
 
-    auto const heap = D3D12_HEAP_PROPERTIES{ D3D12_HEAP_TYPE_DEFAULT, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 0, 0 };
-    auto const description = D3D12_RESOURCE_DESC{
-        D3D12_RESOURCE_DIMENSION_TEXTURE2D, 0, texture->width, texture->height, 1, 1,
-        _textureFormat, DXGI_SAMPLE_DESC{ 1, 0 },
-        D3D12_TEXTURE_LAYOUT_UNKNOWN, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
+    auto const heap = ::D3D12_HEAP_PROPERTIES{ ::D3D12_HEAP_TYPE_DEFAULT, ::D3D12_CPU_PAGE_PROPERTY_UNKNOWN, ::D3D12_MEMORY_POOL_UNKNOWN, 0, 0 };
+    auto const description = ::D3D12_RESOURCE_DESC{
+        ::D3D12_RESOURCE_DIMENSION_TEXTURE2D, 0, texture->width, texture->height, 1, 1,
+        _textureFormat, ::DXGI_SAMPLE_DESC{ 1, 0 },
+        ::D3D12_TEXTURE_LAYOUT_UNKNOWN, ::D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
     };
-    auto const clear = D3D12_CLEAR_VALUE{ _textureFormat, { 0.0f, 0.0f, 0.0f, 0.0f } };
+    auto const clear = ::D3D12_CLEAR_VALUE{ _textureFormat, { 0.0f, 0.0f, 0.0f, 0.0f } };
 
-    _Check(context.device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &description, D3D12_RESOURCE_STATE_RENDER_TARGET, &clear, IID_PPV_ARGS(&texture->resource)), "create a texture");
+    _Check(context.device->CreateCommittedResource(&heap, ::D3D12_HEAP_FLAG_NONE, &description, ::D3D12_RESOURCE_STATE_RENDER_TARGET, &clear, IID_PPV_ARGS(&texture->resource)), "create a texture");
 
     texture->srv = _AllocateSlot(context.freeSrvs, context.nextSrv, _srvCapacity);
     texture->rtv = _AllocateSlot(context.freeRtvs, context.nextRtv, _rtvCapacity);
@@ -1647,7 +1647,7 @@ void* __CreateTexture(std::uint32_t width, std::uint32_t height) {
     float const transparent[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 
     transfer.list->ClearRenderTargetView(_GetRtv(texture->rtv), transparent, 0, nullptr);
-    _Barrier(transfer.list.Get(), texture->resource.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    _Barrier(transfer.list.Get(), texture->resource.Get(), ::D3D12_RESOURCE_STATE_RENDER_TARGET, ::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
     return texture;
 }
@@ -1677,28 +1677,28 @@ void __DownloadTexture(void* handle, std::vector<std::uint8_t>& pixels) {
 
     auto const rowBytes = static_cast<std::uint64_t>(texture->width) * 4;
     auto const rowPitch = _Align(rowBytes, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-    auto const readback = _CreateBuffer(D3D12_HEAP_TYPE_READBACK, (rowPitch * texture->height), D3D12_RESOURCE_STATE_COPY_DEST);
+    auto const readback = _CreateBuffer(::D3D12_HEAP_TYPE_READBACK, (rowPitch * texture->height), ::D3D12_RESOURCE_STATE_COPY_DEST);
 
-    auto source = D3D12_TEXTURE_COPY_LOCATION{};
+    auto source = ::D3D12_TEXTURE_COPY_LOCATION{};
     source.pResource = texture->resource.Get();
-    source.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    source.Type = ::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     source.SubresourceIndex = 0;
 
-    auto destination = D3D12_TEXTURE_COPY_LOCATION{};
+    auto destination = ::D3D12_TEXTURE_COPY_LOCATION{};
     destination.pResource = readback.Get();
-    destination.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    destination.Type = ::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
     destination.PlacedFootprint.Offset = 0;
-    destination.PlacedFootprint.Footprint = D3D12_SUBRESOURCE_FOOTPRINT{ _textureFormat, texture->width, texture->height, 1, static_cast<UINT>(rowPitch) };
+    destination.PlacedFootprint.Footprint = ::D3D12_SUBRESOURCE_FOOTPRINT{ _textureFormat, texture->width, texture->height, 1, static_cast<::UINT>(rowPitch) };
 
-    _Barrier(transfer.list.Get(), texture->resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    _Barrier(transfer.list.Get(), texture->resource.Get(), ::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, ::D3D12_RESOURCE_STATE_COPY_SOURCE);
     transfer.list->CopyTextureRegion(&destination, 0, 0, 0, &source, nullptr);
-    _Barrier(transfer.list.Get(), texture->resource.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    _Barrier(transfer.list.Get(), texture->resource.Get(), ::D3D12_RESOURCE_STATE_COPY_SOURCE, ::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
     _FlushTransfer();
     _WaitForFence(_GetContext().fenceValue);
 
     auto mapped = static_cast<std::uint8_t*>(nullptr);
-    auto const range = D3D12_RANGE{ 0, static_cast<SIZE_T>(rowPitch * texture->height) };
+    auto const range = ::D3D12_RANGE{ 0, static_cast<::SIZE_T>(rowPitch * texture->height) };
 
     _Check(readback->Map(0, &range, reinterpret_cast<void**>(&mapped)), "map the readback buffer");
 
@@ -1709,7 +1709,7 @@ void __DownloadTexture(void* handle, std::vector<std::uint8_t>& pixels) {
         std::memcpy((pixels.data() + (row * rowBytes)), (mapped + (row * rowPitch)), rowBytes);
     }
 
-    auto const written = D3D12_RANGE{ 0, 0 };
+    auto const written = ::D3D12_RANGE{ 0, 0 };
     readback->Unmap(0, &written);
 
     _CollectDeferred();
@@ -1733,20 +1733,20 @@ void __UploadTexture(void* handle, std::uint32_t x, std::uint32_t y, std::uint32
         std::memcpy((allocation.cpu + (row * rowPitch)), (pixels + (row * rowBytes)), rowBytes);
     }
 
-    auto source = D3D12_TEXTURE_COPY_LOCATION{};
+    auto source = ::D3D12_TEXTURE_COPY_LOCATION{};
     source.pResource = allocation.buffer;
-    source.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    source.Type = ::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
     source.PlacedFootprint.Offset = allocation.offset;
-    source.PlacedFootprint.Footprint = D3D12_SUBRESOURCE_FOOTPRINT{ _textureFormat, width, height, 1, static_cast<UINT>(rowPitch) };
+    source.PlacedFootprint.Footprint = ::D3D12_SUBRESOURCE_FOOTPRINT{ _textureFormat, width, height, 1, static_cast<::UINT>(rowPitch) };
 
-    auto destination = D3D12_TEXTURE_COPY_LOCATION{};
+    auto destination = ::D3D12_TEXTURE_COPY_LOCATION{};
     destination.pResource = texture->resource.Get();
-    destination.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    destination.Type = ::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     destination.SubresourceIndex = 0;
 
-    _Barrier(transfer.list.Get(), texture->resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST);
+    _Barrier(transfer.list.Get(), texture->resource.Get(), ::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, ::D3D12_RESOURCE_STATE_COPY_DEST);
     transfer.list->CopyTextureRegion(&destination, x, y, 0, &source, nullptr);
-    _Barrier(transfer.list.Get(), texture->resource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    _Barrier(transfer.list.Get(), texture->resource.Get(), ::D3D12_RESOURCE_STATE_COPY_DEST, ::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 }
 
 void __CopyTexture(void* sourceHandle, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, void* destinationHandle, std::uint32_t toX, std::uint32_t toY) {
@@ -1760,30 +1760,30 @@ void __CopyTexture(void* sourceHandle, std::uint32_t x, std::uint32_t y, std::ui
     auto const destinationTexture = static_cast<_Texture*>(destinationHandle);
     auto& transfer = _GetTransfer();
 
-    auto source = D3D12_TEXTURE_COPY_LOCATION{};
+    auto source = ::D3D12_TEXTURE_COPY_LOCATION{};
     source.pResource = sourceTexture->resource.Get();
-    source.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    source.Type = ::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     source.SubresourceIndex = 0;
 
-    auto destination = D3D12_TEXTURE_COPY_LOCATION{};
+    auto destination = ::D3D12_TEXTURE_COPY_LOCATION{};
     destination.pResource = destinationTexture->resource.Get();
-    destination.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    destination.Type = ::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     destination.SubresourceIndex = 0;
 
-    auto const box = D3D12_BOX{ x, y, 0, (x + width), (y + height), 1 };
+    auto const box = ::D3D12_BOX{ x, y, 0, (x + width), (y + height), 1 };
 
-    _Barrier(transfer.list.Get(), sourceTexture->resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_SOURCE);
-    _Barrier(transfer.list.Get(), destinationTexture->resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST);
+    _Barrier(transfer.list.Get(), sourceTexture->resource.Get(), ::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, ::D3D12_RESOURCE_STATE_COPY_SOURCE);
+    _Barrier(transfer.list.Get(), destinationTexture->resource.Get(), ::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, ::D3D12_RESOURCE_STATE_COPY_DEST);
     transfer.list->CopyTextureRegion(&destination, toX, toY, 0, &source, &box);
-    _Barrier(transfer.list.Get(), destinationTexture->resource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    _Barrier(transfer.list.Get(), sourceTexture->resource.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    _Barrier(transfer.list.Get(), destinationTexture->resource.Get(), ::D3D12_RESOURCE_STATE_COPY_DEST, ::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    _Barrier(transfer.list.Get(), sourceTexture->resource.Get(), ::D3D12_RESOURCE_STATE_COPY_SOURCE, ::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 }
 
 void __ReleaseWindowTarget(void* handle) {
     PROFILE
 
     auto& context = _GetContext();
-    auto const it = context.swapchains.find(static_cast<HWND>(handle));
+    auto const it = context.swapchains.find(static_cast<::HWND>(handle));
 
     if (it == context.swapchains.end()) {
         return;
@@ -1793,7 +1793,7 @@ void __ReleaseWindowTarget(void* handle) {
 
     _ReleaseSwapchainBuffers(*swapchain);
 
-    for (auto i = UINT(0); i < _swapchainBuffers; i++) {
+    for (auto i = ::UINT(0); i < _swapchainBuffers; i++) {
         context.freeRtvs.push_back(swapchain->rtvs[i]);
     }
 
@@ -1806,7 +1806,7 @@ void* __GetWindowFrameWait(void* handle) {
     PROFILE
 
     auto& context = _GetContext();
-    auto const it = context.swapchains.find(static_cast<HWND>(handle));
+    auto const it = context.swapchains.find(static_cast<::HWND>(handle));
 
     if ((it == context.swapchains.end()) || (it->second->waiting == false)) {
         return nullptr;
@@ -1826,7 +1826,7 @@ void __SetWindowFrameReady(void* handle) {
 
     auto& context = _GetContext();
 
-    if (auto const it = context.swapchains.find(static_cast<HWND>(handle)); it != context.swapchains.end()) {
+    if (auto const it = context.swapchains.find(static_cast<::HWND>(handle)); it != context.swapchains.end()) {
         it->second->waiting = false;
     }
 }
@@ -1948,7 +1948,7 @@ void Painter::__beginPaint(PaintTarget const& target) {
         [&](WindowPaintTarget const& windowTarget) {
             assert(windowTarget.window.getHandle() != nullptr);
 
-            auto const swapchain = _GetSwapchain(static_cast<HWND>(windowTarget.window.getHandle()));
+            auto const swapchain = _GetSwapchain(static_cast<::HWND>(windowTarget.window.getHandle()));
 
             if (swapchain == nullptr) {
                 /* nothing to present to (a minimized window): the pass is a no-op */
@@ -1974,7 +1974,7 @@ void Painter::__beginPaint(PaintTarget const& target) {
             _impl->renderPassStack.top()->format = _textureFormat;
             _impl->renderPassStack.top()->texture = swapchain->buffers[index].Get();
             _impl->renderPassStack.top()->rtv = _GetRtv(swapchain->rtvs[index]);
-            _impl->renderPassStack.top()->restState = D3D12_RESOURCE_STATE_PRESENT;
+            _impl->renderPassStack.top()->restState = ::D3D12_RESOURCE_STATE_PRESENT;
             _impl->renderPassStack.top()->recording = &_impl->recording;
 
             _OpenRenderPass(*_impl->renderPassStack.top(), windowTarget.clearColor);

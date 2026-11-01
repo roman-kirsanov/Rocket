@@ -27,10 +27,10 @@ static auto constexpr _defaultRefreshRate = 60.0f;
 static auto _isExited = false;
 static auto _nextFrame = std::uint64_t(0);
 
-static void _HandleEvent(SDL_Event const& event) {
+static void _HandleEvent(::SDL_Event const& event) {
     PROFILE
 
-    if (event.type == SDL_EVENT_QUIT) {
+    if (event.type == ::SDL_EVENT_QUIT) {
         _Close();
         return;
     }
@@ -45,7 +45,7 @@ static void _HandleEvent(SDL_Event const& event) {
 
 /* Held events carry no strings, so they outlive SDL's next poll, which frees
    the strings of the events before it: every other event is handled at once. */
-static void _HandleHeldEvents(std::vector<SDL_Event>& held) {
+static void _HandleHeldEvents(std::vector<::SDL_Event>& held) {
     PROFILE
 
     /* taken out first: a handler may run a nested loop (a modal window), which holds its own */
@@ -62,10 +62,10 @@ static void _HandleHeldEvents(std::vector<SDL_Event>& held) {
    the display, and so does the run loop: they are held until the frame is due
    or another event comes, consecutive moves of a window collapse into the last
    one and consecutive turns into their sum. */
-static bool _TakeEvent(std::vector<SDL_Event>& held, SDL_Event const& event) {
+static bool _TakeEvent(std::vector<::SDL_Event>& held, ::SDL_Event const& event) {
     PROFILE
 
-    if ((event.type != SDL_EVENT_MOUSE_MOTION) && (event.type != SDL_EVENT_MOUSE_WHEEL)) {
+    if ((event.type != ::SDL_EVENT_MOUSE_MOTION) && (event.type != ::SDL_EVENT_MOUSE_WHEEL)) {
         _HandleHeldEvents(held);
         _HandleEvent(event);
         return false;
@@ -75,8 +75,8 @@ static bool _TakeEvent(std::vector<SDL_Event>& held, SDL_Event const& event) {
         auto& last = held.back();
 
         if (
-            (event.type == SDL_EVENT_MOUSE_MOTION) &&
-            (last.type == SDL_EVENT_MOUSE_MOTION) &&
+            (event.type == ::SDL_EVENT_MOUSE_MOTION) &&
+            (last.type == ::SDL_EVENT_MOUSE_MOTION) &&
             (last.motion.windowID == event.motion.windowID) &&
             (last.motion.state == event.motion.state)
         ) {
@@ -85,8 +85,8 @@ static bool _TakeEvent(std::vector<SDL_Event>& held, SDL_Event const& event) {
         }
 
         if (
-            (event.type == SDL_EVENT_MOUSE_WHEEL) &&
-            (last.type == SDL_EVENT_MOUSE_WHEEL) &&
+            (event.type == ::SDL_EVENT_MOUSE_WHEEL) &&
+            (last.type == ::SDL_EVENT_MOUSE_WHEEL) &&
             (last.wheel.windowID == event.wheel.windowID)
         ) {
             last.wheel.x += event.wheel.x;
@@ -122,12 +122,12 @@ void __InitVideo() {
     }
 
     /* A window never closes by itself, so the last one asking to close must not quit the app. */
-    SDL_SetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE, "0");
+    ::SDL_SetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE, "0");
     /* The document draws the composition itself (see Window::setInputArea). */
-    SDL_SetHint(SDL_HINT_IME_IMPLEMENTED_UI, "composition");
+    ::SDL_SetHint(SDL_HINT_IME_IMPLEMENTED_UI, "composition");
 
-    if (SDL_InitSubSystem(SDL_INIT_VIDEO) == false) {
-        throw std::runtime_error(std::format("Failed to initialize SDL video: {}", SDL_GetError()));
+    if (::SDL_InitSubSystem(SDL_INIT_VIDEO) == false) {
+        throw std::runtime_error(std::format("Failed to initialize SDL video: {}", ::SDL_GetError()));
     }
 
     _initialized = true;
@@ -151,7 +151,7 @@ std::string const& __GetExecDir() {
     PROFILE
 
     static auto const _execDir = [] {
-        auto const basePath = SDL_GetBasePath();
+        auto const basePath = ::SDL_GetBasePath();
 
         return (basePath != nullptr) ? _TrimSeparator(basePath) : std::string();
     }();
@@ -164,9 +164,9 @@ std::string const& __GetWorkDir() {
 
     static auto _workDir = std::string();
 
-    if (auto const currentDirectory = SDL_GetCurrentDirectory(); currentDirectory != nullptr) {
+    if (auto const currentDirectory = ::SDL_GetCurrentDirectory(); currentDirectory != nullptr) {
         _workDir = _TrimSeparator(currentDirectory);
-        SDL_free(currentDirectory);
+        ::SDL_free(currentDirectory);
     }
 
     return _workDir;
@@ -182,7 +182,7 @@ std::string const& __GetUserDir() {
             return _TrimSeparator(configHome);
         }
 
-        auto const homeFolder = SDL_GetUserFolder(SDL_FOLDER_HOME);
+        auto const homeFolder = ::SDL_GetUserFolder(::SDL_FOLDER_HOME);
 
         return (homeFolder != nullptr) ? (_TrimSeparator(homeFolder) + "/.config") : std::string();
     }();
@@ -211,24 +211,24 @@ void __Run(int argc, char const** argv) {
 void __Tick(bool update) {
     PROFILE
 
-    static thread_local auto _held = std::vector<SDL_Event>();
+    static thread_local auto _held = std::vector<::SDL_Event>();
 
-    auto event = SDL_Event{};
+    auto event = ::SDL_Event{};
 
     for (;;) {
-        auto const now = SDL_GetTicksNS();
+        auto const now = ::SDL_GetTicksNS();
         auto const wait = (_nextFrame > now) ? (_nextFrame - now) : 0;
 
         /* held moves and turns wait for the frame or the next other event */
         if (
-            (SDL_WaitEventTimeout(&event, static_cast<Sint32>((wait + 999999) / 1000000)) == false) ||
+            (::SDL_WaitEventTimeout(&event, static_cast<::Sint32>((wait + 999999) / 1000000)) == false) ||
             (_TakeEvent(_held, event) == false)
         ) {
             break;
         }
     }
 
-    while (SDL_PollEvent(&event)) {
+    while (::SDL_PollEvent(&event)) {
         _TakeEvent(_held, event);
     }
 
@@ -238,14 +238,14 @@ void __Tick(bool update) {
         _Update();
     }
 
-    if (auto const now = SDL_GetTicksNS(); now >= _nextFrame) {
+    if (auto const now = ::SDL_GetTicksNS(); now >= _nextFrame) {
         /* The fastest display a window is painted on, so no window gets fewer
            frames than its screen shows; the primary display when no window is
            painted. */
         auto refreshRate = __GetRefreshRate();
 
         if (refreshRate <= 0.0f) {
-            auto const mode = SDL_GetCurrentDisplayMode(SDL_GetPrimaryDisplay());
+            auto const mode = ::SDL_GetCurrentDisplayMode(::SDL_GetPrimaryDisplay());
             refreshRate = ((mode != nullptr) && (mode->refresh_rate > 0.0f)) ? mode->refresh_rate : _defaultRefreshRate;
         }
 

@@ -17,10 +17,10 @@ std::string __GetClipboardString() {
 
     App::__InitVideo();
 
-    auto const text = SDL_GetClipboardText();
+    auto const text = ::SDL_GetClipboardText();
     auto string = std::string((text != nullptr) ? text : "");
 
-    SDL_free(text);
+    ::SDL_free(text);
 
     return string;
 }
@@ -30,7 +30,7 @@ void __SetClipboardString(std::string const& string) {
 
     App::__InitVideo();
 
-    SDL_SetClipboardText(string.c_str());
+    ::SDL_SetClipboardText(string.c_str());
 }
 
 } /* namespace Rocket */

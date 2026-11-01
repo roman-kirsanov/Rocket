@@ -96,8 +96,8 @@ inline bool _SaveSnapshotPixels(std::string const& path, int width, int height, 
     auto colorSpace = ::CGColorSpaceCreateDeviceRGB();
     auto image = ::CGImageCreate(
         width, height, 8, 32, ((std::size_t)width * 4), colorSpace,
-        ((CGBitmapInfo)kCGImageAlphaLast | (CGBitmapInfo)kCGBitmapByteOrderDefault),
-        provider, nullptr, false, kCGRenderingIntentDefault
+        ((::CGBitmapInfo)::kCGImageAlphaLast | (::CGBitmapInfo)::kCGBitmapByteOrderDefault),
+        provider, nullptr, false, ::kCGRenderingIntentDefault
     );
 
     ::CGColorSpaceRelease(colorSpace);
@@ -108,7 +108,7 @@ inline bool _SaveSnapshotPixels(std::string const& path, int width, int height, 
         return false;
     }
 
-    auto url = ::CFURLCreateFromFileSystemRepresentation(nullptr, (UInt8 const*)path.c_str(), (CFIndex)path.size(), false);
+    auto url = ::CFURLCreateFromFileSystemRepresentation(nullptr, (::UInt8 const*)path.c_str(), (::CFIndex)path.size(), false);
     auto destination = (url != nullptr) ? ::CGImageDestinationCreateWithURL(url, CFSTR("public.png"), 1, nullptr) : nullptr;
 
     if (url != nullptr) {
@@ -137,7 +137,7 @@ inline bool _SaveSnapshotPixels(std::string const& path, int width, int height, 
 #elif defined(_WIN32)
     return _SaveSnapshotPng(path, width, height, pixels);
 #else
-    auto surface = ::SDL_CreateSurfaceFrom(width, height, SDL_PIXELFORMAT_RGBA32, const_cast<std::uint8_t*>(pixels.data()), (width * 4));
+    auto surface = ::SDL_CreateSurfaceFrom(width, height, ::SDL_PIXELFORMAT_RGBA32, const_cast<std::uint8_t*>(pixels.data()), (width * 4));
 
     if (surface == nullptr) {
         std::printf("  failed to wrap pixels for %s\n", path.c_str());
@@ -168,7 +168,7 @@ inline bool _SaveSnapshotPixels(std::string const& path, int width, int height, 
  */
 inline bool _LoadSnapshotPixels(std::string const& path, int& width, int& height, std::vector<std::uint8_t>& pixels) {
 #ifdef __APPLE__
-    auto url = ::CFURLCreateFromFileSystemRepresentation(nullptr, (UInt8 const*)path.c_str(), (CFIndex)path.size(), false);
+    auto url = ::CFURLCreateFromFileSystemRepresentation(nullptr, (::UInt8 const*)path.c_str(), (::CFIndex)path.size(), false);
     auto source = (url != nullptr) ? ::CGImageSourceCreateWithURL(url, nullptr) : nullptr;
 
     if (url != nullptr) {
@@ -194,7 +194,7 @@ inline bool _LoadSnapshotPixels(std::string const& path, int& width, int& height
     auto const bitsPerPixel = ::CGImageGetBitsPerPixel(image);
     auto const alphaInfo = ::CGImageGetAlphaInfo(image);
 
-    if ((bitsPerPixel != 32) || (alphaInfo != kCGImageAlphaLast)) {
+    if ((bitsPerPixel != 32) || (alphaInfo != ::kCGImageAlphaLast)) {
         ::CGImageRelease(image);
         std::printf("  golden %s has unexpected format (bpp %zu, alpha %d)\n", path.c_str(), bitsPerPixel, (int)alphaInfo);
         return false;
@@ -234,7 +234,7 @@ inline bool _LoadSnapshotPixels(std::string const& path, int& width, int& height
         return false;
     }
 
-    auto image = ::SDL_ConvertSurface(loaded, SDL_PIXELFORMAT_RGBA32);
+    auto image = ::SDL_ConvertSurface(loaded, ::SDL_PIXELFORMAT_RGBA32);
     ::SDL_DestroySurface(loaded);
 
     if (image == nullptr) {

@@ -34,7 +34,7 @@
 namespace Rocket {
 
 struct _Window {
-    HWND hwnd;
+    ::HWND hwnd;
     Vec2 size;
     Vec2 position;
     float scale;
@@ -55,19 +55,19 @@ struct _Window {
     std::optional<Vec2> mousePosition;
     std::vector<Mouse> pressedButtons;
     std::optional<Mouse> clickButton;
-    LONG clickTime;
-    POINT clickPoint;
+    ::LONG clickTime;
+    ::POINT clickPoint;
     int clickCount;
     wchar_t highSurrogate;
-    LONG_PTR windowedStyle;
-    WINDOWPLACEMENT windowedPlacement;
+    ::LONG_PTR windowedStyle;
+    ::WINDOWPLACEMENT windowedPlacement;
 };
 
 static auto constexpr _wheelScale = 50.0f;
 static auto constexpr _wheelDelta = 120.0f;
 static auto constexpr _defaultWidth = 640.0f;
 static auto constexpr _defaultHeight = 480.0f;
-static auto constexpr _wmRocketPaint = static_cast<UINT>(WM_APP + 1);
+static auto constexpr _wmRocketPaint = static_cast<::UINT>(WM_APP + 1);
 static auto constexpr _windowClass = L"RocketWindow";
 
 static std::map<std::uint32_t, Scancode> const _keyMap = {
@@ -200,13 +200,13 @@ static Scancode _KeyConvert(std::uint32_t native) {
     return (it != _keyMap.end()) ? it->second : Scancode::Unknown;
 }
 
-static std::uint32_t _GetNativeScancode(WPARAM wParam, LPARAM lParam) {
+static std::uint32_t _GetNativeScancode(::WPARAM wParam, ::LPARAM lParam) {
     PROFILE
 
     auto scancode = static_cast<std::uint32_t>((lParam >> 16) & 0xFF);
 
     if (scancode == 0) {
-        auto const mapped = ::MapVirtualKeyW(static_cast<UINT>(wParam), MAPVK_VK_TO_VSC_EX);
+        auto const mapped = ::MapVirtualKeyW(static_cast<::UINT>(wParam), MAPVK_VK_TO_VSC_EX);
         return ((mapped & 0xFF00) != 0) ? (0xE000 | (mapped & 0xFF)) : mapped;
     }
 
@@ -293,7 +293,7 @@ static std::string _GetKeycode(std::uint32_t native, Scancode scancode) {
     }
 
     auto buffer = std::array<wchar_t, 8>{};
-    auto const state = std::array<BYTE, 256>{};
+    auto const state = std::array<::BYTE, 256>{};
     auto const layout = ::GetKeyboardLayout(0);
     auto const virtualKey = ::MapVirtualKeyExW(native, MAPVK_VSC_TO_VK_EX, layout);
     auto const length = ::ToUnicodeEx(virtualKey, native & 0xFF, state.data(), buffer.data(), static_cast<int>(buffer.size()), 0x4, layout);
@@ -314,7 +314,7 @@ static std::string _GetKeycode(std::uint32_t native, Scancode scancode) {
     return keycode;
 }
 
-static LPCWSTR _CursorConvert(Cursor cursor) {
+static ::LPCWSTR _CursorConvert(Cursor cursor) {
     PROFILE
 
     switch (cursor) {
@@ -357,13 +357,13 @@ static LPCWSTR _CursorConvert(Cursor cursor) {
     return IDC_ARROW;
 }
 
-static HCURSOR _GetCursor(Cursor cursor) {
+static ::HCURSOR _GetCursor(Cursor cursor) {
     PROFILE
 
     return (cursor == Cursor::None) ? nullptr : ::LoadCursorW(nullptr, _CursorConvert(cursor));
 }
 
-static LONG_PTR _GetStyle(LONG_PTR current, bool fullscreen, bool sizable, bool maximizable, bool minimizable) {
+static ::LONG_PTR _GetStyle(::LONG_PTR current, bool fullscreen, bool sizable, bool maximizable, bool minimizable) {
     PROFILE
 
     auto style = current & (WS_VISIBLE | WS_MAXIMIZE | WS_MINIMIZE | WS_DISABLED);
@@ -389,31 +389,31 @@ static LONG_PTR _GetStyle(LONG_PTR current, bool fullscreen, bool sizable, bool 
     return style;
 }
 
-static RECT _PositionMonitorRect(HWND hwnd, bool visible) {
+static ::RECT _PositionMonitorRect(::HWND hwnd, bool visible) {
     PROFILE
 
     auto monitor = visible ? ::MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL) : nullptr;
 
     if (monitor == nullptr) {
-        monitor = ::MonitorFromPoint(POINT{ 0, 0 }, MONITOR_DEFAULTTOPRIMARY);
+        monitor = ::MonitorFromPoint(::POINT{ 0, 0 }, MONITOR_DEFAULTTOPRIMARY);
     }
 
-    auto info = MONITORINFO{ .cbSize = sizeof(MONITORINFO) };
+    auto info = ::MONITORINFO{ .cbSize = sizeof(::MONITORINFO) };
     ::GetMonitorInfoW(monitor, &info);
 
     return info.rcMonitor;
 }
 
-static RECT _GetFrameInsets(HWND hwnd) {
+static ::RECT _GetFrameInsets(::HWND hwnd) {
     PROFILE
 
-    auto window = RECT{};
-    auto frame = RECT{};
+    auto window = ::RECT{};
+    auto frame = ::RECT{};
 
     ::GetWindowRect(hwnd, &window);
 
-    if (SUCCEEDED(::DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, &frame, sizeof(frame)))) {
-        return RECT{
+    if (SUCCEEDED(::DwmGetWindowAttribute(hwnd, ::DWMWA_EXTENDED_FRAME_BOUNDS, &frame, sizeof(frame)))) {
+        return ::RECT{
             frame.left - window.left,
             frame.top - window.top,
             window.right - frame.right,
@@ -421,17 +421,17 @@ static RECT _GetFrameInsets(HWND hwnd) {
         };
     }
 
-    auto const style = static_cast<DWORD>(::GetWindowLongPtrW(hwnd, GWL_STYLE));
-    auto const exStyle = static_cast<DWORD>(::GetWindowLongPtrW(hwnd, GWL_EXSTYLE));
-    auto adjusted = RECT{ 0, 0, 0, 0 };
+    auto const style = static_cast<::DWORD>(::GetWindowLongPtrW(hwnd, GWL_STYLE));
+    auto const exStyle = static_cast<::DWORD>(::GetWindowLongPtrW(hwnd, GWL_EXSTYLE));
+    auto adjusted = ::RECT{ 0, 0, 0, 0 };
 
     ::AdjustWindowRectExForDpi(&adjusted, style, FALSE, exStyle, ::GetDpiForWindow(hwnd));
 
     if ((style & WS_THICKFRAME) == 0 && (style & WS_CAPTION) == 0) {
-        return RECT{ 0, 0, 0, 0 };
+        return ::RECT{ 0, 0, 0, 0 };
     }
 
-    return RECT{
+    return ::RECT{
         std::max(0L, -adjusted.left - 1),
         0,
         std::max(0L, adjusted.right - 1),
@@ -439,19 +439,19 @@ static RECT _GetFrameInsets(HWND hwnd) {
     };
 }
 
-static SIZE _GetWindowSize(HWND hwnd, int width, int height) {
+static ::SIZE _GetWindowSize(::HWND hwnd, int width, int height) {
     PROFILE
 
-    auto const style = static_cast<DWORD>(::GetWindowLongPtrW(hwnd, GWL_STYLE));
-    auto const exStyle = static_cast<DWORD>(::GetWindowLongPtrW(hwnd, GWL_EXSTYLE));
-    auto rect = RECT{ 0, 0, width, height };
+    auto const style = static_cast<::DWORD>(::GetWindowLongPtrW(hwnd, GWL_STYLE));
+    auto const exStyle = static_cast<::DWORD>(::GetWindowLongPtrW(hwnd, GWL_EXSTYLE));
+    auto rect = ::RECT{ 0, 0, width, height };
 
     ::AdjustWindowRectExForDpi(&rect, style, FALSE, exStyle, ::GetDpiForWindow(hwnd));
 
-    return SIZE{ rect.right - rect.left, rect.bottom - rect.top };
+    return ::SIZE{ rect.right - rect.left, rect.bottom - rect.top };
 }
 
-static void _UpdateCloseButton(HWND hwnd, bool closable) {
+static void _UpdateCloseButton(::HWND hwnd, bool closable) {
     PROFILE
 
     auto const menu = ::GetSystemMenu(hwnd, FALSE);
@@ -461,10 +461,10 @@ static void _UpdateCloseButton(HWND hwnd, bool closable) {
     }
 }
 
-static void _ApplyStyle(HWND hwnd, LONG_PTR style, bool closable) {
+static void _ApplyStyle(::HWND hwnd, ::LONG_PTR style, bool closable) {
     PROFILE
 
-    auto client = RECT{};
+    auto client = ::RECT{};
     ::GetClientRect(hwnd, &client);
 
     ::SetWindowLongPtrW(hwnd, GWL_STYLE, style);
@@ -500,7 +500,7 @@ std::vector<void*> __GetPaintedWindows() {
     auto handles = std::vector<void*>();
 
     for (auto const window : Window::GetWindows()) {
-        if (window->getVisible() && (::IsIconic(static_cast<HWND>(window->getHandle())) == FALSE)) {
+        if (window->getVisible() && (::IsIconic(static_cast<::HWND>(window->getHandle())) == FALSE)) {
             handles.push_back(window->getHandle());
         }
     }
@@ -514,7 +514,7 @@ void __PaintWindows(std::vector<void*> const& handles) {
     for (auto const handle : handles) {
         /* a window painted before may have closed, hidden or minimized this one */
         if (auto const painted = __GetPaintedWindows(); std::ranges::find(painted, handle) != painted.end()) {
-            ::SendMessageW(static_cast<HWND>(handle), _wmRocketPaint, 0, 0);
+            ::SendMessageW(static_cast<::HWND>(handle), _wmRocketPaint, 0, 0);
         }
     }
 }
@@ -550,10 +550,10 @@ void Window::__init() {
     App::__InitWin32();
 
     static auto const _registered = [] {
-        auto const windowClass = WNDCLASSEXW{
-            .cbSize = sizeof(WNDCLASSEXW),
+        auto const windowClass = ::WNDCLASSEXW{
+            .cbSize = sizeof(::WNDCLASSEXW),
             .style = 0,
-            .lpfnWndProc = reinterpret_cast<WNDPROC>(&Window::__WindowProc),
+            .lpfnWndProc = reinterpret_cast<::WNDPROC>(&Window::__WindowProc),
             .cbClsExtra = 0,
             .cbWndExtra = 0,
             .hInstance = ::GetModuleHandleW(nullptr),
@@ -595,14 +595,14 @@ void Window::__init() {
         .pressedButtons = {},
         .clickButton = std::nullopt,
         .clickTime = 0,
-        .clickPoint = POINT{ 0, 0 },
+        .clickPoint = ::POINT{ 0, 0 },
         .clickCount = 0,
         .highSurrogate = 0,
         .windowedStyle = 0,
-        .windowedPlacement = WINDOWPLACEMENT{ .length = sizeof(WINDOWPLACEMENT) }
+        .windowedPlacement = ::WINDOWPLACEMENT{ .length = sizeof(::WINDOWPLACEMENT) }
     };
 
-    auto const style = static_cast<DWORD>(_GetStyle(0, false, _impl->sizable, _impl->maximizable, _impl->minimizable));
+    auto const style = static_cast<::DWORD>(_GetStyle(0, false, _impl->sizable, _impl->maximizable, _impl->minimizable));
 
     _impl->hwnd = ::CreateWindowExW(
         0, _windowClass, L"", style,
@@ -636,11 +636,11 @@ void Window::__init() {
 std::intptr_t __stdcall Window::__WindowProc(void* handle, std::uint32_t message, std::uintptr_t wParam, std::intptr_t lParam) {
     PROFILE
 
-    auto const hwnd = static_cast<HWND>(handle);
+    auto const hwnd = static_cast<::HWND>(handle);
 
     if (message == WM_NCCREATE) {
-        auto const create = reinterpret_cast<CREATESTRUCTW const*>(lParam);
-        ::SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(create->lpCreateParams));
+        auto const create = reinterpret_cast<::CREATESTRUCTW const*>(lParam);
+        ::SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<::LONG_PTR>(create->lpCreateParams));
     }
 
     auto const window = reinterpret_cast<Window*>(::GetWindowLongPtrW(hwnd, GWLP_USERDATA));
@@ -654,7 +654,7 @@ std::intptr_t __stdcall Window::__WindowProc(void* handle, std::uint32_t message
     };
 
     auto const cursorPosition = [&]() {
-        auto point = POINT{};
+        auto point = ::POINT{};
         ::GetCursorPos(&point);
         ::ScreenToClient(hwnd, &point);
         return toPoints(point.x, point.y);
@@ -674,7 +674,7 @@ std::intptr_t __stdcall Window::__WindowProc(void* handle, std::uint32_t message
     };
 
     auto const updateSize = [&]() {
-        auto client = RECT{};
+        auto client = ::RECT{};
         ::GetClientRect(hwnd, &client);
 
         if ((::IsIconic(hwnd) == FALSE) && (client.right > 0) && (client.bottom > 0)) {
@@ -699,14 +699,14 @@ std::intptr_t __stdcall Window::__WindowProc(void* handle, std::uint32_t message
         auto const time = ::GetMessageTime();
         auto const sameClick =
             (window->_impl->clickButton == mouse) &&
-            (static_cast<UINT>(time - window->_impl->clickTime) <= ::GetDoubleClickTime()) &&
+            (static_cast<::UINT>(time - window->_impl->clickTime) <= ::GetDoubleClickTime()) &&
             (std::abs(x - window->_impl->clickPoint.x) <= (::GetSystemMetrics(SM_CXDOUBLECLK) / 2)) &&
             (std::abs(y - window->_impl->clickPoint.y) <= (::GetSystemMetrics(SM_CYDOUBLECLK) / 2));
 
         window->_impl->clickCount = sameClick ? (window->_impl->clickCount + 1) : 1;
         window->_impl->clickButton = mouse;
         window->_impl->clickTime = time;
-        window->_impl->clickPoint = POINT{ x, y };
+        window->_impl->clickPoint = ::POINT{ x, y };
 
         if (window->_impl->pressedButtons.empty()) {
             ::SetCapture(hwnd);
@@ -764,7 +764,7 @@ std::intptr_t __stdcall Window::__WindowProc(void* handle, std::uint32_t message
             return 1;
         }
         case WM_PAINT: {
-            auto paint = PAINTSTRUCT{};
+            auto paint = ::PAINTSTRUCT{};
             ::BeginPaint(hwnd, &paint);
             ::EndPaint(hwnd, &paint);
             return 0;
@@ -811,7 +811,7 @@ std::intptr_t __stdcall Window::__WindowProc(void* handle, std::uint32_t message
         case WM_DPICHANGED: {
             window->_impl->scale = static_cast<float>(HIWORD(wParam)) / 96.0f;
 
-            auto const suggested = reinterpret_cast<RECT const*>(lParam);
+            auto const suggested = reinterpret_cast<::RECT const*>(lParam);
 
             window->_impl->resizing = true;
             ::SetWindowPos(
@@ -850,7 +850,7 @@ std::intptr_t __stdcall Window::__WindowProc(void* handle, std::uint32_t message
             auto const position = toPoints(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
 
             if (window->_impl->hover == false) {
-                auto track = TRACKMOUSEEVENT{ .cbSize = sizeof(TRACKMOUSEEVENT), .dwFlags = TME_LEAVE, .hwndTrack = hwnd };
+                auto track = ::TRACKMOUSEEVENT{ .cbSize = sizeof(::TRACKMOUSEEVENT), .dwFlags = TME_LEAVE, .hwndTrack = hwnd };
                 ::TrackMouseEvent(&track);
 
                 window->_impl->hover = true;
@@ -870,7 +870,7 @@ std::intptr_t __stdcall Window::__WindowProc(void* handle, std::uint32_t message
             return 0;
         }
         case WM_CAPTURECHANGED: {
-            if ((reinterpret_cast<HWND>(lParam) != hwnd) && (window->_impl->pressedButtons.empty() == false)) {
+            if ((reinterpret_cast<::HWND>(lParam) != hwnd) && (window->_impl->pressedButtons.empty() == false)) {
                 releaseButtons(window->_impl->mousePosition.value_or(cursorPosition()));
             }
             return 0;
@@ -900,7 +900,7 @@ std::intptr_t __stdcall Window::__WindowProc(void* handle, std::uint32_t message
             }
 
             if ((wParam == VK_CONTROL) && ((lParam & (1 << 24)) == 0)) {
-                auto next = MSG{};
+                auto next = ::MSG{};
                 auto const time = ::GetMessageTime();
 
                 if (
@@ -908,7 +908,7 @@ std::intptr_t __stdcall Window::__WindowProc(void* handle, std::uint32_t message
                     ((next.message == WM_KEYDOWN) || (next.message == WM_SYSKEYDOWN)) &&
                     (next.wParam == VK_MENU) &&
                     ((next.lParam & (1 << 24)) != 0) &&
-                    (static_cast<LONG>(next.time) == time)
+                    (static_cast<::LONG>(next.time) == time)
                 ) {
                     return 0;
                 }
@@ -971,7 +971,7 @@ std::intptr_t __stdcall Window::__WindowProc(void* handle, std::uint32_t message
             return 0;
         }
         case WM_IME_SETCONTEXT: {
-            return ::DefWindowProcW(hwnd, message, wParam, (lParam & ~static_cast<LPARAM>(ISC_SHOWUICOMPOSITIONWINDOW)));
+            return ::DefWindowProcW(hwnd, message, wParam, (lParam & ~static_cast<::LPARAM>(ISC_SHOWUICOMPOSITIONWINDOW)));
         }
         case WM_IME_STARTCOMPOSITION: {
             return 0;
@@ -983,12 +983,12 @@ std::intptr_t __stdcall Window::__WindowProc(void* handle, std::uint32_t message
                 return 0;
             }
 
-            auto const read = [&](DWORD index) {
+            auto const read = [&](::DWORD index) {
                 auto const bytes = ::ImmGetCompositionStringW(context, index, nullptr, 0);
                 auto text = std::wstring((bytes > 0) ? (static_cast<std::size_t>(bytes) / sizeof(wchar_t)) : 0, L'\0');
 
                 if (text.empty() == false) {
-                    ::ImmGetCompositionStringW(context, index, text.data(), static_cast<DWORD>(bytes));
+                    ::ImmGetCompositionStringW(context, index, text.data(), static_cast<::DWORD>(bytes));
                 }
                 return text;
             };
@@ -1004,12 +1004,12 @@ std::intptr_t __stdcall Window::__WindowProc(void* handle, std::uint32_t message
                 auto const text = read(GCS_COMPSTR);
                 auto const cursorUnits = ::ImmGetCompositionStringW(context, GCS_CURSORPOS, nullptr, 0);
 
-                auto attributes = std::vector<BYTE>(text.size());
+                auto attributes = std::vector<::BYTE>(text.size());
                 auto selectionStart = text.size();
                 auto selectionEnd = text.size();
 
                 if (attributes.empty() == false) {
-                    ::ImmGetCompositionStringW(context, GCS_COMPATTR, attributes.data(), static_cast<DWORD>(attributes.size()));
+                    ::ImmGetCompositionStringW(context, GCS_COMPATTR, attributes.data(), static_cast<::DWORD>(attributes.size()));
 
                     for (auto i = std::size_t(0); i < attributes.size(); i++) {
                         if ((attributes[i] == ATTR_TARGET_CONVERTED) || (attributes[i] == ATTR_TARGET_NOTCONVERTED)) {
@@ -1064,17 +1064,17 @@ std::intptr_t __stdcall Window::__WindowProc(void* handle, std::uint32_t message
             return 0;
         }
         case WM_DROPFILES: {
-            auto const drop = reinterpret_cast<HDROP>(wParam);
+            auto const drop = reinterpret_cast<::HDROP>(wParam);
             auto const count = ::DragQueryFileW(drop, 0xFFFFFFFF, nullptr, 0);
             auto paths = std::vector<std::string>();
 
-            for (auto i = UINT(0); i < count; i++) {
+            for (auto i = ::UINT(0); i < count; i++) {
                 auto path = std::wstring(::DragQueryFileW(drop, i, nullptr, 0), L'\0');
-                ::DragQueryFileW(drop, i, path.data(), static_cast<UINT>(path.size() + 1));
+                ::DragQueryFileW(drop, i, path.data(), static_cast<::UINT>(path.size() + 1));
                 paths.push_back(App::__FromWide(path));
             }
 
-            auto point = POINT{};
+            auto point = ::POINT{};
             ::DragQueryPoint(drop, &point);
             ::DragFinish(drop);
 
@@ -1096,7 +1096,7 @@ Vec2 const& Window::__getPosition() const {
 
     auto const monitor = _PositionMonitorRect(_impl->hwnd, _impl->visible);
     auto const insets = _GetFrameInsets(_impl->hwnd);
-    auto rect = RECT{};
+    auto rect = ::RECT{};
 
     ::GetWindowRect(_impl->hwnd, &rect);
 
@@ -1195,8 +1195,8 @@ bool Window::__isFocused() const {
 void Window::__center() const {
     PROFILE
 
-    auto info = MONITORINFO{ .cbSize = sizeof(MONITORINFO) };
-    auto rect = RECT{};
+    auto info = ::MONITORINFO{ .cbSize = sizeof(::MONITORINFO) };
+    auto rect = ::RECT{};
 
     ::GetMonitorInfoW(::MonitorFromWindow(_impl->hwnd, MONITOR_DEFAULTTOPRIMARY), &info);
     ::GetWindowRect(_impl->hwnd, &rect);
@@ -1234,15 +1234,15 @@ void Window::__setInputArea(std::optional<Vec4> const& caretRect) {
         auto const context = ::ImmGetContext(_impl->hwnd);
 
         if (context != nullptr) {
-            auto const area = RECT{
-                static_cast<LONG>(std::floor(caretRect->x * _impl->scale)),
-                static_cast<LONG>(std::floor(caretRect->y * _impl->scale)),
-                static_cast<LONG>(std::ceil((caretRect->x + caretRect->width) * _impl->scale)),
-                static_cast<LONG>(std::ceil((caretRect->y + caretRect->height) * _impl->scale))
+            auto const area = ::RECT{
+                static_cast<::LONG>(std::floor(caretRect->x * _impl->scale)),
+                static_cast<::LONG>(std::floor(caretRect->y * _impl->scale)),
+                static_cast<::LONG>(std::ceil((caretRect->x + caretRect->width) * _impl->scale)),
+                static_cast<::LONG>(std::ceil((caretRect->y + caretRect->height) * _impl->scale))
             };
 
-            auto composition = COMPOSITIONFORM{ .dwStyle = CFS_POINT, .ptCurrentPos = POINT{ area.left, area.top }, .rcArea = area };
-            auto candidate = CANDIDATEFORM{ .dwIndex = 0, .dwStyle = CFS_EXCLUDE, .ptCurrentPos = POINT{ area.left, area.bottom }, .rcArea = area };
+            auto composition = ::COMPOSITIONFORM{ .dwStyle = CFS_POINT, .ptCurrentPos = ::POINT{ area.left, area.top }, .rcArea = area };
+            auto candidate = ::CANDIDATEFORM{ .dwIndex = 0, .dwStyle = CFS_EXCLUDE, .ptCurrentPos = ::POINT{ area.left, area.bottom }, .rcArea = area };
 
             ::ImmSetCompositionWindow(context, &composition);
             ::ImmSetCandidateWindow(context, &candidate);
@@ -1393,15 +1393,15 @@ void Window::__setFullscreen(bool fullscreen) {
 
     if (fullscreen) {
         _impl->windowedStyle = ::GetWindowLongPtrW(_impl->hwnd, GWL_STYLE);
-        _impl->windowedPlacement = WINDOWPLACEMENT{ .length = sizeof(WINDOWPLACEMENT) };
+        _impl->windowedPlacement = ::WINDOWPLACEMENT{ .length = sizeof(::WINDOWPLACEMENT) };
         ::GetWindowPlacement(_impl->hwnd, &_impl->windowedPlacement);
 
-        auto info = MONITORINFO{ .cbSize = sizeof(MONITORINFO) };
+        auto info = ::MONITORINFO{ .cbSize = sizeof(::MONITORINFO) };
         ::GetMonitorInfoW(::MonitorFromWindow(_impl->hwnd, MONITOR_DEFAULTTOPRIMARY), &info);
 
         _impl->fullscreen = true;
 
-        auto const style = _GetStyle(_impl->windowedStyle & ~static_cast<LONG_PTR>(WS_MAXIMIZE), true, false, false, false);
+        auto const style = _GetStyle(_impl->windowedStyle & ~static_cast<::LONG_PTR>(WS_MAXIMIZE), true, false, false, false);
         ::SetWindowLongPtrW(_impl->hwnd, GWL_STYLE, style);
         ::SetWindowPos(
             _impl->hwnd, HWND_TOP,
@@ -1413,7 +1413,7 @@ void Window::__setFullscreen(bool fullscreen) {
         _impl->fullscreen = false;
 
         auto const visible = ::GetWindowLongPtrW(_impl->hwnd, GWL_STYLE) & WS_VISIBLE;
-        ::SetWindowLongPtrW(_impl->hwnd, GWL_STYLE, ((_impl->windowedStyle & ~static_cast<LONG_PTR>(WS_VISIBLE)) | visible));
+        ::SetWindowLongPtrW(_impl->hwnd, GWL_STYLE, ((_impl->windowedStyle & ~static_cast<::LONG_PTR>(WS_VISIBLE)) | visible));
 
         if (visible == 0) {
             _impl->windowedPlacement.showCmd = SW_HIDE;
@@ -1448,10 +1448,10 @@ void Window::__runModal() {
 
     auto const parent = GetFocusedWindow();
 
-    auto disabled = std::vector<HWND>();
+    auto disabled = std::vector<::HWND>();
 
     for (auto const other : GetWindows()) {
-        auto const hwnd = static_cast<HWND>(other->getHandle());
+        auto const hwnd = static_cast<::HWND>(other->getHandle());
 
         if ((other != this) && (::IsWindowEnabled(hwnd) != FALSE)) {
             ::EnableWindow(hwnd, FALSE);
@@ -1460,7 +1460,7 @@ void Window::__runModal() {
     }
 
     if ((parent != nullptr) && (parent != this)) {
-        ::SetWindowLongPtrW(_impl->hwnd, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(parent->getHandle()));
+        ::SetWindowLongPtrW(_impl->hwnd, GWLP_HWNDPARENT, reinterpret_cast<::LONG_PTR>(parent->getHandle()));
     }
 
     _impl->modal = true;

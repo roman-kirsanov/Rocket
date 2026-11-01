@@ -53,35 +53,35 @@ void __OpenFileDialog(OpenFileDialogOptions const& options, OpenFileDialogCallba
     auto state = _OpenFileDialogState{};
 
     /* filters must outlive the dialog: they are read when it shows */
-    auto filters = std::vector<SDL_DialogFileFilter>();
+    auto filters = std::vector<::SDL_DialogFileFilter>();
 
     for (auto const& [ description, extension ] : options.extensions) {
-        filters.push_back(SDL_DialogFileFilter{ description.c_str(), extension.c_str() });
+        filters.push_back(::SDL_DialogFileFilter{ description.c_str(), extension.c_str() });
     }
 
     auto const previousWindow = Window::GetFocusedWindow();
-    auto const properties = SDL_CreateProperties();
+    auto const properties = ::SDL_CreateProperties();
 
-    SDL_SetStringProperty(properties, SDL_PROP_FILE_DIALOG_TITLE_STRING, options.title.c_str());
-    SDL_SetStringProperty(properties, SDL_PROP_FILE_DIALOG_ACCEPT_STRING, options.action.c_str());
-    SDL_SetBooleanProperty(properties, SDL_PROP_FILE_DIALOG_MANY_BOOLEAN, options.multipleSelection);
+    ::SDL_SetStringProperty(properties, SDL_PROP_FILE_DIALOG_TITLE_STRING, options.title.c_str());
+    ::SDL_SetStringProperty(properties, SDL_PROP_FILE_DIALOG_ACCEPT_STRING, options.action.c_str());
+    ::SDL_SetBooleanProperty(properties, SDL_PROP_FILE_DIALOG_MANY_BOOLEAN, options.multipleSelection);
     // NOTE: Not supported in SDL3 (options.message)
 
     if (filters.empty() == false) {
-        SDL_SetPointerProperty(properties, SDL_PROP_FILE_DIALOG_FILTERS_POINTER, filters.data());
-        SDL_SetNumberProperty(properties, SDL_PROP_FILE_DIALOG_NFILTERS_NUMBER, static_cast<Sint64>(filters.size()));
+        ::SDL_SetPointerProperty(properties, SDL_PROP_FILE_DIALOG_FILTERS_POINTER, filters.data());
+        ::SDL_SetNumberProperty(properties, SDL_PROP_FILE_DIALOG_NFILTERS_NUMBER, static_cast<::Sint64>(filters.size()));
     }
 
     if (previousWindow != nullptr) {
-        SDL_SetPointerProperty(properties, SDL_PROP_FILE_DIALOG_WINDOW_POINTER, previousWindow->getHandle());
+        ::SDL_SetPointerProperty(properties, SDL_PROP_FILE_DIALOG_WINDOW_POINTER, previousWindow->getHandle());
     }
 
     /* SDL has no dialog that picks files and folders alike: one that allows
        folders picks folders */
-    auto const type = options.directorySelection ? SDL_FILEDIALOG_OPENFOLDER : SDL_FILEDIALOG_OPENFILE;
+    auto const type = options.directorySelection ? ::SDL_FILEDIALOG_OPENFOLDER : ::SDL_FILEDIALOG_OPENFILE;
 
-    SDL_ShowFileDialogWithProperties(type, _OnOpenFileDialog, &state, properties);
-    SDL_DestroyProperties(properties);
+    ::SDL_ShowFileDialogWithProperties(type, _OnOpenFileDialog, &state, properties);
+    ::SDL_DestroyProperties(properties);
 
     /* SDL's dialog runs asynchronously and Rocket's synchronously: tick the run
        loop, without App updates, until the dialog is dismissed */

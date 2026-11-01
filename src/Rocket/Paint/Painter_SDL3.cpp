@@ -152,10 +152,10 @@ static_assert(offsetof(_ShadowFilterFieldUniforms, invert) == 32);
 struct _RenderPass {
     std::uint32_t width = 0;
     std::uint32_t height = 0;
-    SDL_GPUTextureFormat format = SDL_GPU_TEXTUREFORMAT_INVALID;
-    SDL_GPUTexture* texture = nullptr;
-    SDL_GPUCommandBuffer* commandBuffer = nullptr;
-    SDL_GPURenderPass* pass = nullptr;
+    ::SDL_GPUTextureFormat format = ::SDL_GPU_TEXTUREFORMAT_INVALID;
+    ::SDL_GPUTexture* texture = nullptr;
+    ::SDL_GPUCommandBuffer* commandBuffer = nullptr;
+    ::SDL_GPURenderPass* pass = nullptr;
     bool commit = false;
 };
 
@@ -164,13 +164,13 @@ struct _FilterTextures {
     std::uint32_t width = 0;
     std::uint32_t height = 0;
     std::tuple<
-        SDL_GPUTexture*,
-        SDL_GPUTexture*
+        ::SDL_GPUTexture*,
+        ::SDL_GPUTexture*
     > textures;
 };
 
 struct Painter::_Painter {
-    SDL_GPUCommandBuffer* commandBuffer = nullptr;
+    ::SDL_GPUCommandBuffer* commandBuffer = nullptr;
     bool swapchainAcquired = false;
     std::stack<std::optional<_RenderPass>> renderPassStack;
     std::map<std::uint64_t, _FilterTextures> filterTextures;
@@ -239,38 +239,38 @@ static Vec2 _EdgeExpansion(Mat3 const& transform) {
     };
 }
 
-static SDL_GPUColorTargetBlendState _GetBlend(Blend blend) {
+static ::SDL_GPUColorTargetBlendState _GetBlend(Blend blend) {
     PROFILE
 
-    auto state = SDL_GPUColorTargetBlendState{};
+    auto state = ::SDL_GPUColorTargetBlendState{};
     state.enable_blend = true;
-    state.color_blend_op = SDL_GPU_BLENDOP_ADD;
-    state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
+    state.color_blend_op = ::SDL_GPU_BLENDOP_ADD;
+    state.alpha_blend_op = ::SDL_GPU_BLENDOP_ADD;
 
     switch (blend) {
         case Blend::Over:
-            state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
-            state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-            state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
-            state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+            state.src_color_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE;
+            state.dst_color_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+            state.src_alpha_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE;
+            state.dst_alpha_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
             break;
         case Blend::Add:
-            state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
-            state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
-            state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
-            state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+            state.src_color_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE;
+            state.dst_color_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE;
+            state.src_alpha_blendfactor = ::SDL_GPU_BLENDFACTOR_ZERO;
+            state.dst_alpha_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE;
             break;
         case Blend::Multiply:
-            state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_DST_COLOR;
-            state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-            state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
-            state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+            state.src_color_blendfactor = ::SDL_GPU_BLENDFACTOR_DST_COLOR;
+            state.dst_color_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+            state.src_alpha_blendfactor = ::SDL_GPU_BLENDFACTOR_ZERO;
+            state.dst_alpha_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE;
             break;
         case Blend::Screen:
-            state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
-            state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_COLOR;
-            state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
-            state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+            state.src_color_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE;
+            state.dst_color_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_COLOR;
+            state.src_alpha_blendfactor = ::SDL_GPU_BLENDFACTOR_ZERO;
+            state.dst_alpha_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE;
             break;
     }
 
@@ -285,7 +285,7 @@ static void _SetScissor(_RenderPass const& renderPass, std::optional<Vec4> const
     auto const passWidth = static_cast<int>(renderPass.width);
     auto const passHeight = static_cast<int>(renderPass.height);
 
-    auto scissorInfo = SDL_Rect{};
+    auto scissorInfo = ::SDL_Rect{};
 
     if (scissor.has_value()) {
         auto const left = std::max(0, static_cast<int>(std::roundf(scissor->x)));
@@ -293,14 +293,14 @@ static void _SetScissor(_RenderPass const& renderPass, std::optional<Vec4> const
         auto const right = std::min(passWidth, static_cast<int>(std::roundf(scissor->x + scissor->width)));
         auto const bottom = std::min(passHeight, static_cast<int>(std::roundf(scissor->y + scissor->height)));
 
-        scissorInfo = SDL_Rect{
+        scissorInfo = ::SDL_Rect{
             std::min(left, passWidth),
             std::min(top, passHeight),
             std::max(0, right - left),
             std::max(0, bottom - top)
         };
     } else {
-        scissorInfo = SDL_Rect{
+        scissorInfo = ::SDL_Rect{
             0, 0,
             passWidth,
             passHeight
@@ -380,7 +380,7 @@ static void _SetViewport(_RenderPass const& renderPass, Vec4 const& viewport) {
 
     assert(renderPass.pass != nullptr);
 
-    auto const viewportInfo = SDL_GPUViewport{
+    auto const viewportInfo = ::SDL_GPUViewport{
         viewport.x,
         viewport.y,
         viewport.width,
@@ -392,16 +392,16 @@ static void _SetViewport(_RenderPass const& renderPass, Vec4 const& viewport) {
     ::SDL_SetGPUViewport(renderPass.pass, &viewportInfo);
 }
 
-static SDL_GPUDevice* _GetDevice() {
+static ::SDL_GPUDevice* _GetDevice() {
     PROFILE
 
-    return static_cast<SDL_GPUDevice*>(__GetDefaultGPUDevice());
+    return static_cast<::SDL_GPUDevice*>(__GetDefaultGPUDevice());
 }
 
-static SDL_GPUShader* _CreateShader(std::uint8_t const* code, std::size_t size, SDL_GPUShaderStage stage, std::uint32_t samplers, std::uint32_t uniformBuffers) {
+static ::SDL_GPUShader* _CreateShader(std::uint8_t const* code, std::size_t size, ::SDL_GPUShaderStage stage, std::uint32_t samplers, std::uint32_t uniformBuffers) {
     PROFILE
 
-    auto info = SDL_GPUShaderCreateInfo{};
+    auto info = ::SDL_GPUShaderCreateInfo{};
     info.code_size = size;
     info.code = code;
     info.entrypoint = "main";
@@ -419,18 +419,18 @@ static SDL_GPUShader* _CreateShader(std::uint8_t const* code, std::size_t size, 
     return shader;
 }
 
-static SDL_GPUShader* _GetVertexShader() {
+static ::SDL_GPUShader* _GetVertexShader() {
     PROFILE
 
-    static auto const _shader = _CreateShader(Rocket_SPIRV_QuadVertex, Rocket_SPIRV_QuadVertex_len, SDL_GPU_SHADERSTAGE_VERTEX, 0, 2);
+    static auto const _shader = _CreateShader(Rocket_SPIRV_QuadVertex, Rocket_SPIRV_QuadVertex_len, ::SDL_GPU_SHADERSTAGE_VERTEX, 0, 2);
 
     return _shader;
 }
 
-static SDL_GPUShader* _GetFragmentShader(_Fragment fragment) {
+static ::SDL_GPUShader* _GetFragmentShader(_Fragment fragment) {
     PROFILE
 
-    static auto _shaders = std::map<_Fragment, SDL_GPUShader*>();
+    static auto _shaders = std::map<_Fragment, ::SDL_GPUShader*>();
 
     auto it = _shaders.find(fragment);
 
@@ -440,8 +440,8 @@ static SDL_GPUShader* _GetFragmentShader(_Fragment fragment) {
 
     /* uniform buffer counts run to the highest slot a shader declares: the
        filter shaders take their uniforms at the brush slot, as on Metal */
-    auto shader = static_cast<SDL_GPUShader*>(nullptr);
-    auto constexpr stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
+    auto shader = static_cast<::SDL_GPUShader*>(nullptr);
+    auto constexpr stage = ::SDL_GPU_SHADERSTAGE_FRAGMENT;
 
     switch (fragment) {
         case _Fragment::ColorBrush:            shader = _CreateShader(Rocket_SPIRV_ColorBrush, Rocket_SPIRV_ColorBrush_len, stage, 0, 3); break;
@@ -459,16 +459,16 @@ static SDL_GPUShader* _GetFragmentShader(_Fragment fragment) {
     return shader;
 }
 
-static SDL_GPUSampler* _CreateSampler(SDL_GPUFilter minFilter, SDL_GPUFilter magFilter) {
+static ::SDL_GPUSampler* _CreateSampler(::SDL_GPUFilter minFilter, ::SDL_GPUFilter magFilter) {
     PROFILE
 
-    auto info = SDL_GPUSamplerCreateInfo{};
+    auto info = ::SDL_GPUSamplerCreateInfo{};
     info.min_filter = minFilter;
     info.mag_filter = magFilter;
-    info.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
-    info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-    info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-    info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    info.mipmap_mode = ::SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+    info.address_mode_u = ::SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    info.address_mode_v = ::SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    info.address_mode_w = ::SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
 
     auto sampler = ::SDL_CreateGPUSampler(_GetDevice(), &info);
 
@@ -479,20 +479,20 @@ static SDL_GPUSampler* _CreateSampler(SDL_GPUFilter minFilter, SDL_GPUFilter mag
     return sampler;
 }
 
-static SDL_GPUGraphicsPipeline* _CreatePipeline(_Fragment fragment, SDL_GPUTextureFormat format, Blend blend) {
+static ::SDL_GPUGraphicsPipeline* _CreatePipeline(_Fragment fragment, ::SDL_GPUTextureFormat format, Blend blend) {
     PROFILE
 
-    auto colorTarget = SDL_GPUColorTargetDescription{};
+    auto colorTarget = ::SDL_GPUColorTargetDescription{};
     colorTarget.format = format;
     colorTarget.blend_state = _GetBlend(blend);
 
-    auto info = SDL_GPUGraphicsPipelineCreateInfo{};
+    auto info = ::SDL_GPUGraphicsPipelineCreateInfo{};
     info.vertex_shader = _GetVertexShader();
     info.fragment_shader = _GetFragmentShader(fragment);
-    info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP;
-    info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
-    info.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
-    info.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
+    info.primitive_type = ::SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP;
+    info.rasterizer_state.fill_mode = ::SDL_GPU_FILLMODE_FILL;
+    info.rasterizer_state.cull_mode = ::SDL_GPU_CULLMODE_NONE;
+    info.multisample_state.sample_count = ::SDL_GPU_SAMPLECOUNT_1;
     info.target_info.color_target_descriptions = &colorTarget;
     info.target_info.num_color_targets = 1;
 
@@ -505,10 +505,10 @@ static SDL_GPUGraphicsPipeline* _CreatePipeline(_Fragment fragment, SDL_GPUTextu
     return pipeline;
 }
 
-static SDL_GPUGraphicsPipeline* _GetPipeline(_Fragment fragment, SDL_GPUTextureFormat format, Blend blend) {
+static ::SDL_GPUGraphicsPipeline* _GetPipeline(_Fragment fragment, ::SDL_GPUTextureFormat format, Blend blend) {
     PROFILE
 
-    static auto _pipelines = std::map<std::uint64_t, SDL_GPUGraphicsPipeline*>();
+    static auto _pipelines = std::map<std::uint64_t, ::SDL_GPUGraphicsPipeline*>();
 
     auto const key = (((std::uint64_t)fragment) << 40) | (((std::uint64_t)format) << 8) | (std::uint64_t)blend;
     auto it = _pipelines.find(key);
@@ -520,45 +520,45 @@ static SDL_GPUGraphicsPipeline* _GetPipeline(_Fragment fragment, SDL_GPUTextureF
     return it->second;
 }
 
-static SDL_GPUSampler* _GetLinLinSampler() {
+static ::SDL_GPUSampler* _GetLinLinSampler() {
     PROFILE
 
-    static auto const _sampler = _CreateSampler(SDL_GPU_FILTER_LINEAR, SDL_GPU_FILTER_LINEAR);
+    static auto const _sampler = _CreateSampler(::SDL_GPU_FILTER_LINEAR, ::SDL_GPU_FILTER_LINEAR);
 
     return _sampler;
 }
 
-static SDL_GPUSampler* _GetNerNerSampler() {
+static ::SDL_GPUSampler* _GetNerNerSampler() {
     PROFILE
 
-    static auto const _sampler = _CreateSampler(SDL_GPU_FILTER_NEAREST, SDL_GPU_FILTER_NEAREST);
+    static auto const _sampler = _CreateSampler(::SDL_GPU_FILTER_NEAREST, ::SDL_GPU_FILTER_NEAREST);
 
     return _sampler;
 }
 
-static SDL_GPUSampler* _GetLinNerSampler() {
+static ::SDL_GPUSampler* _GetLinNerSampler() {
     PROFILE
 
-    static auto const _sampler = _CreateSampler(SDL_GPU_FILTER_LINEAR, SDL_GPU_FILTER_NEAREST);
+    static auto const _sampler = _CreateSampler(::SDL_GPU_FILTER_LINEAR, ::SDL_GPU_FILTER_NEAREST);
 
     return _sampler;
 }
 
-static SDL_GPUSampler* _GetNerLinSampler() {
+static ::SDL_GPUSampler* _GetNerLinSampler() {
     PROFILE
 
-    static auto const _sampler = _CreateSampler(SDL_GPU_FILTER_NEAREST, SDL_GPU_FILTER_LINEAR);
+    static auto const _sampler = _CreateSampler(::SDL_GPU_FILTER_NEAREST, ::SDL_GPU_FILTER_LINEAR);
 
     return _sampler;
 }
 
-static void _BindTexture(_RenderPass const& renderPass, SDL_GPUTexture* texture, SDL_GPUSampler* sampler) {
+static void _BindTexture(_RenderPass const& renderPass, ::SDL_GPUTexture* texture, ::SDL_GPUSampler* sampler) {
     PROFILE
 
     assert(renderPass.pass != nullptr);
     assert(texture != nullptr);
 
-    auto const binding = SDL_GPUTextureSamplerBinding{ texture, sampler };
+    auto const binding = ::SDL_GPUTextureSamplerBinding{ texture, sampler };
 
     ::SDL_BindGPUFragmentSamplers(renderPass.pass, 0, &binding, 1);
 }
@@ -570,16 +570,16 @@ static int _GetGaussianTaps(float extent) {
 static void _OpenRenderPass(_RenderPass& renderPass, std::optional<Vec4> const& clear) {
     PROFILE
 
-    auto target = SDL_GPUColorTargetInfo{};
+    auto target = ::SDL_GPUColorTargetInfo{};
     target.texture = renderPass.texture;
-    target.load_op = SDL_GPU_LOADOP_LOAD;
-    target.store_op = SDL_GPU_STOREOP_STORE;
+    target.load_op = ::SDL_GPU_LOADOP_LOAD;
+    target.store_op = ::SDL_GPU_STOREOP_STORE;
     target.cycle = false;
 
     if (clear.has_value()) {
-        target.load_op = SDL_GPU_LOADOP_CLEAR;
+        target.load_op = ::SDL_GPU_LOADOP_CLEAR;
         /* the target is premultiplied; the clear color is straight RGBA */
-        target.clear_color = SDL_FColor{
+        target.clear_color = ::SDL_FColor{
             (clear->red * clear->alpha),
             (clear->green * clear->alpha),
             (clear->blue * clear->alpha),
@@ -594,7 +594,7 @@ static void _OpenRenderPass(_RenderPass& renderPass, std::optional<Vec4> const& 
     }
 }
 
-static void _BeginRenderPass(_RenderPass& renderPass, SDL_GPUCommandBuffer* command, SDL_GPUTexture* texture, std::uint32_t width, std::uint32_t height, SDL_GPUTextureFormat format, std::optional<Vec4> const& clear) {
+static void _BeginRenderPass(_RenderPass& renderPass, ::SDL_GPUCommandBuffer* command, ::SDL_GPUTexture* texture, std::uint32_t width, std::uint32_t height, ::SDL_GPUTextureFormat format, std::optional<Vec4> const& clear) {
     PROFILE
 
     assert(command != nullptr);
@@ -629,7 +629,7 @@ static void _EndRenderPass(_RenderPass& renderPass) {
     renderPass.texture = nullptr;
     renderPass.pass = nullptr;
     renderPass.commandBuffer = nullptr;
-    renderPass.format = SDL_GPU_TEXTUREFORMAT_INVALID;
+    renderPass.format = ::SDL_GPU_TEXTUREFORMAT_INVALID;
     renderPass.commit = false;
 }
 
@@ -825,7 +825,7 @@ static void _PushImageBrushUniforms(_RenderPass const& renderPass, ImageBrush co
                                                                                   _GetNerNerSampler()
     );
 
-    _BindTexture(renderPass, static_cast<SDL_GPUTexture*>(imageBrush.image->getTexture()), sampler);
+    _BindTexture(renderPass, static_cast<::SDL_GPUTexture*>(imageBrush.image->getTexture()), sampler);
     ::SDL_PushGPUFragmentUniformData(renderPass.commandBuffer, _brushFragmentUniformsIndex, &imageUniforms, sizeof(_ImageBrushUniforms));
 }
 
@@ -950,10 +950,10 @@ void* __GetDefaultGPUDevice() {
 int __GetDefaultTextureFormat() {
     PROFILE
 
-    return (int)SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    return (int)::SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
 }
 
-bool __ClaimWindow(SDL_Window* window) {
+bool __ClaimWindow(::SDL_Window* window) {
     PROFILE
 
     auto claimed = ::SDL_ClaimWindowForGPUDevice(_GetDevice(), window);
@@ -969,7 +969,7 @@ bool __ClaimWindow(SDL_Window* window) {
     return claimed;
 }
 
-void __ReleaseWindow(SDL_Window* window) {
+void __ReleaseWindow(::SDL_Window* window) {
     PROFILE
 
     ::SDL_ReleaseWindowFromGPUDevice(_GetDevice(), window);
@@ -992,15 +992,15 @@ _FilterTextures& Painter::_Painter::getFilterTextures(std::uint32_t width, std::
     auto it = filterTextures.find(key);
 
     if (it == filterTextures.end()) {
-        auto info = SDL_GPUTextureCreateInfo{};
-        info.type = SDL_GPU_TEXTURETYPE_2D;
-        info.format = (SDL_GPUTextureFormat)__GetDefaultTextureFormat();
+        auto info = ::SDL_GPUTextureCreateInfo{};
+        info.type = ::SDL_GPU_TEXTURETYPE_2D;
+        info.format = (::SDL_GPUTextureFormat)__GetDefaultTextureFormat();
         info.usage = (SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET);
         info.width = width;
         info.height = height;
         info.layer_count_or_depth = 1;
         info.num_levels = 1;
-        info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+        info.sample_count = ::SDL_GPU_SAMPLECOUNT_1;
 
         auto first = ::SDL_CreateGPUTexture(_GetDevice(), &info);
         auto second = ::SDL_CreateGPUTexture(_GetDevice(), &info);
@@ -1112,19 +1112,19 @@ void Painter::__beginPaint(PaintTarget const& target) {
             _BeginRenderPass(
                 *_impl->renderPassStack.top(),
                 _impl->commandBuffer,
-                static_cast<SDL_GPUTexture*>(imageTarget.image.getTexture()),
+                static_cast<::SDL_GPUTexture*>(imageTarget.image.getTexture()),
                 (std::uint32_t)imageTarget.image.getSize().width,
                 (std::uint32_t)imageTarget.image.getSize().height,
-                (SDL_GPUTextureFormat)__GetDefaultTextureFormat(),
+                (::SDL_GPUTextureFormat)__GetDefaultTextureFormat(),
                 imageTarget.clearColor
             );
         },
         [&](WindowPaintTarget const& windowTarget) {
             assert(windowTarget.window.getHandle() != nullptr);
 
-            auto window = static_cast<SDL_Window*>(windowTarget.window.getHandle());
+            auto window = static_cast<::SDL_Window*>(windowTarget.window.getHandle());
             auto const commit = acquireCommandBuffer();
-            auto texture = static_cast<SDL_GPUTexture*>(nullptr);
+            auto texture = static_cast<::SDL_GPUTexture*>(nullptr);
             auto width = std::uint32_t{ 0 };
             auto height = std::uint32_t{ 0 };
 
@@ -1269,7 +1269,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         (1.0f / static_cast<float>(filterHeight))
     };
 
-    auto const drawBlur = [&](_RenderPass& pass, SDL_GPUTexture* source, Vec2 const& direction, Vec4 const& rect, std::optional<Vec4> const& scissor, Blend mode) {
+    auto const drawBlur = [&](_RenderPass& pass, ::SDL_GPUTexture* source, Vec2 const& direction, Vec4 const& rect, std::optional<Vec4> const& scissor, Blend mode) {
         assert(pass.pass != nullptr);
         assert(source != nullptr);
 
@@ -1289,7 +1289,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         ::SDL_DrawGPUPrimitives(pass.pass, 4, 1, 0, 0);
     };
 
-    auto const drawShadowField = [&](_RenderPass& pass, SDL_GPUTexture* source, _Fragment fragment, Vec2 const& direction, float spread, bool fromSilhouette, Vec4 const& rect) {
+    auto const drawShadowField = [&](_RenderPass& pass, ::SDL_GPUTexture* source, _Fragment fragment, Vec2 const& direction, float spread, bool fromSilhouette, Vec4 const& rect) {
         assert(pass.pass != nullptr);
         assert(source != nullptr);
 
@@ -1309,7 +1309,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         ::SDL_DrawGPUPrimitives(pass.pass, 4, 1, 0, 0);
     };
 
-    auto const drawShadowComposite = [&](_RenderPass& pass, SDL_GPUTexture* source, bool fromSilhouette, Vec4 const& rect, std::optional<Vec4> const& scissor, Blend mode) {
+    auto const drawShadowComposite = [&](_RenderPass& pass, ::SDL_GPUTexture* source, bool fromSilhouette, Vec4 const& rect, std::optional<Vec4> const& scissor, Blend mode) {
         assert(pass.pass != nullptr);
         assert(source != nullptr);
 
@@ -1359,7 +1359,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _SuspendRenderPass(*_impl->renderPassStack.top());
 
         auto const& [ shapeTexture, blurTexture ] = _impl->getFilterTextures(filterWidth, filterHeight).textures;
-        auto const filterFormat = (SDL_GPUTextureFormat)__GetDefaultTextureFormat();
+        auto const filterFormat = (::SDL_GPUTextureFormat)__GetDefaultTextureFormat();
         auto const clearColor = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f };
 
         auto shapePass = _RenderPass{};
@@ -1399,7 +1399,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _SuspendRenderPass(*_impl->renderPassStack.top());
 
         auto [ source, target ] = _impl->getFilterTextures(filterWidth, filterHeight).textures;
-        auto const filterFormat = (SDL_GPUTextureFormat)__GetDefaultTextureFormat();
+        auto const filterFormat = (::SDL_GPUTextureFormat)__GetDefaultTextureFormat();
         auto const clearColor = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f };
         auto fromSilhouette = true;
 

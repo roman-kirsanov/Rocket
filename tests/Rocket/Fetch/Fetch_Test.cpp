@@ -28,16 +28,16 @@ public:
     Server() {
         _socket = ::socket(AF_INET, SOCK_STREAM, 0);
 
-        auto address = sockaddr_in{};
+        auto address = ::sockaddr_in{};
         address.sin_family = AF_INET;
         address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         address.sin_port = 0;
 
-        ::bind(_socket, reinterpret_cast<sockaddr*>(&address), sizeof(address));
+        ::bind(_socket, reinterpret_cast<::sockaddr*>(&address), sizeof(address));
         ::listen(_socket, 16);
 
-        auto length = socklen_t(sizeof(address));
-        ::getsockname(_socket, reinterpret_cast<sockaddr*>(&address), &length);
+        auto length = ::socklen_t(sizeof(address));
+        ::getsockname(_socket, reinterpret_cast<::sockaddr*>(&address), &length);
         _port = ntohs(address.sin_port);
 
         _thread = std::thread([this] {

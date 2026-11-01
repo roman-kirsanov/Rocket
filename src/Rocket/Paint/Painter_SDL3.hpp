@@ -13,8 +13,8 @@ struct SDL_Window;
 
 namespace Rocket {
 
-bool __ClaimWindow(SDL_Window* window);
-void __ReleaseWindow(SDL_Window* window);
+bool __ClaimWindow(::SDL_Window* window);
+void __ReleaseWindow(::SDL_Window* window);
 std::uint64_t __GetWindowFlags();
 
 } /* namespace Rocket */

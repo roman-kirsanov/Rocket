@@ -1339,7 +1339,7 @@ void Document::_updateLayout() {
     ::YGConfigSetPointScaleFactor((::YGConfig*)_config, _scale);
     ::YGNodeStyleSetWidth((::YGNode*)_layoutNode, size.width);
     ::YGNodeStyleSetHeight((::YGNode*)_layoutNode, size.height);
-    ::YGNodeCalculateLayout((::YGNode*)_layoutNode, size.width, size.height, YGDirectionLTR);
+    ::YGNodeCalculateLayout((::YGNode*)_layoutNode, size.width, size.height, ::YGDirectionLTR);
 }
 
 void Document::_updateNode(Node& node) {

@@ -21,7 +21,7 @@ namespace Rocket {
 static auto constexpr _openAttempts = 10;
 static auto constexpr _openRetryDelayMs = 5;
 
-static HWND _GetOwner() {
+static ::HWND _GetOwner() {
     PROFILE
 
     static auto const _owner = [] {

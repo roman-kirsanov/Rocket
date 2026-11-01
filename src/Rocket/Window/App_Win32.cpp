@@ -31,12 +31,12 @@ static auto constexpr _defaultRefreshRate = 60.0;
 static auto _isExited = false;
 static auto _frameEnd = std::uint64_t(0);
 static auto _timerPainting = 0;
-static auto _timerId = UINT_PTR(0);
+static auto _timerId = ::UINT_PTR(0);
 
 static double _GetFramePeriod() {
     PROFILE
 
-    auto mode = DEVMODEW{ .dmSize = sizeof(DEVMODEW) };
+    auto mode = ::DEVMODEW{ .dmSize = sizeof(::DEVMODEW) };
 
     auto const rate = ((::EnumDisplaySettingsW(nullptr, ENUM_CURRENT_SETTINGS, &mode) != FALSE) && (mode.dmDisplayFrequency > 1))
         ? static_cast<double>(mode.dmDisplayFrequency)
@@ -48,7 +48,7 @@ static double _GetFramePeriod() {
 static std::uint64_t _GetTicks() {
     PROFILE
 
-    auto counter = LARGE_INTEGER{};
+    auto counter = ::LARGE_INTEGER{};
     ::QueryPerformanceCounter(&counter);
 
     return static_cast<std::uint64_t>(counter.QuadPart);
@@ -57,22 +57,22 @@ static std::uint64_t _GetTicks() {
 static std::uint64_t _GetTicksPerSecond() {
     PROFILE
 
-    auto frequency = LARGE_INTEGER{};
+    auto frequency = ::LARGE_INTEGER{};
     ::QueryPerformanceFrequency(&frequency);
 
     return static_cast<std::uint64_t>(frequency.QuadPart);
 }
 
-static void CALLBACK _OnPaintTimer(HWND, UINT, UINT_PTR, DWORD) {
+static void CALLBACK _OnPaintTimer(::HWND, ::UINT, ::UINT_PTR, ::DWORD) {
     PROFILE
 
     __PaintWindows();
 }
 
-static void _CoalesceMessage(std::vector<MSG>& held, MSG const& message) {
+static void _CoalesceMessage(std::vector<::MSG>& held, ::MSG const& message) {
     PROFILE
 
-    auto constexpr buttons = WPARAM(MK_LBUTTON | MK_RBUTTON | MK_MBUTTON | MK_XBUTTON1 | MK_XBUTTON2);
+    auto constexpr buttons = ::WPARAM(MK_LBUTTON | MK_RBUTTON | MK_MBUTTON | MK_XBUTTON1 | MK_XBUTTON2);
 
     if (held.empty() == false) {
         auto& last = held.back();
@@ -93,7 +93,7 @@ static void _CoalesceMessage(std::vector<MSG>& held, MSG const& message) {
             (last.hwnd == message.hwnd)
         ) {
             auto const delta = std::clamp(GET_WHEEL_DELTA_WPARAM(last.wParam) + GET_WHEEL_DELTA_WPARAM(message.wParam), -32768, 32767);
-            last.wParam = MAKEWPARAM(LOWORD(message.wParam), static_cast<WORD>(static_cast<SHORT>(delta)));
+            last.wParam = MAKEWPARAM(LOWORD(message.wParam), static_cast<::WORD>(static_cast<::SHORT>(delta)));
             last.lParam = message.lParam;
             return;
         }
@@ -102,7 +102,7 @@ static void _CoalesceMessage(std::vector<MSG>& held, MSG const& message) {
     held.push_back(message);
 }
 
-static void _DispatchMessage(MSG const& message) {
+static void _DispatchMessage(::MSG const& message) {
     PROFILE
 
     if (message.message == WM_QUIT) {
@@ -114,7 +114,7 @@ static void _DispatchMessage(MSG const& message) {
     ::DispatchMessageW(&message);
 }
 
-static void _DispatchHeldMessages(std::vector<MSG>& held) {
+static void _DispatchHeldMessages(std::vector<::MSG>& held) {
     PROFILE
 
     auto const messages = std::move(held);
@@ -125,10 +125,10 @@ static void _DispatchHeldMessages(std::vector<MSG>& held) {
     }
 }
 
-static bool _DrainMessages(std::vector<MSG>& held) {
+static bool _DrainMessages(std::vector<::MSG>& held) {
     PROFILE
 
-    auto message = MSG{};
+    auto message = ::MSG{};
     auto handled = false;
 
     while (::PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE) != FALSE) {
@@ -165,7 +165,7 @@ void __InitWin32() {
     static auto _initialized = false;
 
     if (_comInitialized == false) {
-        ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        ::CoInitializeEx(nullptr, ::COINIT_APARTMENTTHREADED | ::COINIT_DISABLE_OLE1DDE);
         _comInitialized = true;
     }
 
@@ -215,7 +215,7 @@ std::string const& __GetExecPath() {
         auto path = std::wstring(MAX_PATH, L'\0');
 
         for (;;) {
-            auto const length = ::GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
+            auto const length = ::GetModuleFileNameW(nullptr, path.data(), static_cast<::DWORD>(path.size()));
 
             if (length == 0) {
                 return std::string();
@@ -264,10 +264,10 @@ std::string const& __GetUserDir() {
     PROFILE
 
     static auto const _userDir = [] {
-        auto path = PWSTR(nullptr);
+        auto path = ::PWSTR(nullptr);
         auto folder = std::string();
 
-        if (SUCCEEDED(::SHGetKnownFolderPath(FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, nullptr, &path))) {
+        if (SUCCEEDED(::SHGetKnownFolderPath(::FOLDERID_RoamingAppData, ::KF_FLAG_DEFAULT, nullptr, &path))) {
             folder = _TrimSeparator(__FromWide(path));
         }
 
@@ -301,7 +301,7 @@ void __Tick(bool update) {
     PROFILE
 
     static auto const _timer = ::CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
-    static thread_local auto _held = std::vector<MSG>();
+    static thread_local auto _held = std::vector<::MSG>();
 
     /* A window that presented a frame is painted when its swapchain can take
        the next one, which follows the vertical blank of the display it is on.
@@ -310,11 +310,11 @@ void __Tick(bool update) {
     auto ready = std::vector<void*>();
 
     for (;;) {
-        auto handles = std::vector<HANDLE>{ _timer };
+        auto handles = std::vector<::HANDLE>{ _timer };
         auto waiting = std::vector<void*>{ nullptr };
 
         for (auto const window : __GetPaintedWindows()) {
-            auto const wait = static_cast<HANDLE>(__GetWindowFrameWait(window));
+            auto const wait = static_cast<::HANDLE>(__GetWindowFrameWait(window));
 
             if (wait == nullptr) {
                 continue;
@@ -337,11 +337,11 @@ void __Tick(bool update) {
         }
 
         auto const remaining = static_cast<double>(_frameEnd - now) / static_cast<double>(_GetTicksPerSecond());
-        auto due = LARGE_INTEGER{ .QuadPart = -static_cast<LONGLONG>(remaining * 10000000.0) };
+        auto due = ::LARGE_INTEGER{ .QuadPart = -static_cast<::LONGLONG>(remaining * 10000000.0) };
 
         ::SetWaitableTimer(_timer, &due, 0, nullptr, nullptr, FALSE);
 
-        auto const result = ::MsgWaitForMultipleObjectsEx(static_cast<DWORD>(handles.size()), handles.data(), INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+        auto const result = ::MsgWaitForMultipleObjectsEx(static_cast<::DWORD>(handles.size()), handles.data(), INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
 
         if ((result >= WAIT_OBJECT_0) && (result < (WAIT_OBJECT_0 + handles.size()))) {
             if (auto const window = waiting[result - WAIT_OBJECT_0]; window != nullptr) {
@@ -391,7 +391,7 @@ void __SetTimerPainting(bool painting) {
     _timerPainting += painting ? 1 : -1;
 
     if ((_timerPainting > 0) && (_timerId == 0)) {
-        _timerId = ::SetTimer(nullptr, 0, static_cast<UINT>(std::max(1.0, std::floor(_GetFramePeriod() * 1000.0))), _OnPaintTimer);
+        _timerId = ::SetTimer(nullptr, 0, static_cast<::UINT>(std::max(1.0, std::floor(_GetFramePeriod() * 1000.0))), _OnPaintTimer);
     } else if ((_timerPainting == 0) && (_timerId != 0)) {
         ::KillTimer(nullptr, _timerId);
         _timerId = 0;

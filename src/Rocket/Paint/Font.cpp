@@ -121,26 +121,26 @@ static std::uint32_t _SizeToPixels(float size) {
     return static_cast<std::uint32_t>(std::max(size, 1.0f));
 }
 
-static void _FontSvgFree(FT_Pointer* state) {
+static void _FontSvgFree(::FT_Pointer* state) {
     PROFILE
 
     delete *reinterpret_cast<_FontSvgState**>(state);
 }
 
-static FT_Error _FontSvgNew(FT_Pointer* state) {
+static ::FT_Error _FontSvgNew(::FT_Pointer* state) {
     PROFILE
 
     *state = new _FontSvgState{};
 
-    return FT_Err_Ok;
+    return ::FT_Err_Ok;
 }
 
-static FT_Error _FontSvgRender(FT_GlyphSlot slot, FT_Pointer* state) {
+static ::FT_Error _FontSvgRender(::FT_GlyphSlot slot, ::FT_Pointer* state) {
     PROFILE
 
     auto svgState = *reinterpret_cast<_FontSvgState**>(state);
 
-    if (svgState->err != FT_Err_Ok) {
+    if (svgState->err != ::FT_Err_Ok) {
         return svgState->err;
     }
 
@@ -152,16 +152,16 @@ static FT_Error _FontSvgRender(FT_GlyphSlot slot, FT_Pointer* state) {
     );
 
     svgState->svg->render(bitmap, svgState->matrix);
-    svgState->err = FT_Err_Ok;
+    svgState->err = ::FT_Err_Ok;
 
     return svgState->err;
 }
 
-static FT_Error _FontSvgPresetSlot(FT_GlyphSlot slot, FT_Bool cache, FT_Pointer* state) {
+static ::FT_Error _FontSvgPresetSlot(::FT_GlyphSlot slot, ::FT_Bool cache, ::FT_Pointer* state) {
     PROFILE
 
     auto svgState = *reinterpret_cast<_FontSvgState**>(state);
-    auto document = reinterpret_cast<FT_SVG_Document>(slot->other);
+    auto document = reinterpret_cast<::FT_SVG_Document>(slot->other);
 
     if (cache != 0) {
         return svgState->err;
@@ -173,7 +173,7 @@ static FT_Error _FontSvgPresetSlot(FT_GlyphSlot slot, FT_Bool cache, FT_Pointer*
     );
 
     if (svgState->svg == nullptr) {
-        svgState->err = FT_Err_Invalid_SVG_Document;
+        svgState->err = ::FT_Err_Invalid_SVG_Document;
         return svgState->err;
     }
 
@@ -192,27 +192,27 @@ static FT_Error _FontSvgPresetSlot(FT_GlyphSlot slot, FT_Bool cache, FT_Pointer*
     svgState->matrix.scale(scale, scale);
     box.transform(svgState->matrix);
 
-    slot->bitmap_left        = FT_Int(box.x);
-    slot->bitmap_top         = FT_Int(-box.y);
+    slot->bitmap_left        = ::FT_Int(box.x);
+    slot->bitmap_top         = ::FT_Int(-box.y);
     slot->bitmap.rows        = (unsigned int)std::ceil(box.h);
     slot->bitmap.width       = (unsigned int)std::ceil(box.w);
     slot->bitmap.pitch       = (int)(slot->bitmap.width * 4);
-    slot->bitmap.pixel_mode  = FT_PIXEL_MODE_BGRA;
+    slot->bitmap.pixel_mode  = ::FT_PIXEL_MODE_BGRA;
 
     auto const vertBearingX = slot->metrics.horiBearingX / 64.0 - slot->metrics.horiAdvance / 64.0 / 2.0;
     auto const vertBearingY = (slot->metrics.vertAdvance / 64.0 - slot->metrics.height / 64.0) / 2.0;
-    slot->metrics.width        = FT_Pos(std::round(box.w * 64.0));
-    slot->metrics.height       = FT_Pos(std::round(box.h * 64.0));
-    slot->metrics.horiBearingX = FT_Pos(box.x * 64.0);
-    slot->metrics.horiBearingY = FT_Pos(-box.y * 64.0);
-    slot->metrics.vertBearingX = FT_Pos(vertBearingX * 64.0);
-    slot->metrics.vertBearingY = FT_Pos(vertBearingY * 64.0);
+    slot->metrics.width        = ::FT_Pos(std::round(box.w * 64.0));
+    slot->metrics.height       = ::FT_Pos(std::round(box.h * 64.0));
+    slot->metrics.horiBearingX = ::FT_Pos(box.x * 64.0);
+    slot->metrics.horiBearingY = ::FT_Pos(-box.y * 64.0);
+    slot->metrics.vertBearingX = ::FT_Pos(vertBearingX * 64.0);
+    slot->metrics.vertBearingY = ::FT_Pos(vertBearingY * 64.0);
 
     if (slot->metrics.vertAdvance == 0) {
-        slot->metrics.vertAdvance = FT_Pos(box.h * 1.2 * 64.0);
+        slot->metrics.vertAdvance = ::FT_Pos(box.h * 1.2 * 64.0);
     }
 
-    svgState->err = FT_Err_Ok;
+    svgState->err = ::FT_Err_Ok;
     return svgState->err;
 }
 
@@ -359,11 +359,11 @@ FontGlyph const& Font::getGlyph(std::uint32_t codepoint, float size) const {
     if (it == _glyphCache.end()) {
         auto index = _getCharIndex(codepoint);
         auto loadFlags = FT_LOAD_NO_HINTING | FT_LOAD_COLOR;
-        auto renderFlags = FT_RENDER_MODE_LIGHT;
+        auto renderFlags = ::FT_RENDER_MODE_LIGHT;
 
         if (_monochrome) {
             loadFlags |= FT_LOAD_MONOCHROME;
-            renderFlags = FT_RENDER_MODE_MONO;
+            renderFlags = ::FT_RENDER_MODE_MONO;
         }
 
         if (_monohinting) {
@@ -387,7 +387,7 @@ FontGlyph const& Font::getGlyph(std::uint32_t codepoint, float size) const {
         auto bitmap = _impl->face->glyph->bitmap.buffer;
 
         if (_impl->face->glyph->bitmap.buffer != nullptr) {
-            if (_impl->face->glyph->bitmap.pixel_mode == FT_PIXEL_MODE_BGRA) {
+            if (_impl->face->glyph->bitmap.pixel_mode == ::FT_PIXEL_MODE_BGRA) {
                 bitmapFormat = ImageDataFormat::RGBA;
                 _tempBitmap.resize(width * height * 4);
                 for (auto y = 0; y < height; y++) {
@@ -401,7 +401,7 @@ FontGlyph const& Font::getGlyph(std::uint32_t codepoint, float size) const {
                     }
                 }
                 bitmap = _tempBitmap.data();
-            } else if (_impl->face->glyph->bitmap.pixel_mode == FT_PIXEL_MODE_MONO) {
+            } else if (_impl->face->glyph->bitmap.pixel_mode == ::FT_PIXEL_MODE_MONO) {
                 static auto const _monoLut = []{
                     auto lut = std::array<std::array<std::uint8_t, 8>, 256>{};
                     for (auto byte = 0; byte < 256; byte++) {
@@ -512,13 +512,13 @@ float const& Font::getKerning(std::uint32_t codepoint1, std::uint32_t codepoint2
     auto it = _kerningCache.find(key);
 
     if (it == _kerningCache.end()) {
-        auto value = FT_Vector{};
+        auto value = ::FT_Vector{};
         auto index1 = _getCharIndex(codepoint1);
         auto index2 = _getCharIndex(codepoint2);
 
         _setPixelSize(sizeKey);
 
-        FT_Get_Kerning_E(_impl->face, index1, index2, FT_KERNING_DEFAULT, &value);
+        FT_Get_Kerning_E(_impl->face, index1, index2, ::FT_KERNING_DEFAULT, &value);
 
         it = _kerningCache.insert({ key, (value.x / 64.0f) }).first;
     }
@@ -598,8 +598,8 @@ void Font::_initLib() {
     if (_freeTypeLibraryInited == false) {
         _freeTypeLibraryInited = true;
 
-        auto const svgHooks = SVG_RendererHooks{ _FontSvgNew, _FontSvgFree, _FontSvgRender, _FontSvgPresetSlot };
-        auto const noStemDarkening = FT_Bool(0); // 0 means stem darkening is enabled
+        auto const svgHooks = ::SVG_RendererHooks{ _FontSvgNew, _FontSvgFree, _FontSvgRender, _FontSvgPresetSlot };
+        auto const noStemDarkening = ::FT_Bool(0); // 0 means stem darkening is enabled
 
         FT_Init_FreeType_E(&_freeTypeLibrary);
         FT_Property_Set_E(_freeTypeLibrary, "ot-svg", "svg-hooks", &svgHooks);
@@ -619,7 +619,7 @@ void Font::_initFont() {
     );
 
     FT_New_Memory_Face_E(_freeTypeLibrary, _data.data(), _data.size(), _fontIndex, &_impl->face);
-    FT_Select_Charmap_E(_impl->face, FT_ENCODING_UNICODE);
+    FT_Select_Charmap_E(_impl->face, ::FT_ENCODING_UNICODE);
 
     _hasKerning = FT_HAS_KERNING(_impl->face);
 }

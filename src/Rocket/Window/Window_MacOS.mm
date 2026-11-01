@@ -44,123 +44,123 @@
 namespace Rocket {
 
 static auto const _keyMap = std::map<std::int32_t, Scancode>({
-    { kVK_ANSI_0, Scancode::Digit0 },
-    { kVK_ANSI_1, Scancode::Digit1 },
-    { kVK_ANSI_2, Scancode::Digit2 },
-    { kVK_ANSI_3, Scancode::Digit3 },
-    { kVK_ANSI_4, Scancode::Digit4 },
-    { kVK_ANSI_5, Scancode::Digit5 },
-    { kVK_ANSI_6, Scancode::Digit6 },
-    { kVK_ANSI_7, Scancode::Digit7 },
-    { kVK_ANSI_8, Scancode::Digit8 },
-    { kVK_ANSI_9, Scancode::Digit9 },
-    { kVK_ANSI_A, Scancode::KeyA },
-    { kVK_ANSI_B, Scancode::KeyB },
-    { kVK_ANSI_C, Scancode::KeyC },
-    { kVK_ANSI_D, Scancode::KeyD },
-    { kVK_ANSI_E, Scancode::KeyE },
-    { kVK_ANSI_F, Scancode::KeyF },
-    { kVK_ANSI_G, Scancode::KeyG },
-    { kVK_ANSI_H, Scancode::KeyH },
-    { kVK_ANSI_I, Scancode::KeyI },
-    { kVK_ANSI_J, Scancode::KeyJ },
-    { kVK_ANSI_K, Scancode::KeyK },
-    { kVK_ANSI_L, Scancode::KeyL },
-    { kVK_ANSI_M, Scancode::KeyM },
-    { kVK_ANSI_N, Scancode::KeyN },
-    { kVK_ANSI_O, Scancode::KeyO },
-    { kVK_ANSI_P, Scancode::KeyP },
-    { kVK_ANSI_Q, Scancode::KeyQ },
-    { kVK_ANSI_R, Scancode::KeyR },
-    { kVK_ANSI_S, Scancode::KeyS },
-    { kVK_ANSI_T, Scancode::KeyT },
-    { kVK_ANSI_U, Scancode::KeyU },
-    { kVK_ANSI_V, Scancode::KeyV },
-    { kVK_ANSI_W, Scancode::KeyW },
-    { kVK_ANSI_X, Scancode::KeyX },
-    { kVK_ANSI_Y, Scancode::KeyY },
-    { kVK_ANSI_Z, Scancode::KeyZ },
-    { kVK_F1, Scancode::F1 },
-    { kVK_F2, Scancode::F2 },
-    { kVK_F3, Scancode::F3 },
-    { kVK_F4, Scancode::F4 },
-    { kVK_F5, Scancode::F5 },
-    { kVK_F6, Scancode::F6 },
-    { kVK_F7, Scancode::F7 },
-    { kVK_F8, Scancode::F8 },
-    { kVK_F9, Scancode::F9 },
-    { kVK_F10, Scancode::F10 },
-    { kVK_F11, Scancode::F11 },
-    { kVK_F12, Scancode::F12 },
-    { kVK_F13, Scancode::F13 },
-    { kVK_F14, Scancode::F14 },
-    { kVK_F15, Scancode::F15 },
-    { kVK_F16, Scancode::F16 },
-    { kVK_F17, Scancode::F17 },
-    { kVK_F18, Scancode::F18 },
-    { kVK_F19, Scancode::F19 },
-    { kVK_F20, Scancode::F20 },
-    { kVK_Option, Scancode::Alt },
-    { kVK_DownArrow, Scancode::ArrowDown },
-    { kVK_LeftArrow, Scancode::ArrowLeft },
-    { kVK_RightArrow, Scancode::ArrowRight },
-    { kVK_UpArrow, Scancode::ArrowUp },
-    { kVK_ANSI_Backslash, Scancode::Backslash },
-    { kVK_ANSI_LeftBracket, Scancode::BracketLeft },
-    { kVK_ANSI_RightBracket, Scancode::BracketRight },
-    { kVK_CapsLock, Scancode::Capslock },
-    { kVK_ANSI_Comma, Scancode::Comma },
-    { kVK_Control, Scancode::Control },
-    { kVK_Delete, Scancode::Backspace },
-    { kVK_End, Scancode::End },
-    { kVK_ANSI_Equal, Scancode::Equal },
-    { kVK_Escape, Scancode::Escape },
-    { kVK_ForwardDelete, Scancode::Delete },
-    { kVK_Function, Scancode::Function },
-    { kVK_ANSI_Grave, Scancode::Backquote },
-    { kVK_Help, Scancode::Help },
-    { kVK_Home, Scancode::Home },
-    { kVK_Command, Scancode::Meta },
-    { kVK_RightCommand, Scancode::MetaRight },
-    { kVK_ISO_Section, Scancode::IntlBackslash },
-    { kVK_ANSI_Minus, Scancode::Minus },
-    { kVK_Mute, Scancode::Mute },
-    { kVK_PageDown, Scancode::PageDown },
-    { kVK_PageUp, Scancode::PageUp },
-    { kVK_ANSI_Period, Scancode::Period },
-    { kVK_ANSI_Quote, Scancode::Quote },
-    { kVK_Return, Scancode::Enter },
-    { kVK_RightOption, Scancode::AltRight },
-    { kVK_RightControl, Scancode::ControlRight },
-    { kVK_RightShift, Scancode::ShiftRight },
-    { kVK_ANSI_Semicolon, Scancode::Semicolon },
-    { kVK_Shift, Scancode::Shift },
-    { kVK_ANSI_Slash, Scancode::Slash },
-    { kVK_Space, Scancode::Space },
-    { kVK_Tab, Scancode::Tab },
-    { kVK_VolumeDown, Scancode::VolumeDown },
-    { kVK_VolumeUp, Scancode::VolumeUp },
-    { kVK_ANSI_KeypadClear, Scancode::NumpadClear },
-    { kVK_ANSI_KeypadDecimal, Scancode::NumpadDecimal },
-    { kVK_ANSI_KeypadDivide, Scancode::NumpadDivide },
-    { kVK_ANSI_KeypadEnter, Scancode::NumpadEnter },
-    { kVK_ANSI_KeypadEquals, Scancode::NumpadEqual },
-    { kVK_ANSI_KeypadMinus, Scancode::NumpadMinus },
-    { kVK_ANSI_KeypadMultiply, Scancode::NumpadMultiply },
-    { kVK_ANSI_KeypadPlus, Scancode::NumpadAdd },
-    { kVK_ANSI_Keypad0, Scancode::Numpad0 },
-    { kVK_ANSI_Keypad1, Scancode::Numpad1 },
-    { kVK_ANSI_Keypad2, Scancode::Numpad2 },
-    { kVK_ANSI_Keypad3, Scancode::Numpad3 },
-    { kVK_ANSI_Keypad4, Scancode::Numpad4 },
-    { kVK_ANSI_Keypad5, Scancode::Numpad5 },
-    { kVK_ANSI_Keypad6, Scancode::Numpad6 },
-    { kVK_ANSI_Keypad7, Scancode::Numpad7 },
-    { kVK_ANSI_Keypad8, Scancode::Numpad8 },
-    { kVK_ANSI_Keypad9, Scancode::Numpad9 }
+    { ::kVK_ANSI_0, Scancode::Digit0 },
+    { ::kVK_ANSI_1, Scancode::Digit1 },
+    { ::kVK_ANSI_2, Scancode::Digit2 },
+    { ::kVK_ANSI_3, Scancode::Digit3 },
+    { ::kVK_ANSI_4, Scancode::Digit4 },
+    { ::kVK_ANSI_5, Scancode::Digit5 },
+    { ::kVK_ANSI_6, Scancode::Digit6 },
+    { ::kVK_ANSI_7, Scancode::Digit7 },
+    { ::kVK_ANSI_8, Scancode::Digit8 },
+    { ::kVK_ANSI_9, Scancode::Digit9 },
+    { ::kVK_ANSI_A, Scancode::KeyA },
+    { ::kVK_ANSI_B, Scancode::KeyB },
+    { ::kVK_ANSI_C, Scancode::KeyC },
+    { ::kVK_ANSI_D, Scancode::KeyD },
+    { ::kVK_ANSI_E, Scancode::KeyE },
+    { ::kVK_ANSI_F, Scancode::KeyF },
+    { ::kVK_ANSI_G, Scancode::KeyG },
+    { ::kVK_ANSI_H, Scancode::KeyH },
+    { ::kVK_ANSI_I, Scancode::KeyI },
+    { ::kVK_ANSI_J, Scancode::KeyJ },
+    { ::kVK_ANSI_K, Scancode::KeyK },
+    { ::kVK_ANSI_L, Scancode::KeyL },
+    { ::kVK_ANSI_M, Scancode::KeyM },
+    { ::kVK_ANSI_N, Scancode::KeyN },
+    { ::kVK_ANSI_O, Scancode::KeyO },
+    { ::kVK_ANSI_P, Scancode::KeyP },
+    { ::kVK_ANSI_Q, Scancode::KeyQ },
+    { ::kVK_ANSI_R, Scancode::KeyR },
+    { ::kVK_ANSI_S, Scancode::KeyS },
+    { ::kVK_ANSI_T, Scancode::KeyT },
+    { ::kVK_ANSI_U, Scancode::KeyU },
+    { ::kVK_ANSI_V, Scancode::KeyV },
+    { ::kVK_ANSI_W, Scancode::KeyW },
+    { ::kVK_ANSI_X, Scancode::KeyX },
+    { ::kVK_ANSI_Y, Scancode::KeyY },
+    { ::kVK_ANSI_Z, Scancode::KeyZ },
+    { ::kVK_F1, Scancode::F1 },
+    { ::kVK_F2, Scancode::F2 },
+    { ::kVK_F3, Scancode::F3 },
+    { ::kVK_F4, Scancode::F4 },
+    { ::kVK_F5, Scancode::F5 },
+    { ::kVK_F6, Scancode::F6 },
+    { ::kVK_F7, Scancode::F7 },
+    { ::kVK_F8, Scancode::F8 },
+    { ::kVK_F9, Scancode::F9 },
+    { ::kVK_F10, Scancode::F10 },
+    { ::kVK_F11, Scancode::F11 },
+    { ::kVK_F12, Scancode::F12 },
+    { ::kVK_F13, Scancode::F13 },
+    { ::kVK_F14, Scancode::F14 },
+    { ::kVK_F15, Scancode::F15 },
+    { ::kVK_F16, Scancode::F16 },
+    { ::kVK_F17, Scancode::F17 },
+    { ::kVK_F18, Scancode::F18 },
+    { ::kVK_F19, Scancode::F19 },
+    { ::kVK_F20, Scancode::F20 },
+    { ::kVK_Option, Scancode::Alt },
+    { ::kVK_DownArrow, Scancode::ArrowDown },
+    { ::kVK_LeftArrow, Scancode::ArrowLeft },
+    { ::kVK_RightArrow, Scancode::ArrowRight },
+    { ::kVK_UpArrow, Scancode::ArrowUp },
+    { ::kVK_ANSI_Backslash, Scancode::Backslash },
+    { ::kVK_ANSI_LeftBracket, Scancode::BracketLeft },
+    { ::kVK_ANSI_RightBracket, Scancode::BracketRight },
+    { ::kVK_CapsLock, Scancode::Capslock },
+    { ::kVK_ANSI_Comma, Scancode::Comma },
+    { ::kVK_Control, Scancode::Control },
+    { ::kVK_Delete, Scancode::Backspace },
+    { ::kVK_End, Scancode::End },
+    { ::kVK_ANSI_Equal, Scancode::Equal },
+    { ::kVK_Escape, Scancode::Escape },
+    { ::kVK_ForwardDelete, Scancode::Delete },
+    { ::kVK_Function, Scancode::Function },
+    { ::kVK_ANSI_Grave, Scancode::Backquote },
+    { ::kVK_Help, Scancode::Help },
+    { ::kVK_Home, Scancode::Home },
+    { ::kVK_Command, Scancode::Meta },
+    { ::kVK_RightCommand, Scancode::MetaRight },
+    { ::kVK_ISO_Section, Scancode::IntlBackslash },
+    { ::kVK_ANSI_Minus, Scancode::Minus },
+    { ::kVK_Mute, Scancode::Mute },
+    { ::kVK_PageDown, Scancode::PageDown },
+    { ::kVK_PageUp, Scancode::PageUp },
+    { ::kVK_ANSI_Period, Scancode::Period },
+    { ::kVK_ANSI_Quote, Scancode::Quote },
+    { ::kVK_Return, Scancode::Enter },
+    { ::kVK_RightOption, Scancode::AltRight },
+    { ::kVK_RightControl, Scancode::ControlRight },
+    { ::kVK_RightShift, Scancode::ShiftRight },
+    { ::kVK_ANSI_Semicolon, Scancode::Semicolon },
+    { ::kVK_Shift, Scancode::Shift },
+    { ::kVK_ANSI_Slash, Scancode::Slash },
+    { ::kVK_Space, Scancode::Space },
+    { ::kVK_Tab, Scancode::Tab },
+    { ::kVK_VolumeDown, Scancode::VolumeDown },
+    { ::kVK_VolumeUp, Scancode::VolumeUp },
+    { ::kVK_ANSI_KeypadClear, Scancode::NumpadClear },
+    { ::kVK_ANSI_KeypadDecimal, Scancode::NumpadDecimal },
+    { ::kVK_ANSI_KeypadDivide, Scancode::NumpadDivide },
+    { ::kVK_ANSI_KeypadEnter, Scancode::NumpadEnter },
+    { ::kVK_ANSI_KeypadEquals, Scancode::NumpadEqual },
+    { ::kVK_ANSI_KeypadMinus, Scancode::NumpadMinus },
+    { ::kVK_ANSI_KeypadMultiply, Scancode::NumpadMultiply },
+    { ::kVK_ANSI_KeypadPlus, Scancode::NumpadAdd },
+    { ::kVK_ANSI_Keypad0, Scancode::Numpad0 },
+    { ::kVK_ANSI_Keypad1, Scancode::Numpad1 },
+    { ::kVK_ANSI_Keypad2, Scancode::Numpad2 },
+    { ::kVK_ANSI_Keypad3, Scancode::Numpad3 },
+    { ::kVK_ANSI_Keypad4, Scancode::Numpad4 },
+    { ::kVK_ANSI_Keypad5, Scancode::Numpad5 },
+    { ::kVK_ANSI_Keypad6, Scancode::Numpad6 },
+    { ::kVK_ANSI_Keypad7, Scancode::Numpad7 },
+    { ::kVK_ANSI_Keypad8, Scancode::Numpad8 },
+    { ::kVK_ANSI_Keypad9, Scancode::Numpad9 }
 });
 
-static Vec2 _FlipPoint(NSView* view, NSPoint point) {
+static Vec2 _FlipPoint(NSView* view, ::NSPoint point) {
     PROFILE
 
     return {
@@ -169,14 +169,14 @@ static Vec2 _FlipPoint(NSView* view, NSPoint point) {
     };
 }
 
-static KeyModifiers _ModifiersConvert(NSEventModifierFlags flags) {
+static KeyModifiers _ModifiersConvert(::NSEventModifierFlags flags) {
     PROFILE
 
     return {
-        .control = static_cast<bool>((flags & NSEventModifierFlagControl)),
-        .shift = static_cast<bool>((flags & NSEventModifierFlagShift)),
-        .meta = static_cast<bool>((flags & NSEventModifierFlagCommand)),
-        .alt = static_cast<bool>((flags & NSEventModifierFlagOption))
+        .control = static_cast<bool>((flags & ::NSEventModifierFlagControl)),
+        .shift = static_cast<bool>((flags & ::NSEventModifierFlagShift)),
+        .meta = static_cast<bool>((flags & ::NSEventModifierFlagCommand)),
+        .alt = static_cast<bool>((flags & ::NSEventModifierFlagOption))
     };
 }
 
@@ -212,7 +212,7 @@ static std::string _GetKeycode(NSString* characters, Scancode scancode) {
         return GetDefaultKeycode(scancode);
     }
 
-    auto const cString = [lowercase cStringUsingEncoding: NSUTF8StringEncoding];
+    auto const cString = [lowercase cStringUsingEncoding: ::NSUTF8StringEncoding];
 
     if (cString == NULL) {
         return GetDefaultKeycode(scancode);
@@ -237,7 +237,7 @@ static std::string _SanitizeInput(NSString* characters) {
         return "";
     }
 
-    auto const cString = [characters cStringUsingEncoding: NSUTF8StringEncoding];
+    auto const cString = [characters cStringUsingEncoding: ::NSUTF8StringEncoding];
 
     if (cString == NULL) {
         return "";
@@ -268,8 +268,8 @@ static NSCursor* _CursorConvert(Cursor cursor) {
 
     /* Requires macOS 15: the frame, column, row and zoom cursors are the
        public factories that replaced the deprecated resize* cursors. */
-    auto const frame = [](NSCursorFrameResizePosition position) {
-        return [NSCursor frameResizeCursorFromPosition: position inDirections: NSCursorFrameResizeDirectionsAll];
+    auto const frame = [](::NSCursorFrameResizePosition position) {
+        return [NSCursor frameResizeCursorFromPosition: position inDirections: ::NSCursorFrameResizeDirectionsAll];
     };
 
     switch (cursor) {
@@ -290,19 +290,19 @@ static NSCursor* _CursorConvert(Cursor cursor) {
         case Cursor::NotAllowed:   return [NSCursor operationNotAllowedCursor];
         case Cursor::Grab:         return [NSCursor openHandCursor];
         case Cursor::Grabbing:     return [NSCursor closedHandCursor];
-        case Cursor::EResize:      return frame(NSCursorFrameResizePositionRight);
-        case Cursor::NResize:      return frame(NSCursorFrameResizePositionTop);
-        case Cursor::NEResize:     return frame(NSCursorFrameResizePositionTopRight);
-        case Cursor::NWResize:     return frame(NSCursorFrameResizePositionTopLeft);
-        case Cursor::SResize:      return frame(NSCursorFrameResizePositionBottom);
-        case Cursor::SEResize:     return frame(NSCursorFrameResizePositionBottomRight);
-        case Cursor::SWResize:     return frame(NSCursorFrameResizePositionBottomLeft);
-        case Cursor::WResize:      return frame(NSCursorFrameResizePositionLeft);
-        case Cursor::EWResize:     return [NSCursor columnResizeCursorInDirections: NSHorizontalDirectionsAll];
-        case Cursor::NSResize:     return [NSCursor rowResizeCursorInDirections: NSVerticalDirectionsAll];
-        case Cursor::NESWResize:   return frame(NSCursorFrameResizePositionBottomLeft);
-        case Cursor::ColResize:    return [NSCursor columnResizeCursorInDirections: NSHorizontalDirectionsAll];
-        case Cursor::RowResize:    return [NSCursor rowResizeCursorInDirections: NSVerticalDirectionsAll];
+        case Cursor::EResize:      return frame(::NSCursorFrameResizePositionRight);
+        case Cursor::NResize:      return frame(::NSCursorFrameResizePositionTop);
+        case Cursor::NEResize:     return frame(::NSCursorFrameResizePositionTopRight);
+        case Cursor::NWResize:     return frame(::NSCursorFrameResizePositionTopLeft);
+        case Cursor::SResize:      return frame(::NSCursorFrameResizePositionBottom);
+        case Cursor::SEResize:     return frame(::NSCursorFrameResizePositionBottomRight);
+        case Cursor::SWResize:     return frame(::NSCursorFrameResizePositionBottomLeft);
+        case Cursor::WResize:      return frame(::NSCursorFrameResizePositionLeft);
+        case Cursor::EWResize:     return [NSCursor columnResizeCursorInDirections: ::NSHorizontalDirectionsAll];
+        case Cursor::NSResize:     return [NSCursor rowResizeCursorInDirections: ::NSVerticalDirectionsAll];
+        case Cursor::NESWResize:   return frame(::NSCursorFrameResizePositionBottomLeft);
+        case Cursor::ColResize:    return [NSCursor columnResizeCursorInDirections: ::NSHorizontalDirectionsAll];
+        case Cursor::RowResize:    return [NSCursor rowResizeCursorInDirections: ::NSVerticalDirectionsAll];
         case Cursor::AllScroll:    return [NSCursor openHandCursor];            /* approximation: no public all-scroll cursor */
         case Cursor::ZoomIn:       return [NSCursor zoomInCursor];
         case Cursor::ZoomOut:      return [NSCursor zoomOutCursor];
@@ -349,7 +349,7 @@ static void _CloseWindow(NSWindow* window) {
     NSTrackingArea* _trackingArea;
     NSMutableString* _composedInput;
     NSString* _markedText;
-    NSRange _markedSelection;
+    ::NSRange _markedSelection;
     BOOL _handlingKey;
     BOOL _compositionChanged;
 }
@@ -443,7 +443,7 @@ static void _CloseWindow(NSWindow* window) {
 
     /* AppKit ranges count UTF-16 units; events count characters */
     auto const characters = [](NSString* string) {
-        return static_cast<NSInteger>([string lengthOfBytesUsingEncoding: NSUTF32StringEncoding] / 4);
+        return static_cast<NSInteger>([string lengthOfBytesUsingEncoding: ::NSUTF32StringEncoding] / 4);
     };
 
     auto const text = (_markedText != nil) ? _markedText : @"";
@@ -453,7 +453,7 @@ static void _CloseWindow(NSWindow* window) {
     self.onComposition(
         text,
         characters([text substringToIndex: start]),
-        characters([text substringWithRange: NSMakeRange(start, (end - start))])
+        characters([text substringWithRange: ::NSMakeRange(start, (end - start))])
     );
 }
 
@@ -462,11 +462,11 @@ static void _CloseWindow(NSWindow* window) {
 }
 
 - (NSRange)markedRange {
-    return (_markedText != nil) ? NSMakeRange(0, _markedText.length) : NSMakeRange(NSNotFound, 0);
+    return (_markedText != nil) ? ::NSMakeRange(0, _markedText.length) : ::NSMakeRange(::NSNotFound, 0);
 }
 
 - (NSRange)selectedRange {
-    return NSMakeRange(NSNotFound, 0);
+    return ::NSMakeRange(::NSNotFound, 0);
 }
 
 - (NSAttributedString*)attributedSubstringForProposedRange:(NSRange)range actualRange:(NSRangePointer)actualRange {
@@ -479,7 +479,7 @@ static void _CloseWindow(NSWindow* window) {
 
 - (NSRect)firstRectForCharacterRange:(NSRange)range actualRange:(NSRangePointer)actualRange {
     if (self.inputArea != nil && self.window != nil) {
-        auto const local = NSMakeRect(
+        auto const local = ::NSMakeRect(
             self.inputArea.rectValue.origin.x,
             (self.bounds.size.height - self.inputArea.rectValue.origin.y - self.inputArea.rectValue.size.height),
             self.inputArea.rectValue.size.width,
@@ -493,7 +493,7 @@ static void _CloseWindow(NSWindow* window) {
 }
 
 - (NSUInteger)characterIndexForPoint:(NSPoint)point {
-    return NSNotFound;
+    return ::NSNotFound;
 }
 
 - (void)doCommandBySelector:(SEL)selector {
@@ -504,9 +504,9 @@ static void _CloseWindow(NSWindow* window) {
     auto const layer = [CAMetalLayer layer];
 
     layer.device = (__bridge id<MTLDevice>)Rocket::__GetDefaultGPUDevice();
-    layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+    layer.pixelFormat = ::MTLPixelFormatBGRA8Unorm;
     layer.framebufferOnly = YES;
-    layer.autoresizingMask = (kCALayerWidthSizable | kCALayerHeightSizable);
+    layer.autoresizingMask = (::kCALayerWidthSizable | ::kCALayerHeightSizable);
     layer.needsDisplayOnBoundsChange = YES;
 
     return layer;
@@ -517,10 +517,10 @@ static void _CloseWindow(NSWindow* window) {
 
     if (self != nil) {
         self.wantsLayer = YES;
-        self.autoresizingMask = (NSViewWidthSizable | NSViewHeightSizable);
-        self.layerContentsPlacement = NSViewLayerContentsPlacementTopLeft;
-        self.layerContentsRedrawPolicy = NSViewLayerContentsRedrawDuringViewResize;
-        [self registerForDraggedTypes: @[NSPasteboardTypeFileURL]];
+        self.autoresizingMask = (::NSViewWidthSizable | ::NSViewHeightSizable);
+        self.layerContentsPlacement = ::NSViewLayerContentsPlacementTopLeft;
+        self.layerContentsRedrawPolicy = ::NSViewLayerContentsRedrawDuringViewResize;
+        [self registerForDraggedTypes: @[::NSPasteboardTypeFileURL]];
         [self _updateLayerSize];
     }
 
@@ -530,11 +530,11 @@ static void _CloseWindow(NSWindow* window) {
 - (NSArray<NSURL*>*)_draggedFiles:(id<NSDraggingInfo>)sender {
     return [[sender draggingPasteboard]
         readObjectsForClasses: @[NSURL.class]
-                      options: @{ NSPasteboardURLReadingFileURLsOnlyKey: @YES }];
+                      options: @{ ::NSPasteboardURLReadingFileURLsOnlyKey: @YES }];
 }
 
 - (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
-    return ([self _draggedFiles: sender].count > 0 ? NSDragOperationCopy : NSDragOperationNone);
+    return ([self _draggedFiles: sender].count > 0 ? ::NSDragOperationCopy : ::NSDragOperationNone);
 }
 
 - (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)sender {
@@ -562,7 +562,7 @@ static void _CloseWindow(NSWindow* window) {
 
     if (self.window != nil) {
         _displayLink = [self displayLinkWithTarget: self selector: @selector(_display:)];
-        [_displayLink addToRunLoop: [NSRunLoop mainRunLoop] forMode: NSRunLoopCommonModes];
+        [_displayLink addToRunLoop: [NSRunLoop mainRunLoop] forMode: ::NSRunLoopCommonModes];
     }
 }
 
@@ -587,8 +587,8 @@ static void _CloseWindow(NSWindow* window) {
        owner is the view; NSResponder forwards mouseEntered:/mouseExited: up
        the chain to __NSWindow, which dispatches them. */
     _trackingArea = [[NSTrackingArea alloc]
-        initWithRect: NSZeroRect
-             options: (NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways | NSTrackingInVisibleRect)
+        initWithRect: ::NSZeroRect
+             options: (::NSTrackingMouseEnteredAndExited | ::NSTrackingActiveAlways | ::NSTrackingInVisibleRect)
                owner: self
             userInfo: nil];
     [self addTrackingArea: _trackingArea];
@@ -645,7 +645,7 @@ static void _CloseWindow(NSWindow* window) {
     self = [super init];
 
     if (self != nil) {
-        [self setStyleMask: NSWindowStyleMaskTitled];
+        [self setStyleMask: ::NSWindowStyleMaskTitled];
         [self setDelegate: self];
     }
 
@@ -667,7 +667,7 @@ static void _CloseWindow(NSWindow* window) {
 - (void)mouseDown:(NSEvent*)event {
     PROFILE
 
-    if (NSPointInRect([event locationInWindow], self.contentView.frame) == false) {
+    if (::NSPointInRect([event locationInWindow], self.contentView.frame) == false) {
         return;
     }
 
@@ -686,7 +686,7 @@ static void _CloseWindow(NSWindow* window) {
 - (void)rightMouseDown:(NSEvent*)event {
     PROFILE
 
-    if (NSPointInRect([event locationInWindow], self.contentView.frame) == false) {
+    if (::NSPointInRect([event locationInWindow], self.contentView.frame) == false) {
         return;
     }
 
@@ -710,7 +710,7 @@ static void _CloseWindow(NSWindow* window) {
         return;
     }
 
-    if (NSPointInRect([event locationInWindow], self.contentView.frame) == false) {
+    if (::NSPointInRect([event locationInWindow], self.contentView.frame) == false) {
         return;
     }
 
@@ -905,7 +905,7 @@ static void _CloseWindow(NSWindow* window) {
 
     /* macOS sends no mouseMoved while the window is not key, so report the
        cursor position on activation to refresh hover without a move */
-    if (NSPointInRect([self mouseLocationOutsideOfEventStream], self.contentView.frame) == false) {
+    if (::NSPointInRect([self mouseLocationOutsideOfEventStream], self.contentView.frame) == false) {
         return;
     }
 
@@ -989,32 +989,32 @@ std::string __GetLayoutKeycode(Scancode scancode) {
             continue;
         }
 
-        auto const source = TISCopyCurrentKeyboardLayoutInputSource();
+        auto const source = ::TISCopyCurrentKeyboardLayoutInputSource();
 
         if (source == NULL) {
             break;
         }
 
-        auto const data = static_cast<CFDataRef>(TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData));
+        auto const data = static_cast<::CFDataRef>(::TISGetInputSourceProperty(source, ::kTISPropertyUnicodeKeyLayoutData));
         NSString* characters = nil;
 
         if (data != NULL) {
-            auto const layout = reinterpret_cast<UCKeyboardLayout const*>(CFDataGetBytePtr(data));
-            auto deadKeyState = UInt32(0);
-            auto length = UniCharCount(0);
-            UniChar chars[4];
+            auto const layout = reinterpret_cast<::UCKeyboardLayout const*>(::CFDataGetBytePtr(data));
+            auto deadKeyState = ::UInt32(0);
+            auto length = ::UniCharCount(0);
+            ::UniChar chars[4];
 
-            auto const status = UCKeyTranslate(
-                layout, static_cast<UInt16>(code), kUCKeyActionDisplay, 0, LMGetKbdType(),
-                kUCKeyTranslateNoDeadKeysMask, &deadKeyState, 4, &length, chars
+            auto const status = ::UCKeyTranslate(
+                layout, static_cast<::UInt16>(code), ::kUCKeyActionDisplay, 0, ::LMGetKbdType(),
+                ::kUCKeyTranslateNoDeadKeysMask, &deadKeyState, 4, &length, chars
             );
 
-            if (status == noErr) {
+            if (status == ::noErr) {
                 characters = [NSString stringWithCharacters: chars length: length];
             }
         }
 
-        CFRelease(source);
+        ::CFRelease(source);
 
         return _GetKeycode(characters, scancode);
     }
@@ -1092,7 +1092,7 @@ void Window::__init() {
         _composition(std::string([text UTF8String] != NULL ? [text UTF8String] : ""), static_cast<std::int32_t>(cursor), static_cast<std::int32_t>(selectionLength));
     };
 
-    view.onDropFiles = ^(NSArray<NSURL*>* files, NSPoint point) {
+    view.onDropFiles = ^(NSArray<NSURL*>* files, ::NSPoint point) {
         auto paths = std::vector<std::string>();
 
         for (NSURL* file in files) {
@@ -1146,13 +1146,13 @@ bool Window::__getVisible() const {
 bool Window::__getClosable() const {
     PROFILE
 
-    return (_impl->window.styleMask & NSWindowStyleMaskClosable);
+    return (_impl->window.styleMask & ::NSWindowStyleMaskClosable);
 }
 
 bool Window::__getSizable() const {
     PROFILE
 
-    return (_impl->window.styleMask & NSWindowStyleMaskResizable);
+    return (_impl->window.styleMask & ::NSWindowStyleMaskResizable);
 }
 
 bool Window::__getMaximizable() const {
@@ -1166,19 +1166,19 @@ bool Window::__getMaximizable() const {
 bool Window::__getMinimizable() const {
     PROFILE
 
-    return (_impl->window.styleMask & NSWindowStyleMaskMiniaturizable);
+    return (_impl->window.styleMask & ::NSWindowStyleMaskMiniaturizable);
 }
 
 bool Window::__getTopmost() const {
     PROFILE
 
-    return (_impl->window.level == NSStatusWindowLevel);
+    return (_impl->window.level == ::NSStatusWindowLevel);
 }
 
 bool Window::__isMaximized() const {
     PROFILE
 
-    return (_impl->window.styleMask & NSWindowStyleMaskFullScreen);
+    return (_impl->window.styleMask & ::NSWindowStyleMaskFullScreen);
 }
 
 bool Window::__isMinimized() const {
@@ -1190,7 +1190,7 @@ bool Window::__isMinimized() const {
 bool Window::__isFullscreen() const {
     PROFILE
 
-    return (_impl->window.styleMask & NSWindowStyleMaskFullScreen);
+    return (_impl->window.styleMask & ::NSWindowStyleMaskFullScreen);
 }
 
 bool Window::__isHover() const {
@@ -1229,7 +1229,7 @@ void Window::__setInputArea(std::optional<Vec4> const& caretRect) {
     auto const view = (_NSMetalView*)_impl->window.contentView;
 
     if (caretRect.has_value()) {
-        view.inputArea = [NSValue valueWithRect: NSMakeRect(caretRect->x, caretRect->y, caretRect->width, caretRect->height)];
+        view.inputArea = [NSValue valueWithRect: ::NSMakeRect(caretRect->x, caretRect->y, caretRect->width, caretRect->height)];
         [view.inputContext invalidateCharacterCoordinates];
     } else if (view.inputArea != nil) {
         view.inputArea = nil;
@@ -1268,7 +1268,7 @@ Vec2 const& Window::__getPosition() const {
     PROFILE
 
     auto const screen = _PositionScreen(_impl->window);
-    auto const screenFrame = (screen != nil) ? screen.frame : NSZeroRect;
+    auto const screenFrame = (screen != nil) ? screen.frame : ::NSZeroRect;
 
     /* AppKit measures from the bottom-left; flip to a top-left origin. */
     _impl->position = {
@@ -1283,9 +1283,9 @@ void Window::__setPosition(Vec2 const& position) {
     PROFILE
 
     auto const screen = _PositionScreen(_impl->window);
-    auto const screenFrame = (screen != nil) ? screen.frame : NSZeroRect;
+    auto const screenFrame = (screen != nil) ? screen.frame : ::NSZeroRect;
 
-    [_impl->window setFrameOrigin: NSMakePoint(
+    [_impl->window setFrameOrigin: ::NSMakePoint(
         (screenFrame.origin.x + position.x),
         ((screenFrame.origin.y + screenFrame.size.height) - position.y - _impl->window.frame.size.height)
     )];
@@ -1320,11 +1320,11 @@ void Window::__setVisible(bool visible) {
 void Window::__setClosable(bool closable) {
     PROFILE
 
-    if (closable != (bool)(_impl->window.styleMask & NSWindowStyleMaskClosable)) {
+    if (closable != (bool)(_impl->window.styleMask & ::NSWindowStyleMaskClosable)) {
         if (closable) {
-            _impl->window.styleMask |= NSWindowStyleMaskClosable;
+            _impl->window.styleMask |= ::NSWindowStyleMaskClosable;
         } else {
-            _impl->window.styleMask &= ~NSWindowStyleMaskClosable;
+            _impl->window.styleMask &= ~::NSWindowStyleMaskClosable;
         }
     }
 }
@@ -1332,15 +1332,15 @@ void Window::__setClosable(bool closable) {
 void Window::__setSizable(bool sizable) {
     PROFILE
 
-    if (sizable != (bool)(_impl->window.styleMask & NSWindowStyleMaskResizable)) {
+    if (sizable != (bool)(_impl->window.styleMask & ::NSWindowStyleMaskResizable)) {
         if (sizable) {
-            _impl->window.styleMask |= NSWindowStyleMaskResizable;
+            _impl->window.styleMask |= ::NSWindowStyleMaskResizable;
         } else {
-            _impl->window.styleMask &= ~NSWindowStyleMaskResizable;
+            _impl->window.styleMask &= ~::NSWindowStyleMaskResizable;
         }
 
         /* AppKit re-evaluates the zoom button on a style change; reassert ours. */
-        [[_impl->window standardWindowButton: NSWindowZoomButton] setEnabled: _impl->maximizable];
+        [[_impl->window standardWindowButton: ::NSWindowZoomButton] setEnabled: _impl->maximizable];
     }
 }
 
@@ -1348,17 +1348,17 @@ void Window::__setMaximizable(bool maximizable) {
     PROFILE
 
     _impl->maximizable = maximizable;
-    [[_impl->window standardWindowButton: NSWindowZoomButton] setEnabled: maximizable];
+    [[_impl->window standardWindowButton: ::NSWindowZoomButton] setEnabled: maximizable];
 }
 
 void Window::__setMinimizable(bool minimizable) {
     PROFILE
 
-    if (minimizable != (bool)(_impl->window.styleMask & NSWindowStyleMaskMiniaturizable)) {
+    if (minimizable != (bool)(_impl->window.styleMask & ::NSWindowStyleMaskMiniaturizable)) {
         if (minimizable) {
-            _impl->window.styleMask |= NSWindowStyleMaskMiniaturizable;
+            _impl->window.styleMask |= ::NSWindowStyleMaskMiniaturizable;
         } else {
-            _impl->window.styleMask &= ~NSWindowStyleMaskMiniaturizable;
+            _impl->window.styleMask &= ~::NSWindowStyleMaskMiniaturizable;
         }
     }
 }
@@ -1366,7 +1366,7 @@ void Window::__setMinimizable(bool minimizable) {
 void Window::__setMaximized(bool maximized) {
     PROFILE
 
-    if (maximized != (bool)(_impl->window.styleMask & NSWindowStyleMaskFullScreen)) {
+    if (maximized != (bool)(_impl->window.styleMask & ::NSWindowStyleMaskFullScreen)) {
         [_impl->window toggleFullScreen: _impl->window];
     }
 }
@@ -1387,7 +1387,7 @@ void Window::__setFullscreen(bool fullscreen) {
     PROFILE
 
     if (fullscreen != __isFullscreen()) {
-        _impl->window.collectionBehavior |= NSWindowCollectionBehaviorFullScreenPrimary;
+        _impl->window.collectionBehavior |= ::NSWindowCollectionBehaviorFullScreenPrimary;
         [_impl->window toggleFullScreen: _impl->window];
     }
 }
@@ -1395,7 +1395,7 @@ void Window::__setFullscreen(bool fullscreen) {
 void Window::__setTopmost(bool topmost) {
     PROFILE
 
-    [_impl->window setLevel: topmost ? NSStatusWindowLevel : NSNormalWindowLevel];
+    [_impl->window setLevel: topmost ? ::NSStatusWindowLevel : ::NSNormalWindowLevel];
 }
 
 void Window::__setFocus() {

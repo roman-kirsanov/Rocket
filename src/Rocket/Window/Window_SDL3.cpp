@@ -28,7 +28,7 @@
 namespace Rocket {
 
 struct _Window {
-    SDL_Window* window;
+    ::SDL_Window* window;
     Vec2 size;
     Vec2 position;
     float scale;
@@ -50,7 +50,7 @@ struct _Window {
 
 /* Set up by the window itself, which alone may reach its private members. */
 struct _WindowHandlers {
-    std::function<void(SDL_Event const&)> onEvent;
+    std::function<void(::SDL_Event const&)> onEvent;
     std::function<void()> onPaint;
 };
 
@@ -58,170 +58,170 @@ struct _WindowHandlers {
    macOS backend publishes points, and this many points make one notch */
 static auto constexpr _wheelScale = 50.0f;
 
-static auto _handlers = std::map<SDL_WindowID, _WindowHandlers>();
-static auto _modalWindows = std::vector<SDL_WindowID>();
+static auto _handlers = std::map<::SDL_WindowID, _WindowHandlers>();
+static auto _modalWindows = std::vector<::SDL_WindowID>();
 
-static auto const _keyMap = std::map<SDL_Scancode, Scancode>{
-    { SDL_SCANCODE_0, Scancode::Digit0 },
-    { SDL_SCANCODE_1, Scancode::Digit1 },
-    { SDL_SCANCODE_2, Scancode::Digit2 },
-    { SDL_SCANCODE_3, Scancode::Digit3 },
-    { SDL_SCANCODE_4, Scancode::Digit4 },
-    { SDL_SCANCODE_5, Scancode::Digit5 },
-    { SDL_SCANCODE_6, Scancode::Digit6 },
-    { SDL_SCANCODE_7, Scancode::Digit7 },
-    { SDL_SCANCODE_8, Scancode::Digit8 },
-    { SDL_SCANCODE_9, Scancode::Digit9 },
-    { SDL_SCANCODE_A, Scancode::KeyA },
-    { SDL_SCANCODE_B, Scancode::KeyB },
-    { SDL_SCANCODE_C, Scancode::KeyC },
-    { SDL_SCANCODE_D, Scancode::KeyD },
-    { SDL_SCANCODE_E, Scancode::KeyE },
-    { SDL_SCANCODE_F, Scancode::KeyF },
-    { SDL_SCANCODE_G, Scancode::KeyG },
-    { SDL_SCANCODE_H, Scancode::KeyH },
-    { SDL_SCANCODE_I, Scancode::KeyI },
-    { SDL_SCANCODE_J, Scancode::KeyJ },
-    { SDL_SCANCODE_K, Scancode::KeyK },
-    { SDL_SCANCODE_L, Scancode::KeyL },
-    { SDL_SCANCODE_M, Scancode::KeyM },
-    { SDL_SCANCODE_N, Scancode::KeyN },
-    { SDL_SCANCODE_O, Scancode::KeyO },
-    { SDL_SCANCODE_P, Scancode::KeyP },
-    { SDL_SCANCODE_Q, Scancode::KeyQ },
-    { SDL_SCANCODE_R, Scancode::KeyR },
-    { SDL_SCANCODE_S, Scancode::KeyS },
-    { SDL_SCANCODE_T, Scancode::KeyT },
-    { SDL_SCANCODE_U, Scancode::KeyU },
-    { SDL_SCANCODE_V, Scancode::KeyV },
-    { SDL_SCANCODE_W, Scancode::KeyW },
-    { SDL_SCANCODE_X, Scancode::KeyX },
-    { SDL_SCANCODE_Y, Scancode::KeyY },
-    { SDL_SCANCODE_Z, Scancode::KeyZ },
-    { SDL_SCANCODE_F1, Scancode::F1 },
-    { SDL_SCANCODE_F2, Scancode::F2 },
-    { SDL_SCANCODE_F3, Scancode::F3 },
-    { SDL_SCANCODE_F4, Scancode::F4 },
-    { SDL_SCANCODE_F5, Scancode::F5 },
-    { SDL_SCANCODE_F6, Scancode::F6 },
-    { SDL_SCANCODE_F7, Scancode::F7 },
-    { SDL_SCANCODE_F8, Scancode::F8 },
-    { SDL_SCANCODE_F9, Scancode::F9 },
-    { SDL_SCANCODE_F10, Scancode::F10 },
-    { SDL_SCANCODE_F11, Scancode::F11 },
-    { SDL_SCANCODE_F12, Scancode::F12 },
-    { SDL_SCANCODE_F13, Scancode::F13 },
-    { SDL_SCANCODE_F14, Scancode::F14 },
-    { SDL_SCANCODE_F15, Scancode::F15 },
-    { SDL_SCANCODE_F16, Scancode::F16 },
-    { SDL_SCANCODE_F17, Scancode::F17 },
-    { SDL_SCANCODE_F18, Scancode::F18 },
-    { SDL_SCANCODE_F19, Scancode::F19 },
-    { SDL_SCANCODE_F20, Scancode::F20 },
-    { SDL_SCANCODE_LALT, Scancode::Alt },
-    { SDL_SCANCODE_DOWN, Scancode::ArrowDown },
-    { SDL_SCANCODE_LEFT, Scancode::ArrowLeft },
-    { SDL_SCANCODE_RIGHT, Scancode::ArrowRight },
-    { SDL_SCANCODE_UP, Scancode::ArrowUp },
-    { SDL_SCANCODE_BACKSLASH, Scancode::Backslash },
-    { SDL_SCANCODE_NONUSHASH, Scancode::Backslash },
-    { SDL_SCANCODE_BACKSPACE, Scancode::Backspace },
-    { SDL_SCANCODE_LEFTBRACKET, Scancode::BracketLeft },
-    { SDL_SCANCODE_RIGHTBRACKET, Scancode::BracketRight },
-    { SDL_SCANCODE_CAPSLOCK, Scancode::Capslock },
-    { SDL_SCANCODE_COMMA, Scancode::Comma },
-    { SDL_SCANCODE_LCTRL, Scancode::Control },
-    { SDL_SCANCODE_END, Scancode::End },
-    { SDL_SCANCODE_EQUALS, Scancode::Equal },
-    { SDL_SCANCODE_ESCAPE, Scancode::Escape },
-    { SDL_SCANCODE_DELETE, Scancode::Delete },
-    { SDL_SCANCODE_GRAVE, Scancode::Backquote },
-    { SDL_SCANCODE_HELP, Scancode::Help },
-    { SDL_SCANCODE_HOME, Scancode::Home },
-    { SDL_SCANCODE_LGUI, Scancode::Meta },
-    { SDL_SCANCODE_MINUS, Scancode::Minus },
-    { SDL_SCANCODE_MUTE, Scancode::Mute },
-    { SDL_SCANCODE_PAGEDOWN, Scancode::PageDown },
-    { SDL_SCANCODE_PAGEUP, Scancode::PageUp },
-    { SDL_SCANCODE_PERIOD, Scancode::Period },
-    { SDL_SCANCODE_APOSTROPHE, Scancode::Quote },
-    { SDL_SCANCODE_RETURN, Scancode::Enter },
-    { SDL_SCANCODE_RALT, Scancode::AltRight },
-    { SDL_SCANCODE_RCTRL, Scancode::ControlRight },
-    { SDL_SCANCODE_RSHIFT, Scancode::ShiftRight },
-    { SDL_SCANCODE_SEMICOLON, Scancode::Semicolon },
-    { SDL_SCANCODE_LSHIFT, Scancode::Shift },
-    { SDL_SCANCODE_SLASH, Scancode::Slash },
-    { SDL_SCANCODE_SPACE, Scancode::Space },
-    { SDL_SCANCODE_TAB, Scancode::Tab },
-    { SDL_SCANCODE_VOLUMEDOWN, Scancode::VolumeDown },
-    { SDL_SCANCODE_VOLUMEUP, Scancode::VolumeUp },
-    { SDL_SCANCODE_KP_CLEAR, Scancode::NumpadClear },
-    { SDL_SCANCODE_KP_PERIOD, Scancode::NumpadDecimal },
-    { SDL_SCANCODE_KP_DIVIDE, Scancode::NumpadDivide },
-    { SDL_SCANCODE_KP_ENTER, Scancode::NumpadEnter },
-    { SDL_SCANCODE_KP_EQUALS, Scancode::NumpadEqual },
-    { SDL_SCANCODE_KP_MINUS, Scancode::NumpadMinus },
-    { SDL_SCANCODE_KP_MULTIPLY, Scancode::NumpadMultiply },
-    { SDL_SCANCODE_KP_PLUS, Scancode::NumpadAdd },
-    { SDL_SCANCODE_KP_0, Scancode::Numpad0 },
-    { SDL_SCANCODE_KP_1, Scancode::Numpad1 },
-    { SDL_SCANCODE_KP_2, Scancode::Numpad2 },
-    { SDL_SCANCODE_KP_3, Scancode::Numpad3 },
-    { SDL_SCANCODE_KP_4, Scancode::Numpad4 },
-    { SDL_SCANCODE_KP_5, Scancode::Numpad5 },
-    { SDL_SCANCODE_KP_6, Scancode::Numpad6 },
-    { SDL_SCANCODE_KP_7, Scancode::Numpad7 },
-    { SDL_SCANCODE_KP_8, Scancode::Numpad8 },
-    { SDL_SCANCODE_KP_9, Scancode::Numpad9 },
-    { SDL_SCANCODE_INSERT, Scancode::Insert },
-    { SDL_SCANCODE_PRINTSCREEN, Scancode::PrintScreen },
-    { SDL_SCANCODE_SCROLLLOCK, Scancode::ScrollLock },
-    { SDL_SCANCODE_PAUSE, Scancode::Pause },
-    { SDL_SCANCODE_NUMLOCKCLEAR, Scancode::NumLock },
-    { SDL_SCANCODE_APPLICATION, Scancode::ContextMenu },
-    { SDL_SCANCODE_RGUI, Scancode::MetaRight },
-    { SDL_SCANCODE_NONUSBACKSLASH, Scancode::IntlBackslash }
+static auto const _keyMap = std::map<::SDL_Scancode, Scancode>{
+    { ::SDL_SCANCODE_0, Scancode::Digit0 },
+    { ::SDL_SCANCODE_1, Scancode::Digit1 },
+    { ::SDL_SCANCODE_2, Scancode::Digit2 },
+    { ::SDL_SCANCODE_3, Scancode::Digit3 },
+    { ::SDL_SCANCODE_4, Scancode::Digit4 },
+    { ::SDL_SCANCODE_5, Scancode::Digit5 },
+    { ::SDL_SCANCODE_6, Scancode::Digit6 },
+    { ::SDL_SCANCODE_7, Scancode::Digit7 },
+    { ::SDL_SCANCODE_8, Scancode::Digit8 },
+    { ::SDL_SCANCODE_9, Scancode::Digit9 },
+    { ::SDL_SCANCODE_A, Scancode::KeyA },
+    { ::SDL_SCANCODE_B, Scancode::KeyB },
+    { ::SDL_SCANCODE_C, Scancode::KeyC },
+    { ::SDL_SCANCODE_D, Scancode::KeyD },
+    { ::SDL_SCANCODE_E, Scancode::KeyE },
+    { ::SDL_SCANCODE_F, Scancode::KeyF },
+    { ::SDL_SCANCODE_G, Scancode::KeyG },
+    { ::SDL_SCANCODE_H, Scancode::KeyH },
+    { ::SDL_SCANCODE_I, Scancode::KeyI },
+    { ::SDL_SCANCODE_J, Scancode::KeyJ },
+    { ::SDL_SCANCODE_K, Scancode::KeyK },
+    { ::SDL_SCANCODE_L, Scancode::KeyL },
+    { ::SDL_SCANCODE_M, Scancode::KeyM },
+    { ::SDL_SCANCODE_N, Scancode::KeyN },
+    { ::SDL_SCANCODE_O, Scancode::KeyO },
+    { ::SDL_SCANCODE_P, Scancode::KeyP },
+    { ::SDL_SCANCODE_Q, Scancode::KeyQ },
+    { ::SDL_SCANCODE_R, Scancode::KeyR },
+    { ::SDL_SCANCODE_S, Scancode::KeyS },
+    { ::SDL_SCANCODE_T, Scancode::KeyT },
+    { ::SDL_SCANCODE_U, Scancode::KeyU },
+    { ::SDL_SCANCODE_V, Scancode::KeyV },
+    { ::SDL_SCANCODE_W, Scancode::KeyW },
+    { ::SDL_SCANCODE_X, Scancode::KeyX },
+    { ::SDL_SCANCODE_Y, Scancode::KeyY },
+    { ::SDL_SCANCODE_Z, Scancode::KeyZ },
+    { ::SDL_SCANCODE_F1, Scancode::F1 },
+    { ::SDL_SCANCODE_F2, Scancode::F2 },
+    { ::SDL_SCANCODE_F3, Scancode::F3 },
+    { ::SDL_SCANCODE_F4, Scancode::F4 },
+    { ::SDL_SCANCODE_F5, Scancode::F5 },
+    { ::SDL_SCANCODE_F6, Scancode::F6 },
+    { ::SDL_SCANCODE_F7, Scancode::F7 },
+    { ::SDL_SCANCODE_F8, Scancode::F8 },
+    { ::SDL_SCANCODE_F9, Scancode::F9 },
+    { ::SDL_SCANCODE_F10, Scancode::F10 },
+    { ::SDL_SCANCODE_F11, Scancode::F11 },
+    { ::SDL_SCANCODE_F12, Scancode::F12 },
+    { ::SDL_SCANCODE_F13, Scancode::F13 },
+    { ::SDL_SCANCODE_F14, Scancode::F14 },
+    { ::SDL_SCANCODE_F15, Scancode::F15 },
+    { ::SDL_SCANCODE_F16, Scancode::F16 },
+    { ::SDL_SCANCODE_F17, Scancode::F17 },
+    { ::SDL_SCANCODE_F18, Scancode::F18 },
+    { ::SDL_SCANCODE_F19, Scancode::F19 },
+    { ::SDL_SCANCODE_F20, Scancode::F20 },
+    { ::SDL_SCANCODE_LALT, Scancode::Alt },
+    { ::SDL_SCANCODE_DOWN, Scancode::ArrowDown },
+    { ::SDL_SCANCODE_LEFT, Scancode::ArrowLeft },
+    { ::SDL_SCANCODE_RIGHT, Scancode::ArrowRight },
+    { ::SDL_SCANCODE_UP, Scancode::ArrowUp },
+    { ::SDL_SCANCODE_BACKSLASH, Scancode::Backslash },
+    { ::SDL_SCANCODE_NONUSHASH, Scancode::Backslash },
+    { ::SDL_SCANCODE_BACKSPACE, Scancode::Backspace },
+    { ::SDL_SCANCODE_LEFTBRACKET, Scancode::BracketLeft },
+    { ::SDL_SCANCODE_RIGHTBRACKET, Scancode::BracketRight },
+    { ::SDL_SCANCODE_CAPSLOCK, Scancode::Capslock },
+    { ::SDL_SCANCODE_COMMA, Scancode::Comma },
+    { ::SDL_SCANCODE_LCTRL, Scancode::Control },
+    { ::SDL_SCANCODE_END, Scancode::End },
+    { ::SDL_SCANCODE_EQUALS, Scancode::Equal },
+    { ::SDL_SCANCODE_ESCAPE, Scancode::Escape },
+    { ::SDL_SCANCODE_DELETE, Scancode::Delete },
+    { ::SDL_SCANCODE_GRAVE, Scancode::Backquote },
+    { ::SDL_SCANCODE_HELP, Scancode::Help },
+    { ::SDL_SCANCODE_HOME, Scancode::Home },
+    { ::SDL_SCANCODE_LGUI, Scancode::Meta },
+    { ::SDL_SCANCODE_MINUS, Scancode::Minus },
+    { ::SDL_SCANCODE_MUTE, Scancode::Mute },
+    { ::SDL_SCANCODE_PAGEDOWN, Scancode::PageDown },
+    { ::SDL_SCANCODE_PAGEUP, Scancode::PageUp },
+    { ::SDL_SCANCODE_PERIOD, Scancode::Period },
+    { ::SDL_SCANCODE_APOSTROPHE, Scancode::Quote },
+    { ::SDL_SCANCODE_RETURN, Scancode::Enter },
+    { ::SDL_SCANCODE_RALT, Scancode::AltRight },
+    { ::SDL_SCANCODE_RCTRL, Scancode::ControlRight },
+    { ::SDL_SCANCODE_RSHIFT, Scancode::ShiftRight },
+    { ::SDL_SCANCODE_SEMICOLON, Scancode::Semicolon },
+    { ::SDL_SCANCODE_LSHIFT, Scancode::Shift },
+    { ::SDL_SCANCODE_SLASH, Scancode::Slash },
+    { ::SDL_SCANCODE_SPACE, Scancode::Space },
+    { ::SDL_SCANCODE_TAB, Scancode::Tab },
+    { ::SDL_SCANCODE_VOLUMEDOWN, Scancode::VolumeDown },
+    { ::SDL_SCANCODE_VOLUMEUP, Scancode::VolumeUp },
+    { ::SDL_SCANCODE_KP_CLEAR, Scancode::NumpadClear },
+    { ::SDL_SCANCODE_KP_PERIOD, Scancode::NumpadDecimal },
+    { ::SDL_SCANCODE_KP_DIVIDE, Scancode::NumpadDivide },
+    { ::SDL_SCANCODE_KP_ENTER, Scancode::NumpadEnter },
+    { ::SDL_SCANCODE_KP_EQUALS, Scancode::NumpadEqual },
+    { ::SDL_SCANCODE_KP_MINUS, Scancode::NumpadMinus },
+    { ::SDL_SCANCODE_KP_MULTIPLY, Scancode::NumpadMultiply },
+    { ::SDL_SCANCODE_KP_PLUS, Scancode::NumpadAdd },
+    { ::SDL_SCANCODE_KP_0, Scancode::Numpad0 },
+    { ::SDL_SCANCODE_KP_1, Scancode::Numpad1 },
+    { ::SDL_SCANCODE_KP_2, Scancode::Numpad2 },
+    { ::SDL_SCANCODE_KP_3, Scancode::Numpad3 },
+    { ::SDL_SCANCODE_KP_4, Scancode::Numpad4 },
+    { ::SDL_SCANCODE_KP_5, Scancode::Numpad5 },
+    { ::SDL_SCANCODE_KP_6, Scancode::Numpad6 },
+    { ::SDL_SCANCODE_KP_7, Scancode::Numpad7 },
+    { ::SDL_SCANCODE_KP_8, Scancode::Numpad8 },
+    { ::SDL_SCANCODE_KP_9, Scancode::Numpad9 },
+    { ::SDL_SCANCODE_INSERT, Scancode::Insert },
+    { ::SDL_SCANCODE_PRINTSCREEN, Scancode::PrintScreen },
+    { ::SDL_SCANCODE_SCROLLLOCK, Scancode::ScrollLock },
+    { ::SDL_SCANCODE_PAUSE, Scancode::Pause },
+    { ::SDL_SCANCODE_NUMLOCKCLEAR, Scancode::NumLock },
+    { ::SDL_SCANCODE_APPLICATION, Scancode::ContextMenu },
+    { ::SDL_SCANCODE_RGUI, Scancode::MetaRight },
+    { ::SDL_SCANCODE_NONUSBACKSLASH, Scancode::IntlBackslash }
 };
 
 /* Cursor::None has no entry: it hides the cursor instead, see __setCursor. */
-static auto const _cursorMap = std::map<Cursor, SDL_SystemCursor>{
-    { Cursor::Default, SDL_SYSTEM_CURSOR_DEFAULT },
-    { Cursor::ContextMenu, SDL_SYSTEM_CURSOR_DEFAULT },    // NOTE: Not supported in SDL3
-    { Cursor::Help, SDL_SYSTEM_CURSOR_DEFAULT },           // NOTE: Not supported in SDL3
-    { Cursor::Pointer, SDL_SYSTEM_CURSOR_POINTER },
-    { Cursor::Progress, SDL_SYSTEM_CURSOR_PROGRESS },
-    { Cursor::Wait, SDL_SYSTEM_CURSOR_WAIT },
-    { Cursor::Cell, SDL_SYSTEM_CURSOR_CROSSHAIR },         // NOTE: Not supported in SDL3
-    { Cursor::Crosshair, SDL_SYSTEM_CURSOR_CROSSHAIR },
-    { Cursor::Text, SDL_SYSTEM_CURSOR_TEXT },
-    { Cursor::VerticalText, SDL_SYSTEM_CURSOR_TEXT },      // NOTE: Not supported in SDL3
-    { Cursor::Alias, SDL_SYSTEM_CURSOR_DEFAULT },          // NOTE: Not supported in SDL3
-    { Cursor::Copy, SDL_SYSTEM_CURSOR_DEFAULT },           // NOTE: Not supported in SDL3
-    { Cursor::Move, SDL_SYSTEM_CURSOR_MOVE },
-    { Cursor::NoDrop, SDL_SYSTEM_CURSOR_NOT_ALLOWED },     // NOTE: Not supported in SDL3
-    { Cursor::NotAllowed, SDL_SYSTEM_CURSOR_NOT_ALLOWED },
-    { Cursor::Grab, SDL_SYSTEM_CURSOR_POINTER },           // NOTE: Not supported in SDL3
-    { Cursor::Grabbing, SDL_SYSTEM_CURSOR_POINTER },       // NOTE: Not supported in SDL3
-    { Cursor::EResize, SDL_SYSTEM_CURSOR_E_RESIZE },
-    { Cursor::NResize, SDL_SYSTEM_CURSOR_N_RESIZE },
-    { Cursor::NEResize, SDL_SYSTEM_CURSOR_NE_RESIZE },
-    { Cursor::NWResize, SDL_SYSTEM_CURSOR_NW_RESIZE },
-    { Cursor::SResize, SDL_SYSTEM_CURSOR_S_RESIZE },
-    { Cursor::SEResize, SDL_SYSTEM_CURSOR_SE_RESIZE },
-    { Cursor::SWResize, SDL_SYSTEM_CURSOR_SW_RESIZE },
-    { Cursor::WResize, SDL_SYSTEM_CURSOR_W_RESIZE },
-    { Cursor::EWResize, SDL_SYSTEM_CURSOR_EW_RESIZE },
-    { Cursor::NSResize, SDL_SYSTEM_CURSOR_NS_RESIZE },
-    { Cursor::NESWResize, SDL_SYSTEM_CURSOR_NESW_RESIZE },
-    { Cursor::ColResize, SDL_SYSTEM_CURSOR_EW_RESIZE },    // NOTE: Not supported in SDL3
-    { Cursor::RowResize, SDL_SYSTEM_CURSOR_NS_RESIZE },    // NOTE: Not supported in SDL3
-    { Cursor::AllScroll, SDL_SYSTEM_CURSOR_MOVE },         // NOTE: Not supported in SDL3
-    { Cursor::ZoomIn, SDL_SYSTEM_CURSOR_DEFAULT },         // NOTE: Not supported in SDL3
-    { Cursor::ZoomOut, SDL_SYSTEM_CURSOR_DEFAULT }         // NOTE: Not supported in SDL3
+static auto const _cursorMap = std::map<Cursor, ::SDL_SystemCursor>{
+    { Cursor::Default, ::SDL_SYSTEM_CURSOR_DEFAULT },
+    { Cursor::ContextMenu, ::SDL_SYSTEM_CURSOR_DEFAULT },    // NOTE: Not supported in SDL3
+    { Cursor::Help, ::SDL_SYSTEM_CURSOR_DEFAULT },           // NOTE: Not supported in SDL3
+    { Cursor::Pointer, ::SDL_SYSTEM_CURSOR_POINTER },
+    { Cursor::Progress, ::SDL_SYSTEM_CURSOR_PROGRESS },
+    { Cursor::Wait, ::SDL_SYSTEM_CURSOR_WAIT },
+    { Cursor::Cell, ::SDL_SYSTEM_CURSOR_CROSSHAIR },         // NOTE: Not supported in SDL3
+    { Cursor::Crosshair, ::SDL_SYSTEM_CURSOR_CROSSHAIR },
+    { Cursor::Text, ::SDL_SYSTEM_CURSOR_TEXT },
+    { Cursor::VerticalText, ::SDL_SYSTEM_CURSOR_TEXT },      // NOTE: Not supported in SDL3
+    { Cursor::Alias, ::SDL_SYSTEM_CURSOR_DEFAULT },          // NOTE: Not supported in SDL3
+    { Cursor::Copy, ::SDL_SYSTEM_CURSOR_DEFAULT },           // NOTE: Not supported in SDL3
+    { Cursor::Move, ::SDL_SYSTEM_CURSOR_MOVE },
+    { Cursor::NoDrop, ::SDL_SYSTEM_CURSOR_NOT_ALLOWED },     // NOTE: Not supported in SDL3
+    { Cursor::NotAllowed, ::SDL_SYSTEM_CURSOR_NOT_ALLOWED },
+    { Cursor::Grab, ::SDL_SYSTEM_CURSOR_POINTER },           // NOTE: Not supported in SDL3
+    { Cursor::Grabbing, ::SDL_SYSTEM_CURSOR_POINTER },       // NOTE: Not supported in SDL3
+    { Cursor::EResize, ::SDL_SYSTEM_CURSOR_E_RESIZE },
+    { Cursor::NResize, ::SDL_SYSTEM_CURSOR_N_RESIZE },
+    { Cursor::NEResize, ::SDL_SYSTEM_CURSOR_NE_RESIZE },
+    { Cursor::NWResize, ::SDL_SYSTEM_CURSOR_NW_RESIZE },
+    { Cursor::SResize, ::SDL_SYSTEM_CURSOR_S_RESIZE },
+    { Cursor::SEResize, ::SDL_SYSTEM_CURSOR_SE_RESIZE },
+    { Cursor::SWResize, ::SDL_SYSTEM_CURSOR_SW_RESIZE },
+    { Cursor::WResize, ::SDL_SYSTEM_CURSOR_W_RESIZE },
+    { Cursor::EWResize, ::SDL_SYSTEM_CURSOR_EW_RESIZE },
+    { Cursor::NSResize, ::SDL_SYSTEM_CURSOR_NS_RESIZE },
+    { Cursor::NESWResize, ::SDL_SYSTEM_CURSOR_NESW_RESIZE },
+    { Cursor::ColResize, ::SDL_SYSTEM_CURSOR_EW_RESIZE },    // NOTE: Not supported in SDL3
+    { Cursor::RowResize, ::SDL_SYSTEM_CURSOR_NS_RESIZE },    // NOTE: Not supported in SDL3
+    { Cursor::AllScroll, ::SDL_SYSTEM_CURSOR_MOVE },         // NOTE: Not supported in SDL3
+    { Cursor::ZoomIn, ::SDL_SYSTEM_CURSOR_DEFAULT },         // NOTE: Not supported in SDL3
+    { Cursor::ZoomOut, ::SDL_SYSTEM_CURSOR_DEFAULT }         // NOTE: Not supported in SDL3
 };
 
-static Scancode _KeyConvert(SDL_Scancode scancode) {
+static Scancode _KeyConvert(::SDL_Scancode scancode) {
     PROFILE
 
     auto const it = _keyMap.find(scancode);
@@ -229,7 +229,7 @@ static Scancode _KeyConvert(SDL_Scancode scancode) {
     return (it != _keyMap.end()) ? it->second : Scancode::Unknown;
 }
 
-static KeyModifiers _ModifiersConvert(SDL_Keymod mod) {
+static KeyModifiers _ModifiersConvert(::SDL_Keymod mod) {
     PROFILE
 
     return {
@@ -246,14 +246,14 @@ static bool _IsControlCodepoint(std::uint32_t codepoint) {
     return (codepoint < 0x20u) || ((codepoint >= 0x7Fu) && (codepoint < 0xA0u));
 }
 
-static std::string _GetKeycode(SDL_Scancode sdlScancode, Scancode scancode) {
+static std::string _GetKeycode(::SDL_Scancode sdlScancode, Scancode scancode) {
     PROFILE
 
     if (__IsCharacterScancode(scancode) == false) {
         return GetDefaultKeycode(scancode);
     }
 
-    auto const key = SDL_GetKeyFromScancode(sdlScancode, SDL_KMOD_NONE, false);
+    auto const key = ::SDL_GetKeyFromScancode(sdlScancode, SDL_KMOD_NONE, false);
 
     if ((key == SDLK_UNKNOWN) || ((key & SDLK_SCANCODE_MASK) != 0) || _IsControlCodepoint(key)) {
         return GetDefaultKeycode(scancode);
@@ -278,33 +278,33 @@ static std::optional<Mouse> _MouseConvert(std::uint8_t button) {
 
 /* Only a shown window is synced: a hidden one has nothing on screen to wait
    for, and on Wayland the wait would run into SDL's timeout. */
-static void _SyncWindow(SDL_Window* window) {
+static void _SyncWindow(::SDL_Window* window) {
     PROFILE
 
-    if ((SDL_GetWindowFlags(window) & SDL_WINDOW_HIDDEN) == 0) {
-        SDL_SyncWindow(window);
+    if ((::SDL_GetWindowFlags(window) & SDL_WINDOW_HIDDEN) == 0) {
+        ::SDL_SyncWindow(window);
     }
 }
 
 /* nothing would be presented, and a vsync present can wait for a frame that never comes */
-static bool _IsPainted(SDL_Window* window) {
+static bool _IsPainted(::SDL_Window* window) {
     PROFILE
 
-    return (SDL_GetWindowFlags(window) & (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED | SDL_WINDOW_OCCLUDED)) == 0;
+    return (::SDL_GetWindowFlags(window) & (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED | SDL_WINDOW_OCCLUDED)) == 0;
 }
 
-static SDL_Rect _PositionDisplayBounds(SDL_Window* window) {
+static ::SDL_Rect _PositionDisplayBounds(::SDL_Window* window) {
     PROFILE
 
-    auto display = SDL_GetDisplayForWindow(window);
+    auto display = ::SDL_GetDisplayForWindow(window);
 
     if (display == 0) {
-        display = SDL_GetPrimaryDisplay();
+        display = ::SDL_GetPrimaryDisplay();
     }
 
-    auto bounds = SDL_Rect{};
+    auto bounds = ::SDL_Rect{};
 
-    SDL_GetDisplayBounds(display, &bounds);
+    ::SDL_GetDisplayBounds(display, &bounds);
 
     return bounds;
 }
@@ -323,32 +323,32 @@ std::string __GetLayoutKeycode(Scancode scancode) {
     return GetDefaultKeycode(scancode);
 }
 
-void __HandleEvent(SDL_Event const& event) {
+void __HandleEvent(::SDL_Event const& event) {
     PROFILE
 
-    auto const window = SDL_GetWindowFromEvent(&event);
+    auto const window = ::SDL_GetWindowFromEvent(&event);
 
     if (window == nullptr) {
         return;
     }
 
-    auto const id = SDL_GetWindowID(window);
+    auto const id = ::SDL_GetWindowID(window);
 
     /* input goes to the innermost modal window only, as under [NSApp runModalForWindow:] */
     if ((_modalWindows.empty() == false) && (_modalWindows.back() != id)) {
         switch (event.type) {
-            case SDL_EVENT_KEY_DOWN:
-            case SDL_EVENT_KEY_UP:
-            case SDL_EVENT_TEXT_INPUT:
-            case SDL_EVENT_TEXT_EDITING:
-            case SDL_EVENT_MOUSE_MOTION:
-            case SDL_EVENT_MOUSE_BUTTON_DOWN:
-            case SDL_EVENT_MOUSE_BUTTON_UP:
-            case SDL_EVENT_MOUSE_WHEEL:
-            case SDL_EVENT_PINCH_UPDATE:
-            case SDL_EVENT_DROP_BEGIN:
-            case SDL_EVENT_DROP_FILE:
-            case SDL_EVENT_DROP_COMPLETE:
+            case ::SDL_EVENT_KEY_DOWN:
+            case ::SDL_EVENT_KEY_UP:
+            case ::SDL_EVENT_TEXT_INPUT:
+            case ::SDL_EVENT_TEXT_EDITING:
+            case ::SDL_EVENT_MOUSE_MOTION:
+            case ::SDL_EVENT_MOUSE_BUTTON_DOWN:
+            case ::SDL_EVENT_MOUSE_BUTTON_UP:
+            case ::SDL_EVENT_MOUSE_WHEEL:
+            case ::SDL_EVENT_PINCH_UPDATE:
+            case ::SDL_EVENT_DROP_BEGIN:
+            case ::SDL_EVENT_DROP_FILE:
+            case ::SDL_EVENT_DROP_COMPLETE:
                 return;
             default:
                 break;
@@ -370,13 +370,13 @@ float __GetRefreshRate() {
     auto refreshRate = 0.0f;
 
     for (auto const& [ id, handlers ] : _handlers) {
-        auto const window = SDL_GetWindowFromID(id);
+        auto const window = ::SDL_GetWindowFromID(id);
 
         if ((window == nullptr) || (_IsPainted(window) == false)) {
             continue;
         }
 
-        auto const mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(window));
+        auto const mode = ::SDL_GetCurrentDisplayMode(::SDL_GetDisplayForWindow(window));
 
         if (mode != nullptr) {
             refreshRate = std::max(refreshRate, mode->refresh_rate);
@@ -389,7 +389,7 @@ float __GetRefreshRate() {
 void __PaintWindows() {
     PROFILE
 
-    auto ids = std::vector<SDL_WindowID>();
+    auto ids = std::vector<::SDL_WindowID>();
 
     for (auto const& [ id, handlers ] : _handlers) {
         ids.push_back(id);
@@ -402,7 +402,7 @@ void __PaintWindows() {
             continue; /* destroyed while an earlier window painted */
         }
 
-        if (_IsPainted(SDL_GetWindowFromID(id)) == false) {
+        if (_IsPainted(::SDL_GetWindowFromID(id)) == false) {
             continue;
         }
 
@@ -415,16 +415,16 @@ void Window::__done() {
     PROFILE
 
     if (_impl->cursorHidden) {
-        SDL_ShowCursor(); /* balance the app-global hide from __setCursor(Cursor::None) */
+        ::SDL_ShowCursor(); /* balance the app-global hide from __setCursor(Cursor::None) */
     }
 
-    auto const id = SDL_GetWindowID(_impl->window);
+    auto const id = ::SDL_GetWindowID(_impl->window);
 
     _handlers.erase(id);
     std::erase(_modalWindows, id);
 
     __ReleaseWindow(_impl->window);
-    SDL_DestroyWindow(_impl->window);
+    ::SDL_DestroyWindow(_impl->window);
 
     delete _impl;
 }
@@ -456,27 +456,27 @@ void Window::__init() {
     };
 
     /* Created like the macOS window: hidden, titled only, not resizable. */
-    _impl->window = SDL_CreateWindow("", 640, 480, (SDL_WINDOW_HIDDEN | SDL_WINDOW_HIGH_PIXEL_DENSITY | __GetWindowFlags()));
+    _impl->window = ::SDL_CreateWindow("", 640, 480, (SDL_WINDOW_HIDDEN | SDL_WINDOW_HIGH_PIXEL_DENSITY | __GetWindowFlags()));
 
     if (_impl->window == nullptr) {
         delete _impl;
-        throw std::runtime_error(std::format("Failed to create the window: {}", SDL_GetError()));
+        throw std::runtime_error(std::format("Failed to create the window: {}", ::SDL_GetError()));
     }
 
     if (__ClaimWindow(_impl->window) == false) {
-        auto const error = std::string(SDL_GetError());
-        SDL_DestroyWindow(_impl->window);
+        auto const error = std::string(::SDL_GetError());
+        ::SDL_DestroyWindow(_impl->window);
         delete _impl;
         throw std::runtime_error(std::format("Failed to claim the window for the GPU device: {}", error));
     }
 
-    _impl->scale = SDL_GetWindowPixelDensity(_impl->window);
+    _impl->scale = ::SDL_GetWindowPixelDensity(_impl->window);
 
-    auto const modifiers = []() { return _ModifiersConvert(SDL_GetModState()); };
+    auto const modifiers = []() { return _ModifiersConvert(::SDL_GetModState()); };
 
     auto const mousePosition = []() {
         auto position = Vec2{};
-        SDL_GetMouseState(&position.x, &position.y);
+        ::SDL_GetMouseState(&position.x, &position.y);
         return position;
     };
 
@@ -485,20 +485,20 @@ void Window::__init() {
         _mouseMove(position, modifiers());
     };
 
-    _handlers[SDL_GetWindowID(_impl->window)] = _WindowHandlers{
-        .onEvent = [&, modifiers, mousePosition, dispatchMouseMove](SDL_Event const& event) {
+    _handlers[::SDL_GetWindowID(_impl->window)] = _WindowHandlers{
+        .onEvent = [&, modifiers, mousePosition, dispatchMouseMove](::SDL_Event const& event) {
             switch (event.type) {
-                case SDL_EVENT_WINDOW_CLOSE_REQUESTED: {
+                case ::SDL_EVENT_WINDOW_CLOSE_REQUESTED: {
                     _close();
                     break;
                 }
-                case SDL_EVENT_WINDOW_RESIZED: {
+                case ::SDL_EVENT_WINDOW_RESIZED: {
                     _resize();
                     break;
                 }
-                case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
-                case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED: {
-                    auto const scale = SDL_GetWindowPixelDensity(_impl->window);
+                case ::SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+                case ::SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED: {
+                    auto const scale = ::SDL_GetWindowPixelDensity(_impl->window);
 
                     if (scale != _impl->scale) {
                         _impl->scale = scale;
@@ -507,21 +507,21 @@ void Window::__init() {
                     }
                     break;
                 }
-                case SDL_EVENT_WINDOW_MAXIMIZED: {
+                case ::SDL_EVENT_WINDOW_MAXIMIZED: {
                     if (_impl->maximized == false) {
                         _impl->maximized = true;
                         _maximize();
                     }
                     break;
                 }
-                case SDL_EVENT_WINDOW_MINIMIZED: {
+                case ::SDL_EVENT_WINDOW_MINIMIZED: {
                     if (_impl->minimized == false) {
                         _impl->minimized = true;
                         _minimize();
                     }
                     break;
                 }
-                case SDL_EVENT_WINDOW_RESTORED: {
+                case ::SDL_EVENT_WINDOW_RESTORED: {
                     /* one event for both: what the window leaves is the state it was in */
                     if (_impl->minimized) {
                         _impl->minimized = false;
@@ -532,31 +532,31 @@ void Window::__init() {
                     }
                     break;
                 }
-                case SDL_EVENT_WINDOW_MOUSE_ENTER: {
+                case ::SDL_EVENT_WINDOW_MOUSE_ENTER: {
                     _impl->hover = true;
                     __setCursor(getCursor()); /* SDL's cursor is global: put this window's back */
                     _mouseEnter(mousePosition(), modifiers());
                     break;
                 }
-                case SDL_EVENT_WINDOW_MOUSE_LEAVE: {
+                case ::SDL_EVENT_WINDOW_MOUSE_LEAVE: {
                     _impl->hover = false;
                     _mouseExit(mousePosition(), modifiers());
                     break;
                 }
-                case SDL_EVENT_WINDOW_FOCUS_GAINED: {
+                case ::SDL_EVENT_WINDOW_FOCUS_GAINED: {
                     _focus();
 
                     /* report the cursor position on activation to refresh hover without a move */
-                    if (SDL_GetMouseFocus() == _impl->window) {
+                    if (::SDL_GetMouseFocus() == _impl->window) {
                         dispatchMouseMove(mousePosition());
                     }
                     break;
                 }
-                case SDL_EVENT_WINDOW_FOCUS_LOST: {
+                case ::SDL_EVENT_WINDOW_FOCUS_LOST: {
                     _blur();
                     break;
                 }
-                case SDL_EVENT_MOUSE_MOTION: {
+                case ::SDL_EVENT_MOUSE_MOTION: {
                     auto const position = Vec2{ event.motion.x, event.motion.y };
 
                     /* a move with no button held ends a press whose release never
@@ -572,7 +572,7 @@ void Window::__init() {
                     dispatchMouseMove(position);
                     break;
                 }
-                case SDL_EVENT_MOUSE_BUTTON_DOWN: {
+                case ::SDL_EVENT_MOUSE_BUTTON_DOWN: {
                     auto const mouse = _MouseConvert(event.button.button);
 
                     if (mouse.has_value() == false) {
@@ -592,7 +592,7 @@ void Window::__init() {
                     _mouseDown(*mouse, position, modifiers(), static_cast<int>(event.button.clicks));
                     break;
                 }
-                case SDL_EVENT_MOUSE_BUTTON_UP: {
+                case ::SDL_EVENT_MOUSE_BUTTON_UP: {
                     auto const mouse = _MouseConvert(event.button.button);
 
                     if (mouse.has_value() == false) {
@@ -604,13 +604,13 @@ void Window::__init() {
                     _mouseUp(*mouse, { event.button.x, event.button.y }, modifiers());
                     break;
                 }
-                case SDL_EVENT_MOUSE_WHEEL: {
+                case ::SDL_EVENT_MOUSE_WHEEL: {
                     /* the horizontal sign follows macOS's scrolling delta, which is
                        positive to the left */
                     _mouseWheel({ (event.wheel.x * -_wheelScale), (event.wheel.y * _wheelScale) }, modifiers());
                     break;
                 }
-                case SDL_EVENT_PINCH_UPDATE: {
+                case ::SDL_EVENT_PINCH_UPDATE: {
                     /* A pinch is reported as a wheel turn with Control held, as Chrome does it: the turn is
                        100 times the natural logarithm of the change in scale, so a listener that multiplies
                        its scale by exp(wheel.y / 100) follows the fingers. */
@@ -622,7 +622,7 @@ void Window::__init() {
                     }
                     break;
                 }
-                case SDL_EVENT_KEY_DOWN: {
+                case ::SDL_EVENT_KEY_DOWN: {
                     /* composition in progress: the input method owns the keys until it commits */
                     if (_impl->composing) {
                         break;
@@ -633,13 +633,13 @@ void Window::__init() {
                     _keyDown(scancode, _GetKeycode(event.key.scancode, scancode), _ModifiersConvert(event.key.mod), event.key.repeat);
                     break;
                 }
-                case SDL_EVENT_KEY_UP: {
+                case ::SDL_EVENT_KEY_UP: {
                     auto const scancode = _KeyConvert(event.key.scancode);
 
                     _keyUp(scancode, _GetKeycode(event.key.scancode, scancode), _ModifiersConvert(event.key.mod));
                     break;
                 }
-                case SDL_EVENT_TEXT_INPUT: {
+                case ::SDL_EVENT_TEXT_INPUT: {
                     if (event.text.text == nullptr) {
                         break;
                     }
@@ -656,17 +656,17 @@ void Window::__init() {
                     }
                     break;
                 }
-                case SDL_EVENT_DROP_BEGIN: {
+                case ::SDL_EVENT_DROP_BEGIN: {
                     _impl->droppedFiles.clear();
                     break;
                 }
-                case SDL_EVENT_DROP_FILE: {
+                case ::SDL_EVENT_DROP_FILE: {
                     if (event.drop.data != nullptr) {
                         _impl->droppedFiles.push_back(std::string(event.drop.data));
                     }
                     break;
                 }
-                case SDL_EVENT_DROP_COMPLETE: {
+                case ::SDL_EVENT_DROP_COMPLETE: {
                     /* one drop of several files arrives as one file event each; they are published together */
                     auto const paths = _impl->droppedFiles;
                     _impl->droppedFiles.clear();
@@ -676,7 +676,7 @@ void Window::__init() {
                     }
                     break;
                 }
-                case SDL_EVENT_TEXT_EDITING: {
+                case ::SDL_EVENT_TEXT_EDITING: {
                     auto const text = std::string((event.edit.text != nullptr) ? event.edit.text : "");
                     _impl->composing = (text.empty() == false);
                     _composition(text, std::max(event.edit.start, 0), std::max(event.edit.length, 0));
@@ -704,7 +704,7 @@ Vec2 const& Window::__getSize() const {
     auto width = 0;
     auto height = 0;
 
-    SDL_GetWindowSize(_impl->window, &width, &height);
+    ::SDL_GetWindowSize(_impl->window, &width, &height);
 
     _impl->size = { static_cast<float>(width), static_cast<float>(height) };
 
@@ -714,7 +714,7 @@ Vec2 const& Window::__getSize() const {
 float Window::__getScale() const {
     PROFILE
 
-    _impl->scale = SDL_GetWindowPixelDensity(_impl->window);
+    _impl->scale = ::SDL_GetWindowPixelDensity(_impl->window);
 
     return _impl->scale;
 }
@@ -740,7 +740,7 @@ bool Window::__getClosable() const {
 bool Window::__getSizable() const {
     PROFILE
 
-    return ((SDL_GetWindowFlags(_impl->window) & SDL_WINDOW_RESIZABLE) != 0);
+    return ((::SDL_GetWindowFlags(_impl->window) & SDL_WINDOW_RESIZABLE) != 0);
 }
 
 bool Window::__getMaximizable() const {
@@ -758,25 +758,25 @@ bool Window::__getMinimizable() const {
 bool Window::__getTopmost() const {
     PROFILE
 
-    return ((SDL_GetWindowFlags(_impl->window) & SDL_WINDOW_ALWAYS_ON_TOP) != 0);
+    return ((::SDL_GetWindowFlags(_impl->window) & SDL_WINDOW_ALWAYS_ON_TOP) != 0);
 }
 
 bool Window::__isMaximized() const {
     PROFILE
 
-    return ((SDL_GetWindowFlags(_impl->window) & SDL_WINDOW_MAXIMIZED) != 0);
+    return ((::SDL_GetWindowFlags(_impl->window) & SDL_WINDOW_MAXIMIZED) != 0);
 }
 
 bool Window::__isMinimized() const {
     PROFILE
 
-    return ((SDL_GetWindowFlags(_impl->window) & SDL_WINDOW_MINIMIZED) != 0);
+    return ((::SDL_GetWindowFlags(_impl->window) & SDL_WINDOW_MINIMIZED) != 0);
 }
 
 bool Window::__isFullscreen() const {
     PROFILE
 
-    return ((SDL_GetWindowFlags(_impl->window) & SDL_WINDOW_FULLSCREEN) != 0);
+    return ((::SDL_GetWindowFlags(_impl->window) & SDL_WINDOW_FULLSCREEN) != 0);
 }
 
 bool Window::__isHover() const {
@@ -788,15 +788,15 @@ bool Window::__isHover() const {
 bool Window::__isFocused() const {
     PROFILE
 
-    return ((SDL_GetWindowFlags(_impl->window) & SDL_WINDOW_INPUT_FOCUS) != 0);
+    return ((::SDL_GetWindowFlags(_impl->window) & SDL_WINDOW_INPUT_FOCUS) != 0);
 }
 
 void Window::__center() const {
     PROFILE
 
-    auto const display = SDL_GetDisplayForWindow(_impl->window);
+    auto const display = ::SDL_GetDisplayForWindow(_impl->window);
 
-    SDL_SetWindowPosition(_impl->window, SDL_WINDOWPOS_CENTERED_DISPLAY(display), SDL_WINDOWPOS_CENTERED_DISPLAY(display));
+    ::SDL_SetWindowPosition(_impl->window, SDL_WINDOWPOS_CENTERED_DISPLAY(display), SDL_WINDOWPOS_CENTERED_DISPLAY(display));
     _SyncWindow(_impl->window);
 }
 
@@ -809,28 +809,28 @@ void Window::__paint() const {
 void Window::__setTitle(std::string const& title) {
     PROFILE
 
-    SDL_SetWindowTitle(_impl->window, title.c_str());
+    ::SDL_SetWindowTitle(_impl->window, title.c_str());
 }
 
 void Window::__setInputArea(std::optional<Vec4> const& caretRect) {
     PROFILE
 
     if (caretRect.has_value()) {
-        auto const rect = SDL_Rect{
+        auto const rect = ::SDL_Rect{
             static_cast<int>(std::floor(caretRect->x)),
             static_cast<int>(std::floor(caretRect->y)),
             static_cast<int>(std::ceil(caretRect->width)),
             static_cast<int>(std::ceil(caretRect->height))
         };
 
-        SDL_SetTextInputArea(_impl->window, &rect, 0);
+        ::SDL_SetTextInputArea(_impl->window, &rect, 0);
 
-        if (SDL_TextInputActive(_impl->window) == false) {
-            SDL_StartTextInput(_impl->window);
+        if (::SDL_TextInputActive(_impl->window) == false) {
+            ::SDL_StartTextInput(_impl->window);
         }
-    } else if (SDL_TextInputActive(_impl->window)) {
-        SDL_ClearComposition(_impl->window);
-        SDL_StopTextInput(_impl->window);
+    } else if (::SDL_TextInputActive(_impl->window)) {
+        ::SDL_ClearComposition(_impl->window);
+        ::SDL_StopTextInput(_impl->window);
 
         if (_impl->composing) {
             _impl->composing = false;
@@ -845,28 +845,28 @@ void Window::__setCursor(Cursor cursor) {
     /* SDL_HideCursor is app-global, as [NSCursor hide] is on macOS. */
     if (cursor == Cursor::None) {
         if (_impl->cursorHidden == false) {
-            SDL_HideCursor();
+            ::SDL_HideCursor();
             _impl->cursorHidden = true;
         }
     } else if (_impl->cursorHidden) {
-        SDL_ShowCursor();
+        ::SDL_ShowCursor();
         _impl->cursorHidden = false;
     }
 
     /* SDL's cursor is global too: apply it only while the mouse is over this window */
     if (_impl->hover && (cursor != Cursor::None)) {
         /* system cursors are created once and kept for the life of the process */
-        static auto _cursors = std::map<SDL_SystemCursor, SDL_Cursor*>();
+        static auto _cursors = std::map<::SDL_SystemCursor, ::SDL_Cursor*>();
 
         auto const it = _cursorMap.find(cursor);
-        auto const systemCursor = (it != _cursorMap.end()) ? it->second : SDL_SYSTEM_CURSOR_DEFAULT;
+        auto const systemCursor = (it != _cursorMap.end()) ? it->second : ::SDL_SYSTEM_CURSOR_DEFAULT;
         auto cursorIt = _cursors.find(systemCursor);
 
         if (cursorIt == _cursors.end()) {
-            cursorIt = _cursors.emplace(systemCursor, SDL_CreateSystemCursor(systemCursor)).first;
+            cursorIt = _cursors.emplace(systemCursor, ::SDL_CreateSystemCursor(systemCursor)).first;
         }
 
-        SDL_SetCursor(cursorIt->second);
+        ::SDL_SetCursor(cursorIt->second);
     }
 }
 
@@ -880,8 +880,8 @@ Vec2 const& Window::__getPosition() const {
     auto top = 0;
     auto left = 0;
 
-    SDL_GetWindowPosition(_impl->window, &x, &y);
-    SDL_GetWindowBordersSize(_impl->window, &top, &left, nullptr, nullptr);
+    ::SDL_GetWindowPosition(_impl->window, &x, &y);
+    ::SDL_GetWindowBordersSize(_impl->window, &top, &left, nullptr, nullptr);
 
     /* SDL places the content area; the position is the frame's corner */
     _impl->position = {
@@ -900,9 +900,9 @@ void Window::__setPosition(Vec2 const& position) {
     auto top = 0;
     auto left = 0;
 
-    SDL_GetWindowBordersSize(_impl->window, &top, &left, nullptr, nullptr);
+    ::SDL_GetWindowBordersSize(_impl->window, &top, &left, nullptr, nullptr);
 
-    SDL_SetWindowPosition(
+    ::SDL_SetWindowPosition(
         _impl->window,
         (bounds.x + static_cast<int>(std::lround(position.x)) + left),
         (bounds.y + static_cast<int>(std::lround(position.y)) + top)
@@ -916,12 +916,12 @@ void Window::__setSize(Vec2 const& size) {
     auto const width = static_cast<int>(std::lround(size.width));
     auto const height = static_cast<int>(std::lround(size.height));
 
-    SDL_SetWindowSize(_impl->window, width, height);
+    ::SDL_SetWindowSize(_impl->window, width, height);
     _SyncWindow(_impl->window);
 
     /* a hidden window is not synced, and some drivers apply its size only
        once it is shown: until then it has the size it was given */
-    if ((SDL_GetWindowFlags(_impl->window) & SDL_WINDOW_HIDDEN) != 0) {
+    if ((::SDL_GetWindowFlags(_impl->window) & SDL_WINDOW_HIDDEN) != 0) {
         _impl->hiddenSize = Vec2{ static_cast<float>(width), static_cast<float>(height) };
     }
 }
@@ -931,8 +931,8 @@ void Window::__setVisible(bool visible) {
 
     if (visible) {
         if (_impl->visible == false) {
-            SDL_ShowWindow(_impl->window);
-            SDL_RaiseWindow(_impl->window);
+            ::SDL_ShowWindow(_impl->window);
+            ::SDL_RaiseWindow(_impl->window);
             _SyncWindow(_impl->window);
             _impl->hiddenSize = std::nullopt;
             _impl->visible = true;
@@ -940,7 +940,7 @@ void Window::__setVisible(bool visible) {
         }
     } else {
         if (_impl->visible) {
-            SDL_HideWindow(_impl->window);
+            ::SDL_HideWindow(_impl->window);
             _impl->visible = false;
             _hide();
         }
@@ -957,7 +957,7 @@ void Window::__setClosable(bool closable) {
 void Window::__setSizable(bool sizable) {
     PROFILE
 
-    SDL_SetWindowResizable(_impl->window, sizable);
+    ::SDL_SetWindowResizable(_impl->window, sizable);
 }
 
 void Window::__setMaximizable(bool maximizable) {
@@ -979,9 +979,9 @@ void Window::__setMaximized(bool maximized) {
 
     if (maximized != isMaximized()) {
         if (maximized) {
-            SDL_MaximizeWindow(_impl->window);
+            ::SDL_MaximizeWindow(_impl->window);
         } else {
-            SDL_RestoreWindow(_impl->window);
+            ::SDL_RestoreWindow(_impl->window);
         }
     }
 }
@@ -991,9 +991,9 @@ void Window::__setMinimized(bool minimized) {
 
     if (minimized != isMinimized()) {
         if (minimized) {
-            SDL_MinimizeWindow(_impl->window);
+            ::SDL_MinimizeWindow(_impl->window);
         } else {
-            SDL_RestoreWindow(_impl->window);
+            ::SDL_RestoreWindow(_impl->window);
         }
     }
 }
@@ -1003,38 +1003,38 @@ void Window::__setFullscreen(bool fullscreen) {
 
     /* With no display mode set, SDL makes the window borderless at the desktop resolution. */
     if (fullscreen != __isFullscreen()) {
-        SDL_SetWindowFullscreen(_impl->window, fullscreen);
+        ::SDL_SetWindowFullscreen(_impl->window, fullscreen);
     }
 }
 
 void Window::__setTopmost(bool topmost) {
     PROFILE
 
-    SDL_SetWindowAlwaysOnTop(_impl->window, topmost);
+    ::SDL_SetWindowAlwaysOnTop(_impl->window, topmost);
 }
 
 void Window::__setFocus() {
     PROFILE
 
     if (_impl->visible == false) {
-        SDL_ShowWindow(_impl->window);
+        ::SDL_ShowWindow(_impl->window);
         _SyncWindow(_impl->window);
         _impl->hiddenSize = std::nullopt;
         _impl->visible = true;
     }
 
-    SDL_RaiseWindow(_impl->window);
+    ::SDL_RaiseWindow(_impl->window);
 }
 
 void Window::__runModal() {
     PROFILE
 
-    auto const id = SDL_GetWindowID(_impl->window);
+    auto const id = ::SDL_GetWindowID(_impl->window);
     auto const parent = GetFocusedWindow();
 
     if ((parent != nullptr) && (parent != this)) {
-        SDL_SetWindowParent(_impl->window, parent->_impl->window);
-        SDL_SetWindowModal(_impl->window, true);
+        ::SDL_SetWindowParent(_impl->window, parent->_impl->window);
+        ::SDL_SetWindowModal(_impl->window, true);
     }
 
     _impl->modal = true;
@@ -1049,8 +1049,8 @@ void Window::__runModal() {
     std::erase(_modalWindows, id);
 
     if ((parent != nullptr) && (parent != this)) {
-        SDL_SetWindowModal(_impl->window, false);
-        SDL_SetWindowParent(_impl->window, nullptr);
+        ::SDL_SetWindowModal(_impl->window, false);
+        ::SDL_SetWindowParent(_impl->window, nullptr);
     }
 }
 

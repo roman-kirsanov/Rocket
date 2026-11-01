@@ -39,7 +39,7 @@ enum class _ShapeType : INT1 {
 struct _RenderPass {
     std::uint32_t width = 0;
     std::uint32_t height = 0;
-    MTLPixelFormat format = MTLPixelFormatInvalid;
+    ::MTLPixelFormat format = ::MTLPixelFormatInvalid;
     id<MTLTexture> texture = nil;
     id<CAMetalDrawable> drawable = nil;
     id<MTLCommandBuffer> commandBuffer = nil;
@@ -126,33 +126,33 @@ static void _SetBlend(MTLRenderPipelineColorAttachmentDescriptor* attachment, Bl
     PROFILE
 
     attachment.blendingEnabled = YES;
-    attachment.rgbBlendOperation = MTLBlendOperationAdd;
-    attachment.alphaBlendOperation = MTLBlendOperationAdd;
+    attachment.rgbBlendOperation = ::MTLBlendOperationAdd;
+    attachment.alphaBlendOperation = ::MTLBlendOperationAdd;
 
     switch (blend) {
         case Blend::Over:
-            attachment.sourceRGBBlendFactor = MTLBlendFactorOne;
-            attachment.destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-            attachment.sourceAlphaBlendFactor = MTLBlendFactorOne;
-            attachment.destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+            attachment.sourceRGBBlendFactor = ::MTLBlendFactorOne;
+            attachment.destinationRGBBlendFactor = ::MTLBlendFactorOneMinusSourceAlpha;
+            attachment.sourceAlphaBlendFactor = ::MTLBlendFactorOne;
+            attachment.destinationAlphaBlendFactor = ::MTLBlendFactorOneMinusSourceAlpha;
             break;
         case Blend::Add:
-            attachment.sourceRGBBlendFactor = MTLBlendFactorOne;
-            attachment.destinationRGBBlendFactor = MTLBlendFactorOne;
-            attachment.sourceAlphaBlendFactor = MTLBlendFactorZero;
-            attachment.destinationAlphaBlendFactor = MTLBlendFactorOne;
+            attachment.sourceRGBBlendFactor = ::MTLBlendFactorOne;
+            attachment.destinationRGBBlendFactor = ::MTLBlendFactorOne;
+            attachment.sourceAlphaBlendFactor = ::MTLBlendFactorZero;
+            attachment.destinationAlphaBlendFactor = ::MTLBlendFactorOne;
             break;
         case Blend::Multiply:
-            attachment.sourceRGBBlendFactor = MTLBlendFactorDestinationColor;
-            attachment.destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-            attachment.sourceAlphaBlendFactor = MTLBlendFactorZero;
-            attachment.destinationAlphaBlendFactor = MTLBlendFactorOne;
+            attachment.sourceRGBBlendFactor = ::MTLBlendFactorDestinationColor;
+            attachment.destinationRGBBlendFactor = ::MTLBlendFactorOneMinusSourceAlpha;
+            attachment.sourceAlphaBlendFactor = ::MTLBlendFactorZero;
+            attachment.destinationAlphaBlendFactor = ::MTLBlendFactorOne;
             break;
         case Blend::Screen:
-            attachment.sourceRGBBlendFactor = MTLBlendFactorOne;
-            attachment.destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceColor;
-            attachment.sourceAlphaBlendFactor = MTLBlendFactorZero;
-            attachment.destinationAlphaBlendFactor = MTLBlendFactorOne;
+            attachment.sourceRGBBlendFactor = ::MTLBlendFactorOne;
+            attachment.destinationRGBBlendFactor = ::MTLBlendFactorOneMinusSourceColor;
+            attachment.sourceAlphaBlendFactor = ::MTLBlendFactorZero;
+            attachment.destinationAlphaBlendFactor = ::MTLBlendFactorOne;
             break;
     }
 }
@@ -165,7 +165,7 @@ static void _SetScissor(_RenderPass const& renderPass, std::optional<Vec4> const
     auto const passWidth = static_cast<int>(renderPass.width);
     auto const passHeight = static_cast<int>(renderPass.height);
 
-    auto scissorInfo = MTLScissorRect{};
+    auto scissorInfo = ::MTLScissorRect{};
 
     if (scissor.has_value()) {
         auto const left = std::max(0, static_cast<int>(std::roundf(scissor->x)));
@@ -173,14 +173,14 @@ static void _SetScissor(_RenderPass const& renderPass, std::optional<Vec4> const
         auto const right = std::min(passWidth, static_cast<int>(std::roundf(scissor->x + scissor->width)));
         auto const bottom = std::min(passHeight, static_cast<int>(std::roundf(scissor->y + scissor->height)));
 
-        scissorInfo = MTLScissorRect{
+        scissorInfo = ::MTLScissorRect{
             (NSUInteger)std::min(left, passWidth),
             (NSUInteger)std::min(top, passHeight),
             (NSUInteger)std::max(0, right - left),
             (NSUInteger)std::max(0, bottom - top)
         };
     } else {
-        scissorInfo = MTLScissorRect{
+        scissorInfo = ::MTLScissorRect{
             0, 0,
             (NSUInteger)passWidth,
             (NSUInteger)passHeight
@@ -260,7 +260,7 @@ static void _SetViewport(_RenderPass const& renderPass, Vec4 const& viewport) {
 
     assert(renderPass.encoder != nil);
 
-    [renderPass.encoder setViewport: MTLViewport{
+    [renderPass.encoder setViewport: ::MTLViewport{
         viewport.x,
         viewport.y,
         viewport.width,
@@ -301,14 +301,14 @@ static id<MTLCommandQueue> _GetQueue() {
     return (__bridge id<MTLCommandQueue>)__GetDefaultGPUCommandQueue();
 }
 
-static id<MTLSamplerState> _CreateSampler(MTLSamplerMinMagFilter minFilter, MTLSamplerMinMagFilter magFilter) {
+static id<MTLSamplerState> _CreateSampler(::MTLSamplerMinMagFilter minFilter, ::MTLSamplerMinMagFilter magFilter) {
     PROFILE
 
     auto descriptor = [MTLSamplerDescriptor new];
     descriptor.minFilter = minFilter;
     descriptor.magFilter = magFilter;
-    descriptor.sAddressMode = MTLSamplerAddressModeClampToEdge;
-    descriptor.tAddressMode = MTLSamplerAddressModeClampToEdge;
+    descriptor.sAddressMode = ::MTLSamplerAddressModeClampToEdge;
+    descriptor.tAddressMode = ::MTLSamplerAddressModeClampToEdge;
 
     auto sampler = [_GetDevice() newSamplerStateWithDescriptor: descriptor];
 
@@ -331,7 +331,7 @@ static id<MTLFunction> _CreateFunction(NSString* name) {
     return function;
 }
 
-static id<MTLRenderPipelineState> _CreatePipeline(NSString* fragmentName, MTLPixelFormat format, Blend blend) {
+static id<MTLRenderPipelineState> _CreatePipeline(NSString* fragmentName, ::MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto const _vertexFunction = _CreateFunction(@"quadVertex");
@@ -352,7 +352,7 @@ static id<MTLRenderPipelineState> _CreatePipeline(NSString* fragmentName, MTLPix
     return pipeline;
 }
 
-static id<MTLRenderPipelineState> _GetPipeline(NSString* fragmentName, MTLPixelFormat format, Blend blend, std::map<std::uint64_t, id<MTLRenderPipelineState>>& cache) {
+static id<MTLRenderPipelineState> _GetPipeline(NSString* fragmentName, ::MTLPixelFormat format, Blend blend, std::map<std::uint64_t, id<MTLRenderPipelineState>>& cache) {
     PROFILE
 
     auto const key = (((std::uint64_t)format) << 8) | (std::uint64_t)blend;
@@ -365,7 +365,7 @@ static id<MTLRenderPipelineState> _GetPipeline(NSString* fragmentName, MTLPixelF
     return it->second;
 }
 
-static id<MTLRenderPipelineState> _GetColorBrushPipeline(MTLPixelFormat format, Blend blend) {
+static id<MTLRenderPipelineState> _GetColorBrushPipeline(::MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
@@ -373,7 +373,7 @@ static id<MTLRenderPipelineState> _GetColorBrushPipeline(MTLPixelFormat format, 
     return _GetPipeline(@"colorBrushFragment", format, blend, _pipelines);
 }
 
-static id<MTLRenderPipelineState> _GetImageBrushPipeline(MTLPixelFormat format, Blend blend) {
+static id<MTLRenderPipelineState> _GetImageBrushPipeline(::MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
@@ -381,7 +381,7 @@ static id<MTLRenderPipelineState> _GetImageBrushPipeline(MTLPixelFormat format, 
     return _GetPipeline(@"imageBrushFragment", format, blend, _pipelines);
 }
 
-static id<MTLRenderPipelineState> _GetLinearGradientBrushPipeline(MTLPixelFormat format, Blend blend) {
+static id<MTLRenderPipelineState> _GetLinearGradientBrushPipeline(::MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
@@ -389,7 +389,7 @@ static id<MTLRenderPipelineState> _GetLinearGradientBrushPipeline(MTLPixelFormat
     return _GetPipeline(@"linearGradientBrushFragment", format, blend, _pipelines);
 }
 
-static id<MTLRenderPipelineState> _GetRadialGradientBrushPipeline(MTLPixelFormat format, Blend blend) {
+static id<MTLRenderPipelineState> _GetRadialGradientBrushPipeline(::MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
@@ -397,7 +397,7 @@ static id<MTLRenderPipelineState> _GetRadialGradientBrushPipeline(MTLPixelFormat
     return _GetPipeline(@"radialGradientBrushFragment", format, blend, _pipelines);
 }
 
-static id<MTLRenderPipelineState> _GetBlurFilterPipeline(MTLPixelFormat format, Blend blend) {
+static id<MTLRenderPipelineState> _GetBlurFilterPipeline(::MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
@@ -405,7 +405,7 @@ static id<MTLRenderPipelineState> _GetBlurFilterPipeline(MTLPixelFormat format, 
     return _GetPipeline(@"blurFilterFragment", format, blend, _pipelines);
 }
 
-static id<MTLRenderPipelineState> _GetShadowFilterDilatePipeline(MTLPixelFormat format, Blend blend) {
+static id<MTLRenderPipelineState> _GetShadowFilterDilatePipeline(::MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
@@ -413,7 +413,7 @@ static id<MTLRenderPipelineState> _GetShadowFilterDilatePipeline(MTLPixelFormat 
     return _GetPipeline(@"shadowFilterDilateFragment", format, blend, _pipelines);
 }
 
-static id<MTLRenderPipelineState> _GetShadowFilterBlurPipeline(MTLPixelFormat format, Blend blend) {
+static id<MTLRenderPipelineState> _GetShadowFilterBlurPipeline(::MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
@@ -421,7 +421,7 @@ static id<MTLRenderPipelineState> _GetShadowFilterBlurPipeline(MTLPixelFormat fo
     return _GetPipeline(@"shadowFilterBlurFragment", format, blend, _pipelines);
 }
 
-static id<MTLRenderPipelineState> _GetShadowFilterCompositePipeline(MTLPixelFormat format, Blend blend) {
+static id<MTLRenderPipelineState> _GetShadowFilterCompositePipeline(::MTLPixelFormat format, Blend blend) {
     PROFILE
 
     static auto _pipelines = std::map<std::uint64_t, id<MTLRenderPipelineState>>();
@@ -432,7 +432,7 @@ static id<MTLRenderPipelineState> _GetShadowFilterCompositePipeline(MTLPixelForm
 static id<MTLSamplerState> _GetLinLinSampler() {
     PROFILE
 
-    static auto const _sampler = _CreateSampler(MTLSamplerMinMagFilterLinear, MTLSamplerMinMagFilterLinear);
+    static auto const _sampler = _CreateSampler(::MTLSamplerMinMagFilterLinear, ::MTLSamplerMinMagFilterLinear);
 
     return _sampler;
 }
@@ -440,7 +440,7 @@ static id<MTLSamplerState> _GetLinLinSampler() {
 static id<MTLSamplerState> _GetNerNerSampler() {
     PROFILE
 
-    static auto const _sampler = _CreateSampler(MTLSamplerMinMagFilterNearest, MTLSamplerMinMagFilterNearest);
+    static auto const _sampler = _CreateSampler(::MTLSamplerMinMagFilterNearest, ::MTLSamplerMinMagFilterNearest);
 
     return _sampler;
 }
@@ -448,7 +448,7 @@ static id<MTLSamplerState> _GetNerNerSampler() {
 static id<MTLSamplerState> _GetLinNerSampler() {
     PROFILE
 
-    static auto const _sampler = _CreateSampler(MTLSamplerMinMagFilterLinear, MTLSamplerMinMagFilterNearest);
+    static auto const _sampler = _CreateSampler(::MTLSamplerMinMagFilterLinear, ::MTLSamplerMinMagFilterNearest);
 
     return _sampler;
 }
@@ -456,7 +456,7 @@ static id<MTLSamplerState> _GetLinNerSampler() {
 static id<MTLSamplerState> _GetNerLinSampler() {
     PROFILE
 
-    static auto const _sampler = _CreateSampler(MTLSamplerMinMagFilterNearest, MTLSamplerMinMagFilterLinear);
+    static auto const _sampler = _CreateSampler(::MTLSamplerMinMagFilterNearest, ::MTLSamplerMinMagFilterLinear);
 
     return _sampler;
 }
@@ -474,11 +474,11 @@ static void _OpenRenderPass(_RenderPass& renderPass, std::optional<Vec4> const& 
 
     auto descriptor = [MTLRenderPassDescriptor renderPassDescriptor];
     descriptor.colorAttachments[0].texture = renderPass.texture;
-    descriptor.colorAttachments[0].loadAction = MTLLoadActionLoad;
-    descriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
+    descriptor.colorAttachments[0].loadAction = ::MTLLoadActionLoad;
+    descriptor.colorAttachments[0].storeAction = ::MTLStoreActionStore;
 
     if (clear.has_value()) {
-        descriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
+        descriptor.colorAttachments[0].loadAction = ::MTLLoadActionClear;
         /* the target is premultiplied; the clear color is straight RGBA */
         descriptor.colorAttachments[0].clearColor = ::MTLClearColorMake(
             (clear->red * clear->alpha),
@@ -495,7 +495,7 @@ static void _OpenRenderPass(_RenderPass& renderPass, std::optional<Vec4> const& 
     }
 }
 
-static void _BeginRenderPass(_RenderPass& renderPass, id<MTLCommandBuffer> command, id<MTLTexture> texture, id<CAMetalDrawable> drawable, std::uint32_t width, std::uint32_t height, MTLPixelFormat format, std::optional<Vec4> const& clear) {
+static void _BeginRenderPass(_RenderPass& renderPass, id<MTLCommandBuffer> command, id<MTLTexture> texture, id<CAMetalDrawable> drawable, std::uint32_t width, std::uint32_t height, ::MTLPixelFormat format, std::optional<Vec4> const& clear) {
     PROFILE
 
     assert(command != nil);
@@ -532,7 +532,7 @@ static void _EndRenderPass(_RenderPass& renderPass) {
     renderPass.drawable = nil;
     renderPass.encoder = nil;
     renderPass.commandBuffer = nil;
-    renderPass.format = MTLPixelFormatInvalid;
+    renderPass.format = ::MTLPixelFormatInvalid;
     renderPass.commit = false;
 }
 
@@ -563,16 +563,16 @@ static void _PushStateUniforms(_RenderPass const& renderPass, Vec2 const& resolu
     assert(renderPass.encoder != nil);
 
     auto const stateUniforms = StateUniforms{
-        .resolution = simd_make_float2(resolution.x, resolution.y),
-        .projection = simd_float3x3{
-            simd_make_float3(2.0f / resolution.width, 0.0f, 0.0f),
-            simd_make_float3(0.0f, -2.0f / resolution.height, 0.0f),
-            simd_make_float3(-1.0f, 1.0f, 1.0f)
+        .resolution = ::simd_make_float2(resolution.x, resolution.y),
+        .projection = ::simd_float3x3{
+            ::simd_make_float3(2.0f / resolution.width, 0.0f, 0.0f),
+            ::simd_make_float3(0.0f, -2.0f / resolution.height, 0.0f),
+            ::simd_make_float3(-1.0f, 1.0f, 1.0f)
         },
         .transform = simd_matrix(
-            simd_make_float3(transform.data[0], transform.data[1], transform.data[2]),
-            simd_make_float3(transform.data[3], transform.data[4], transform.data[5]),
-            simd_make_float3(transform.data[6], transform.data[7], transform.data[8])
+            ::simd_make_float3(transform.data[0], transform.data[1], transform.data[2]),
+            ::simd_make_float3(transform.data[3], transform.data[4], transform.data[5]),
+            ::simd_make_float3(transform.data[6], transform.data[7], transform.data[8])
         ),
         .opacity = opacity
     };
@@ -617,10 +617,10 @@ static void _PushShapeUniforms(_RenderPass const& renderPass, Shape const& shape
 
     auto const shapeUniforms = ShapeUniforms{
         .vertices = {
-            simd_make_float2((rect.x - expand.x),         (rect.y - expand.y)),
-            simd_make_float2((rect.x - expand.x),         (rect.getMaxY() + expand.y)),
-            simd_make_float2((rect.getMaxX() + expand.x), (rect.y - expand.y)),
-            simd_make_float2((rect.getMaxX() + expand.x), (rect.getMaxY() + expand.y))
+            ::simd_make_float2((rect.x - expand.x),         (rect.y - expand.y)),
+            ::simd_make_float2((rect.x - expand.x),         (rect.getMaxY() + expand.y)),
+            ::simd_make_float2((rect.getMaxX() + expand.x), (rect.y - expand.y)),
+            ::simd_make_float2((rect.getMaxX() + expand.x), (rect.getMaxY() + expand.y))
         },
         .bounds  = { rect.x, rect.y, rect.width, rect.height }, // unexpanded: localPos and localUV stay in shape space
         .borders = { borders.left, borders.top, borders.right, borders.bottom },
@@ -641,7 +641,7 @@ static void _PushColorBrushUniforms(_RenderPass const& renderPass, ColorBrush co
     assert(renderPass.encoder != nil);
 
     auto const colorUniforms = ColorBrushUniforms{
-        .color = simd_make_float4(colorBrush.color.red, colorBrush.color.green, colorBrush.color.blue, colorBrush.color.alpha)
+        .color = ::simd_make_float4(colorBrush.color.red, colorBrush.color.green, colorBrush.color.blue, colorBrush.color.alpha)
     };
 
     [renderPass.encoder setFragmentBytes: &colorUniforms length: sizeof(ColorBrushUniforms) atIndex: _brushFragmentUniformsIndex];
@@ -848,7 +848,7 @@ void* __GetDefaultGPUCommandQueue() {
 int __GetDefaultTextureFormat() {
     PROFILE
 
-    return (int)MTLPixelFormatRGBA8Unorm;
+    return (int)::MTLPixelFormatRGBA8Unorm;
 }
 
 _FilterTextures& Painter::_Painter::getFilterTextures(std::uint32_t width, std::uint32_t height) {
@@ -863,13 +863,13 @@ _FilterTextures& Painter::_Painter::getFilterTextures(std::uint32_t width, std::
 
     if (it == filterTextures.end()) {
         auto descriptor = [MTLTextureDescriptor
-            texture2DDescriptorWithPixelFormat: (MTLPixelFormat)__GetDefaultTextureFormat()
+            texture2DDescriptorWithPixelFormat: (::MTLPixelFormat)__GetDefaultTextureFormat()
                                          width: width
                                         height: height
                                      mipmapped: NO];
 
-        descriptor.usage = (MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget);
-        descriptor.storageMode = MTLStorageModePrivate;
+        descriptor.usage = (::MTLTextureUsageShaderRead | ::MTLTextureUsageRenderTarget);
+        descriptor.storageMode = ::MTLStorageModePrivate;
 
         auto first = [_GetDevice() newTextureWithDescriptor: descriptor];
         auto second = [_GetDevice() newTextureWithDescriptor: descriptor];
@@ -964,7 +964,7 @@ void Painter::__beginPaint(PaintTarget const& target) {
                 nil,
                 (std::uint32_t)imageTarget.image.getSize().width,
                 (std::uint32_t)imageTarget.image.getSize().height,
-                (MTLPixelFormat)__GetDefaultTextureFormat(),
+                (::MTLPixelFormat)__GetDefaultTextureFormat(),
                 imageTarget.clearColor
             );
         },
@@ -1080,7 +1080,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
             _PushGradientBrushUniforms(pass, *gradientBrush);
         }
 
-        [pass.encoder drawPrimitives: MTLPrimitiveTypeTriangleStrip vertexStart: 0 vertexCount: 4];
+        [pass.encoder drawPrimitives: ::MTLPrimitiveTypeTriangleStrip vertexStart: 0 vertexCount: 4];
     };
 
     auto const blurred = (blurFilter != nullptr) && (blurFilter->radius > 0.0f);
@@ -1123,7 +1123,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         [pass.encoder setRenderPipelineState: _GetBlurFilterPipeline(pass.format, mode)];
         [pass.encoder setFragmentTexture: source atIndex: 0];
         [pass.encoder setFragmentSamplerState: _GetLinLinSampler() atIndex: 0];
-        [pass.encoder drawPrimitives: MTLPrimitiveTypeTriangleStrip vertexStart: 0 vertexCount: 4];
+        [pass.encoder drawPrimitives: ::MTLPrimitiveTypeTriangleStrip vertexStart: 0 vertexCount: 4];
     };
 
     auto const drawShadowField = [&](_RenderPass& pass, id<MTLTexture> source, id<MTLRenderPipelineState> pipeline, Vec2 const& direction, float spread, bool fromSilhouette, Vec4 const& rect) {
@@ -1144,7 +1144,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         [pass.encoder setRenderPipelineState: pipeline];
         [pass.encoder setFragmentTexture: source atIndex: 0];
         [pass.encoder setFragmentSamplerState: _GetLinLinSampler() atIndex: 0];
-        [pass.encoder drawPrimitives: MTLPrimitiveTypeTriangleStrip vertexStart: 0 vertexCount: 4];
+        [pass.encoder drawPrimitives: ::MTLPrimitiveTypeTriangleStrip vertexStart: 0 vertexCount: 4];
     };
 
     auto const drawShadowComposite = [&](_RenderPass& pass, id<MTLTexture> source, bool fromSilhouette, Vec4 const& rect, std::optional<Vec4> const& scissor, Blend mode) {
@@ -1172,7 +1172,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         [pass.encoder setRenderPipelineState: _GetShadowFilterCompositePipeline(pass.format, mode)];
         [pass.encoder setFragmentTexture: source atIndex: 0];
         [pass.encoder setFragmentSamplerState: _GetLinLinSampler() atIndex: 0];
-        [pass.encoder drawPrimitives: MTLPrimitiveTypeTriangleStrip vertexStart: 0 vertexCount: 4];
+        [pass.encoder drawPrimitives: ::MTLPrimitiveTypeTriangleStrip vertexStart: 0 vertexCount: 4];
     };
 
     if (blurred) {
@@ -1198,7 +1198,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _SuspendRenderPass(*_impl->renderPassStack.top());
 
         auto const& [ shapeTexture, blurTexture ] = _impl->getFilterTextures(filterWidth, filterHeight).textures;
-        auto const filterFormat = (MTLPixelFormat)__GetDefaultTextureFormat();
+        auto const filterFormat = (::MTLPixelFormat)__GetDefaultTextureFormat();
         auto const clearColor = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f };
 
         auto shapePass = _RenderPass{};
@@ -1238,7 +1238,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _SuspendRenderPass(*_impl->renderPassStack.top());
 
         auto [ source, target ] = _impl->getFilterTextures(filterWidth, filterHeight).textures;
-        auto const filterFormat = (MTLPixelFormat)__GetDefaultTextureFormat();
+        auto const filterFormat = (::MTLPixelFormat)__GetDefaultTextureFormat();
         auto const clearColor = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f };
         auto fromSilhouette = true;
 
