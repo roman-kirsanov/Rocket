@@ -434,7 +434,7 @@ void Window::__init() {
 
     App::__InitVideo();
 
-    _impl = new Window::_Window{
+    _impl = new _Window{
         .window = nullptr,
         .size = { 0.0f, 0.0f },
         .position = { 0.0f, 0.0f },

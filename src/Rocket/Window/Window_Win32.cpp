@@ -559,7 +559,7 @@ void Window::__init() {
         throw std::runtime_error("Failed to register the window class");
     }
 
-    _impl = new Window::_Window{
+    _impl = new _Window{
         .hwnd = nullptr,
         .size = { _defaultWidth, _defaultHeight },
         .position = { 0.0f, 0.0f },
