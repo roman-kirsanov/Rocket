@@ -7,13 +7,14 @@
 
 #pragma once
 
-#include <vector>
-#include <optional>
-#include <memory>
 #include <cstdint>
+#include <memory>
+#include <optional>
+#include <string>
+#include <vector>
 #include <Rocket/Math/Vec2.hpp>
-#include <Rocket/Paint/Image.hpp>
 #include <Rocket/Paint/Font.hpp>
+#include <Rocket/Paint/Image.hpp>
 
 namespace Rocket {
 
@@ -135,8 +136,20 @@ struct TextStyle {
     std::optional<bool> underline;
     /** Strikeout flag; propagated to TextGlyph::strikeout for callers, not drawn by Text's renderer. */
     std::optional<bool> strikeout;
-    bool operator==(TextStyle const&) const;
-    bool operator!=(TextStyle const&) const;
+
+    /**
+     * Whether every field equals the corresponding field of another style.
+     *
+     * @param options The style to compare with.
+     */
+    bool operator==(TextStyle const& options) const;
+
+    /**
+     * Whether any field differs from the corresponding field of another style.
+     *
+     * @param options The style to compare with.
+     */
+    bool operator!=(TextStyle const& options) const;
 };
 
 /** A styled codepoint range [startIndex, endIndex) used with Text::setStyles. */
@@ -176,7 +189,8 @@ struct TextEditSnapshot {
  * (string, index, layout, image, edit), so the work only happens after an
  * input the stage depends on actually changes; the size, string, scale, and
  * secure setters compare before assigning and only mark the downstream stages
- * dirty on a real change, while the style setters always invalidate.
+ * dirty on a real change. setStyles() compares as well; setStyle(),
+ * addStyle() and clearStyle() always invalidate.
  *
  * Interactive editing is opt-in via setEditable(). While enabled the object
  * additionally owns a caret and an anchor position (which together define the
@@ -197,7 +211,10 @@ struct TextEditSnapshot {
  */
 class Text {
 public:
+    /** Destroys the text and releases its rendered image. */
     ~Text();
+
+    /** Creates an empty, non-editable text with default alignment and no styles. */
     Text();
 
     Text(Text &&) = delete;
@@ -248,7 +265,7 @@ public:
     TextJustify const& getJustify() const;
 
     /** Returns the text as UTF-8, re-encoding from the codepoints if editing has changed them. */
-	std::string const& getString() const;
+    std::string const& getString() const;
 
     /** Returns the optional display scale factor applied to all font sizes. */
     std::optional<float> const& getScale() const;
@@ -376,7 +393,7 @@ public:
      *
      * @param string The new UTF-8 string to display.
      */
-	void setString(std::string const& string);
+    void setString(std::string const& string);
 
     /**
      * Sets a display scale factor multiplied into all font sizes.
@@ -402,7 +419,9 @@ public:
      * \r\n, \r) replaced with single spaces, the layout never wraps (the
      * width limit is ignored, so the caller scrolls the overflow), and
      * moveUp()/moveDown() move to the line start/end instead of switching
-     * lines. When true, typed and pasted \r\n and \r are normalised to \n.
+     * lines. When true, typed and pasted \r\n and \r are normalized to \n.
+     *
+     * @param multiLine Whether the text is multi-line, or std::nullopt to unset (behaves as true).
      */
     void setMultiLine(std::optional<bool> multiLine);
 
@@ -452,8 +471,10 @@ public:
      * Unlike clearStyle() + addStyle(), this only invalidates (and later
      * re-shapes and re-rasterizes) when the ranges actually differ, so it
      * is safe to call with identical styles on every layout pass.
+     *
+     * @param styles The style ranges that replace the current ones.
      */
-    void setStyles(std::vector<TextStyleRange> const&);
+    void setStyles(std::vector<TextStyleRange> const& styles);
 
     /** Removes all style ranges, reverting to default appearance. */
     void clearStyle();
@@ -668,11 +689,11 @@ private:
         bool strikeout;
     };
 
-	struct _StyleRange {
-		std::int64_t startIndex;
-		std::int64_t endIndex;
-		TextStyle style;
-	};
+    struct _StyleRange {
+        std::int64_t startIndex;
+        std::int64_t endIndex;
+        TextStyle style;
+    };
 
     struct _EditState {
         std::int64_t caret;
@@ -703,13 +724,13 @@ private:
     TextJustify _justify;
     std::unique_ptr<_EditState> _editState;
     std::vector<std::uint32_t> _codepoints;
-	mutable std::string _string;
-	mutable std::vector<_StyleRange> _ranges;
+    mutable std::string _string;
+    mutable std::vector<_StyleRange> _ranges;
     mutable std::vector<_IndexEntry> _index;
     mutable std::vector<TextLine> _lines;
     mutable std::vector<TextGlyph> _glyphs;
-	mutable std::unique_ptr<Image> _image;
-	mutable Vec2 _size;
+    mutable std::unique_ptr<Image> _image;
+    mutable Vec2 _size;
     mutable bool _needsString;
     mutable bool _needsIndex;
     mutable bool _needsLayout;
@@ -742,7 +763,6 @@ private:
     void _setAnchor(std::int64_t);
     void _setCaretAffinity(bool);
     void _removeSelection();
-    void _deleteSelection();
     void _insertCodepoints(std::int64_t, std::vector<std::uint32_t> const&);
     void _eraseCodepoints(std::int64_t, std::int64_t);
 };

@@ -34,16 +34,36 @@ struct QuadShape {
     std::optional<float> borderBottomLeftRadius;
     /** Bottom-right corner radius in pixels; overrides borderRadius when set. */
     std::optional<float> borderBottomRightRadius;
-    bool operator==(QuadShape const&) const;
-    bool operator!=(QuadShape const&) const;
+    /**
+     * Returns true when every field equals the other shape's.
+     *
+     * @param quadShape The shape to compare with.
+     */
+    bool operator==(QuadShape const& quadShape) const;
+    /**
+     * Returns true when any field differs from the other shape's.
+     *
+     * @param quadShape The shape to compare with.
+     */
+    bool operator!=(QuadShape const& quadShape) const;
 };
 
 /** A filled ellipse shape inscribed into its bounding rectangle. */
 struct EllipseShape {
     /** Bounding rectangle (x, y, width, height) the ellipse is inscribed into. */
     Vec4 rect;
-    bool operator==(EllipseShape const&) const;
-    bool operator!=(EllipseShape const&) const;
+    /**
+     * Returns true when every field equals the other shape's.
+     *
+     * @param ellipseShape The shape to compare with.
+     */
+    bool operator==(EllipseShape const& ellipseShape) const;
+    /**
+     * Returns true when any field differs from the other shape's.
+     *
+     * @param ellipseShape The shape to compare with.
+     */
+    bool operator!=(EllipseShape const& ellipseShape) const;
 };
 
 /**
@@ -81,8 +101,18 @@ struct QuadOutlineShape {
     std::optional<float> rightBorder;
     /** Bottom edge border width; overrides border when set. */
     std::optional<float> bottomBorder;
-    bool operator==(QuadOutlineShape const&) const;
-    bool operator!=(QuadOutlineShape const&) const;
+    /**
+     * Returns true when every field equals the other shape's.
+     *
+     * @param frameShape The shape to compare with.
+     */
+    bool operator==(QuadOutlineShape const& frameShape) const;
+    /**
+     * Returns true when any field differs from the other shape's.
+     *
+     * @param frameShape The shape to compare with.
+     */
+    bool operator!=(QuadOutlineShape const& frameShape) const;
 };
 
 /** An ellipse outline shape (a ring) inscribed into its bounding rectangle. */
@@ -91,8 +121,18 @@ struct EllipseOutlineShape {
     Vec4 rect;
     /** Ring thickness in pixels. */
     std::optional<float> border;
-    bool operator==(EllipseOutlineShape const&) const;
-    bool operator!=(EllipseOutlineShape const&) const;
+    /**
+     * Returns true when every field equals the other shape's.
+     *
+     * @param ellipseOutlineShape The shape to compare with.
+     */
+    bool operator==(EllipseOutlineShape const& ellipseOutlineShape) const;
+    /**
+     * Returns true when any field differs from the other shape's.
+     *
+     * @param ellipseOutlineShape The shape to compare with.
+     */
+    bool operator!=(EllipseOutlineShape const& ellipseOutlineShape) const;
 };
 
 /** A filled or outlined rectangle or ellipse shape. */

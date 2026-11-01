@@ -16,9 +16,9 @@
 #include <wrl/client.h>
 #include <wincodec.h>
 #include <Rocket/Base/Profile.hpp>
-#include <Rocket/Paint/Image.hpp>
 #include <Rocket/Paint/Painter_Win32.hpp>
 #include <Rocket/Window/App_Win32.hpp>
+#include <Rocket/Paint/Image.hpp>
 
 using Microsoft::WRL::ComPtr;
 

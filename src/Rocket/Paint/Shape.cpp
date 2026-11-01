@@ -24,7 +24,7 @@ bool QuadShape::operator==(QuadShape const& quadShape) const {
 bool QuadShape::operator!=(QuadShape const& quadShape) const {
     PROFILE
 
-    return !operator==(quadShape);
+    return (operator==(quadShape) == false);
 }
 
 bool EllipseShape::operator==(EllipseShape const& ellipseShape) const {
@@ -36,7 +36,7 @@ bool EllipseShape::operator==(EllipseShape const& ellipseShape) const {
 bool EllipseShape::operator!=(EllipseShape const& ellipseShape) const {
     PROFILE
 
-    return !operator==(ellipseShape);
+    return (operator==(ellipseShape) == false);
 }
 
 bool QuadOutlineShape::operator==(QuadOutlineShape const& frameShape) const {
@@ -58,7 +58,7 @@ bool QuadOutlineShape::operator==(QuadOutlineShape const& frameShape) const {
 bool QuadOutlineShape::operator!=(QuadOutlineShape const& frameShape) const {
     PROFILE
 
-    return !operator==(frameShape);
+    return (operator==(frameShape) == false);
 }
 
 bool EllipseOutlineShape::operator==(EllipseOutlineShape const& ellipseOutlineShape) const {
@@ -71,7 +71,7 @@ bool EllipseOutlineShape::operator==(EllipseOutlineShape const& ellipseOutlineSh
 bool EllipseOutlineShape::operator!=(EllipseOutlineShape const& ellipseOutlineShape) const {
     PROFILE
 
-    return !operator==(ellipseOutlineShape);
+    return (operator==(ellipseOutlineShape) == false);
 }
 
 } /* namespace Rocket */

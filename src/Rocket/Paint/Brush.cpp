@@ -19,7 +19,7 @@ bool ColorBrush::operator==(ColorBrush const& colorBrush) const {
 bool ColorBrush::operator!=(ColorBrush const& colorBrush) const {
     PROFILE
 
-    return !operator==(colorBrush);
+    return (operator==(colorBrush) == false);
 }
 
 bool ImageBrush::operator==(ImageBrush const& imageBrush) const {
@@ -45,7 +45,7 @@ bool ImageBrush::operator==(ImageBrush const& imageBrush) const {
 bool ImageBrush::operator!=(ImageBrush const& imageBrush) const {
     PROFILE
 
-    return !operator==(imageBrush);
+    return (operator==(imageBrush) == false);
 }
 
 bool GradientBrush::operator==(GradientBrush const& gradientBrush) const {
@@ -62,7 +62,7 @@ bool GradientBrush::operator==(GradientBrush const& gradientBrush) const {
 bool GradientBrush::operator!=(GradientBrush const& gradientBrush) const {
     PROFILE
 
-    return !operator==(gradientBrush);
+    return (operator==(gradientBrush) == false);
 }
 
 } /* namespace Rocket */

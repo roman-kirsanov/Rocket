@@ -6,6 +6,7 @@
  */
 
 #include <vector>
+#include <format>
 #include <cstring>
 #include <cassert>
 #include <stdexcept>
@@ -13,9 +14,9 @@
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
 #include <Rocket/Base/Profile.hpp>
-#include <Rocket/Paint/Image.hpp>
 #include <Rocket/Paint/Painter.hpp>
 #include <Rocket/Paint/Painter_Private.hpp>
+#include <Rocket/Paint/Image.hpp>
 
 namespace Rocket {
 
@@ -47,7 +48,7 @@ static SDL_GPUTexture* _CreateTexture(std::uint32_t width, std::uint32_t height)
     auto texture = ::SDL_CreateGPUTexture(_Device(), &info);
 
     if (texture == nullptr) {
-        throw std::runtime_error(::SDL_GetError());
+        throw std::runtime_error(std::format("Failed to create a GPU texture: {}", ::SDL_GetError()));
     }
 
     return texture;
@@ -59,7 +60,7 @@ static SDL_GPUCommandBuffer* _AcquireCommandBuffer() {
     auto commandBuffer = ::SDL_AcquireGPUCommandBuffer(_Device());
 
     if (commandBuffer == nullptr) {
-        throw std::runtime_error(::SDL_GetError());
+        throw std::runtime_error(std::format("Failed to acquire a GPU command buffer: {}", ::SDL_GetError()));
     }
 
     return commandBuffer;
@@ -77,7 +78,7 @@ static void _UploadPixels(SDL_GPUTexture* texture, std::uint32_t x, std::uint32_
     auto staging = ::SDL_CreateGPUTransferBuffer(_Device(), &bufferInfo);
 
     if (staging == nullptr) {
-        throw std::runtime_error(::SDL_GetError());
+        throw std::runtime_error(std::format("Failed to create a GPU transfer buffer: {}", ::SDL_GetError()));
     }
 
     std::memcpy(::SDL_MapGPUTransferBuffer(_Device(), staging, false), pixels, dataSize);
@@ -109,7 +110,7 @@ static void _DownloadPixels(SDL_GPUTexture* texture, std::uint32_t width, std::u
     auto staging = ::SDL_CreateGPUTransferBuffer(_Device(), &bufferInfo);
 
     if (staging == nullptr) {
-        throw std::runtime_error(::SDL_GetError());
+        throw std::runtime_error(std::format("Failed to create a GPU transfer buffer: {}", ::SDL_GetError()));
     }
 
     auto source = SDL_GPUTextureRegion{};
@@ -170,7 +171,7 @@ void Image::__init(std::string const& path) {
     // does every other image's pixels.
     auto pixels = std::vector<std::uint8_t>((std::size_t)width * height * 4);
 
-    for (std::uint32_t row = 0; row < height; row++) {
+    for (auto row = std::uint32_t(0); row < height; row++) {
         std::memcpy(
             pixels.data() + ((std::size_t)row * width * 4),
             static_cast<std::uint8_t const*>(surface->pixels) + ((std::size_t)row * surface->pitch),

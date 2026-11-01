@@ -6,8 +6,8 @@
  */
 
 #include <Rocket/Base/Profile.hpp>
-#include <Rocket/Paint/Painter.hpp>
 #include <Rocket/Paint/Image.hpp>
+#include <Rocket/Paint/Painter.hpp>
 
 namespace Rocket {
 
@@ -87,7 +87,7 @@ void Painter::paint(Shape const& shape, Brush const& brush, PaintOptions const& 
     }
 
     if (colorBrush != nullptr) {
-        if (colorBrush->color.alpha == 0) {
+        if (colorBrush->color.alpha == 0.0f) {
             return;
         }
     } else if (imageBrush != nullptr) {

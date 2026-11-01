@@ -21,8 +21,18 @@ namespace Rocket {
 struct ColorBrush {
     /** RGBA fill color. */
     Vec4 color;
-    bool operator==(ColorBrush const&) const;
-    bool operator!=(ColorBrush const&) const;
+    /**
+     * Returns true when every field equals the other brush's.
+     *
+     * @param colorBrush The brush to compare with.
+     */
+    bool operator==(ColorBrush const& colorBrush) const;
+    /**
+     * Returns true when any field differs from the other brush's.
+     *
+     * @param colorBrush The brush to compare with.
+     */
+    bool operator!=(ColorBrush const& colorBrush) const;
 };
 
 /**
@@ -60,8 +70,18 @@ struct ImageBrush {
     std::optional<bool> flipY;
     /** Shrink the image to fit inside the shape while preserving aspect ratio when true; never upscales. Has no effect on an axis whose position is ImagePosition::Stretch (the default). */
     std::optional<bool> fit;
-    bool operator==(ImageBrush const&) const;
-    bool operator!=(ImageBrush const&) const;
+    /**
+     * Returns true when every field equals the other brush's.
+     *
+     * @param imageBrush The brush to compare with.
+     */
+    bool operator==(ImageBrush const& imageBrush) const;
+    /**
+     * Returns true when any field differs from the other brush's.
+     *
+     * @param imageBrush The brush to compare with.
+     */
+    bool operator!=(ImageBrush const& imageBrush) const;
 };
 
 /**
@@ -83,8 +103,18 @@ struct GradientBrush {
     std::optional<Vec4> stopColor;
     /** Multi-stop list of (position 0–1, color) pairs; overrides startColor/stopColor when non-empty. At most the first 10 stops are used. */
     std::vector<std::tuple<float, Vec4>> stops;
-    bool operator==(GradientBrush const&) const;
-    bool operator!=(GradientBrush const&) const;
+    /**
+     * Returns true when every field equals the other brush's.
+     *
+     * @param gradientBrush The brush to compare with.
+     */
+    bool operator==(GradientBrush const& gradientBrush) const;
+    /**
+     * Returns true when any field differs from the other brush's.
+     *
+     * @param gradientBrush The brush to compare with.
+     */
+    bool operator!=(GradientBrush const& gradientBrush) const;
 };
 
 /** A color, image, or gradient brush. */

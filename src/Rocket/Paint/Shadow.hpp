@@ -29,8 +29,18 @@ struct Shadow {
     std::optional<float> blur;
     /** Casts the shadow inward from the node's padding box (inside the border), under its text and children, instead of as a drop shadow. */
     std::optional<bool> inset;
-    bool operator==(Shadow const&) const;
-    bool operator!=(Shadow const&) const;
+    /**
+     * Returns true when every field equals the other shadow's.
+     *
+     * @param shadow The shadow to compare with.
+     */
+    bool operator==(Shadow const& shadow) const;
+    /**
+     * Returns true when any field differs from the other shadow's.
+     *
+     * @param shadow The shadow to compare with.
+     */
+    bool operator!=(Shadow const& shadow) const;
 };
 
 } /* namespace Rocket */

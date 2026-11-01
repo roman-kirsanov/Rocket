@@ -47,7 +47,10 @@ enum class ImageFilter {
  */
 class Image {
 public:
+    /** Destroys the image and releases its GPU texture. */
     ~Image();
+
+    /** Constructs an empty 1x1 image. */
     Image();
 
     /**
@@ -94,7 +97,7 @@ public:
     /** Returns the image dimensions in pixels. */
     Vec2 const& getSize() const;
 
-    /** Returns the underlying GPU texture handle as void* (id<MTLTexture> on macOS, SDL_GPUTexture* on SDL3, the Direct3D 12 painter's own texture record on Win32). */
+    /** Returns the underlying GPU texture handle as void* (id<MTLTexture> on macOS, SDL_GPUTexture* on SDL3, the GLES painter's own texture record on GLES, the Direct3D 12 painter's own texture record on Win32). */
     void* getTexture() const;
 
     /**

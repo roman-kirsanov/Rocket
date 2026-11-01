@@ -47,11 +47,13 @@ Vec4 ColorFromRGB(std::int32_t const& red, std::int32_t const& green, std::int32
  */
 Vec4 ColorFromRGBA(std::int32_t const& red, std::int32_t const& green, std::int32_t const& blue, float const& alpha);
 
-/**
- * Predefined color constants in sRGB RGBA (0.0-1.0 per channel).
- */
+/** Opaque black in sRGB RGBA (0.0-1.0 per channel). */
 auto constexpr COLOR_BLACK = Vec4{ 0.0f, 0.0f, 0.0f, 1.0f };
+
+/** Opaque white in sRGB RGBA (0.0-1.0 per channel). */
 auto constexpr COLOR_WHITE = Vec4{ 1.0f, 1.0f, 1.0f, 1.0f };
+
+/** Fully transparent black in sRGB RGBA (0.0-1.0 per channel). */
 auto constexpr COLOR_TRANSPARENT = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f };
 
 } /* namespace Rocket */

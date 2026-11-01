@@ -25,46 +25,60 @@
 #define GL_GLES_PROTOTYPES 0
 #include <GLES3/gl3.h>
 #include <Rocket/Base/Profile.hpp>
-#include <Rocket/Paint/Painter.hpp>
 #include <Rocket/Paint/Image.hpp>
-#include <Rocket/Paint/Painter_GLES.hpp>
+#include <Rocket/Paint/Painter.hpp>
 #include <Rocket/Paint/Painter_Private.hpp>
 #include <Rocket/Paint/Painter_SDL3.hpp>
 #include <Rocket/Window/App_SDL3.hpp>
 #include <Rocket/Window/Window.hpp>
-#include "Painter.glsl.hpp"
-#include "QuadVertex.glsl.hpp"
+#include "BlurFilter.glsl.hpp"
 #include "ColorBrush.glsl.hpp"
 #include "ImageBrush.glsl.hpp"
 #include "LinearGradientBrush.glsl.hpp"
+#include "Painter.glsl.hpp"
+#include "QuadVertex.glsl.hpp"
 #include "RadialGradientBrush.glsl.hpp"
-#include "BlurFilter.glsl.hpp"
-#include "ShadowFilterDilate.glsl.hpp"
 #include "ShadowFilterBlur.glsl.hpp"
 #include "ShadowFilterComposite.glsl.hpp"
+#include "ShadowFilterDilate.glsl.hpp"
+#include <Rocket/Paint/Painter_GLES.hpp>
 
 namespace Rocket {
 
-/* The uniform blocks of GLES/Painter.glsl in std140 layout: vec2 aligns to 8
-   bytes, vec4, mat3 columns and array elements to 16, so the padding is spelled
-   out and the offsets are checked below. */
+enum class _Fragment {
+    ColorBrush,
+    ImageBrush,
+    LinearGradientBrush,
+    RadialGradientBrush,
+    BlurFilter,
+    ShadowFilterDilate,
+    ShadowFilterBlur,
+    ShadowFilterComposite
+};
+
+enum class _ShapeType : std::int32_t {
+    Quad,
+    Ellipse,
+    QuadOutline,
+    EllipseOutline
+};
 
 struct _StateUniforms {
     float resolution[2];
-    float _pad0[2];
-    float projection[12]; // three columns, each padded to four floats
-    float transform[12];  // three columns, each padded to four floats
+    float padding0[2];
+    float projection[12];
+    float transform[12];
     float opacity;
-    float _pad1[3];
+    float padding1[3];
 };
 
 struct _ShapeUniforms {
-    float vertices[4][4]; // .xy used; vec4 for the std140 array stride
+    float vertices[4][4];
     float bounds[4];
-    float borders[4]; // per-edge outline widths (left, top, right, bottom)
-    float corners[4]; // per-corner radii (top-left, top-right, bottom-right, bottom-left)
-    std::int32_t type; // 0=quad, 1=ellipse, 2=quad outline, 3=ellipse outline
-    std::int32_t _pad0[3];
+    float borders[4];
+    float corners[4];
+    _ShapeType type;
+    std::int32_t padding0[3];
 };
 
 struct _ColorBrushUniforms {
@@ -76,24 +90,23 @@ struct _ImageBrushUniforms {
     float size[2];
     float flip[2];
     float repeat[2];
-    float _pad0[2];
+    float padding0[2];
     float npatch[4];
     float source[4];
     float destin[4];
 };
 
-/** Colors are premultiplied. */
 struct _GradientBrushUniforms {
     float startPoint[2];
-    float _pad0[2];
+    float padding0[2];
     float startColor[4];
     float stopPoint[2];
-    float _pad1[2];
+    float padding1[2];
     float stopColor[4];
     std::int32_t stopCount;
-    std::int32_t _pad2[3];
+    std::int32_t padding2[3];
     float stopColors[10][4];
-    float stopPositions[3][4]; // position i is stopPositions[i / 4][i % 4]
+    float stopPositions[3][4];
 };
 
 struct _BlurFilterUniforms {
@@ -101,32 +114,32 @@ struct _BlurFilterUniforms {
     float direction[2];
     float sigma;
     std::int32_t taps;
-    std::int32_t _pad0[2];
+    std::int32_t padding0[2];
 };
 
 struct _ShadowFilterUniforms {
     float color[4];
     float opacity;
-    float _pad0;
+    float padding0;
     float texel[2];
-    float offset[2];             // inset field displacement, in pixels
-    float sigma;                 // gaussian standard deviation in texels
-    std::int32_t taps;           // gaussian half-width in taps
-    std::int32_t inset;          // 0 = drop shadow, 1 = inset
-    std::int32_t fromSilhouette; // 1 = source is the shape texture (.a), 0 = a field texture (.r/.g)
-    std::int32_t invert;         // 1 = complement the field (no earlier pass did it)
-    std::int32_t _pad1;
+    float offset[2];
+    float sigma;
+    std::int32_t taps;
+    std::int32_t inset;
+    std::int32_t fromSilhouette;
+    std::int32_t invert;
+    std::int32_t padding1;
 };
 
 struct _ShadowFilterFieldUniforms {
     float texel[2];
-    float direction[2];          // (1, 0) horizontal pass, (0, 1) vertical pass
-    float spread;                // dilate pass: extent in pixels along direction; negative erodes
-    float sigma;                 // blur pass: gaussian standard deviation in texels
-    std::int32_t taps;           // blur pass: gaussian half-width in taps
-    std::int32_t fromSilhouette; // 1 = source is the shape texture (.a), 0 = a field texture (.r/.g)
-    std::int32_t invert;         // 1 = complement the field (first pass of an inset chain)
-    std::int32_t _pad0[3];
+    float direction[2];
+    float spread;
+    float sigma;
+    std::int32_t taps;
+    std::int32_t fromSilhouette;
+    std::int32_t invert;
+    std::int32_t padding0[3];
 };
 
 static_assert(offsetof(_StateUniforms, projection) == 16);
@@ -144,18 +157,6 @@ static_assert(offsetof(_ShadowFilterUniforms, texel) == 24);
 static_assert(offsetof(_ShadowFilterUniforms, invert) == 56);
 static_assert(offsetof(_ShadowFilterFieldUniforms, invert) == 32);
 
-enum class _Fragment {
-    ColorBrush,
-    ImageBrush,
-    LinearGradientBrush,
-    RadialGradientBrush,
-    BlurFilter,
-    ShadowFilterDilate,
-    ShadowFilterBlur,
-    ShadowFilterComposite
-};
-
-/** The OpenGL ES 3.0 entry points the painter uses, loaded through SDL once the context exists. */
 struct _GL {
     PFNGLACTIVETEXTUREPROC ActiveTexture = nullptr;
     PFNGLATTACHSHADERPROC AttachShader = nullptr;
@@ -208,7 +209,6 @@ struct _GL {
     PFNGLVIEWPORTPROC Viewport = nullptr;
 };
 
-/** The one GL context every painter, image and window shares, owned by a hidden window of its own. */
 struct _Context {
     SDL_Window* window = nullptr;
     SDL_GLContext context = nullptr;
@@ -224,7 +224,6 @@ struct _Texture {
     std::uint32_t height = 0;
 };
 
-/** What a recorded command draws into: an image's texture, or a window's own framebuffer. */
 struct _Target {
     _Texture* texture = nullptr;
     SDL_WindowID window = 0;
@@ -234,7 +233,6 @@ struct _Target {
     bool operator==(_Target const&) const = default;
 };
 
-/** A run of the uniform data recorded for a pass, bound to a block when its draw is replayed. */
 struct _UniformRange {
     std::size_t offset = 0;
     std::size_t size = 0;
@@ -269,17 +267,12 @@ struct _FilterTextures {
     > textures;
 };
 
-/* GL runs a draw as soon as it is issued, but a pass must leave its target
-   untouched until the outermost endPaint(), and not at all when the painter is
-   destroyed first. So a painter records its passes as commands, with their
-   uniforms, and replays them at the outermost endPaint(); dropping them
-   abandons the passes. */
 struct Painter::_Painter {
     std::stack<std::optional<_Target>> passStack;
     std::vector<_Command> commands;
     std::vector<std::uint8_t> uniforms;
-    std::vector<SDL_WindowID> windows; // the windows painted in the recorded passes, presented after the replay
-    std::map<std::uint64_t, _FilterTextures> filterTextures; // keyed by (width << 32) | height
+    std::vector<SDL_WindowID> windows;
+    std::map<std::uint64_t, _FilterTextures> filterTextures;
     std::uint64_t filterTexturesUse = 0;
     _FilterTextures& getFilterTextures(std::uint32_t width, std::uint32_t height);
     void evictFilterTextures();
@@ -289,16 +282,14 @@ struct Painter::_Painter {
     void drop();
 };
 
-static auto constexpr _BLUR_TAP_MAX = 64;
-static auto constexpr _FILTER_TEXTURE_CACHE_MAX = 8;
-static auto constexpr _STATE_UNIFORMS_BINDING = 0;
-static auto constexpr _SHAPE_UNIFORMS_BINDING = 1;
-static auto constexpr _BRUSH_UNIFORMS_BINDING = 2;
+static auto constexpr _blurTapMax = 64;
+static auto constexpr _filterTextureCacheMax = 8;
+static auto constexpr _stateUniformsBinding = 0;
+static auto constexpr _shapeUniformsBinding = 1;
+static auto constexpr _brushUniformsBinding = 2;
 
 static auto _gl = _GL{};
 
-/* how many painters hold recorded passes, and the textures released while any
-   does: those are deleted once the last recording has run or been dropped */
 static auto _recordingPainters = 0;
 static auto _releasedTextures = std::vector<_Texture*>();
 
@@ -373,9 +364,6 @@ static void _SetBlend(Blend blend) {
     }
 }
 
-/* The scissor in GL's window coordinates: an image target's rows run top down,
-   as its pixels are uploaded, but a window's framebuffer has its first row at
-   the bottom. */
 static std::array<GLint, 4> _GetScissor(_Target const& target, std::optional<Vec4> const& scissor) {
     PROFILE
 
@@ -398,6 +386,8 @@ static std::array<GLint, 4> _GetScissor(_Target const& target, std::optional<Vec
         };
     }
 
+    /* An image target's rows run top down, as its pixels are uploaded, but a
+       window's framebuffer has its first row at the bottom. */
     if (target.texture == nullptr) {
         rect[1] = (passHeight - (rect[1] + rect[3]));
     }
@@ -405,9 +395,6 @@ static std::array<GLint, 4> _GetScissor(_Target const& target, std::optional<Vec
     return rect;
 }
 
-/* A kernel samples one texel per tap out to its extent, capped at
-   _BLUR_TAP_MAX: the power of two a filter's passes are downscaled by to bring
-   its widest kernel under the cap */
 static float _FilterDownsample(Filter const& filter) {
     PROFILE
 
@@ -428,8 +415,11 @@ static float _FilterDownsample(Filter const& filter) {
         });
     }
 
+    /* A kernel samples one texel per tap out to its extent, capped at
+       _blurTapMax: the passes are downscaled by a power of two to bring the
+       widest kernel under the cap. */
     while (
-        (kernelExtent / downsample) > static_cast<float>(_BLUR_TAP_MAX)
+        (kernelExtent / downsample) > static_cast<float>(_blurTapMax)
     ) {
         downsample *= 2.0f;
     }
@@ -437,9 +427,6 @@ static float _FilterDownsample(Filter const& filter) {
     return downsample;
 }
 
-/* device-space rect a filtered draw can touch: the transformed shape bounds
-   grown by what the kernels reach, snapped outward to whole target pixels and
-   clipped to the target; nullopt when none of it lands on the target */
 static std::optional<Vec4> _FilterBounds(Vec4 const& bounds, Mat3 const& transform, Vec2 const& margin, Vec2 const& target) {
     PROFILE
 
@@ -538,17 +525,14 @@ static void _LoadFunctions() {
     _LoadFunction(_gl.Viewport, "glViewport");
 }
 
-/* The attributes are set before any window exists: SDL picks a window's GL
-   configuration when it creates the window. The context is owned by a hidden
-   window of its own, so it outlives every window it draws into; at 640x480
-   rather than smaller, because KMSDRM picks its display mode from the size of
-   the first window. */
 static _Context& _GetContext() {
     PROFILE
 
     static auto _context = [] {
         App::__InitVideo();
 
+        /* The attributes are set before any window exists: SDL picks a window's
+           GL configuration when it creates the window. */
         ::SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
         ::SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
         ::SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
@@ -558,10 +542,13 @@ static _Context& _GetContext() {
 
         auto context = _Context{};
 
+        /* The context is owned by a hidden window of its own, so it outlives
+           every window it draws into; at 640x480 rather than smaller, because
+           KMSDRM picks its display mode from the size of the first window. */
         context.window = ::SDL_CreateWindow("", 640, 480, (SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL | SDL_WINDOW_NOT_FOCUSABLE));
 
         if (context.window == nullptr) {
-            throw std::runtime_error(::SDL_GetError());
+            throw std::runtime_error(std::string("Failed to create the window of the GL context: ") + ::SDL_GetError());
         }
 
         context.context = ::SDL_GL_CreateContext(context.window);
@@ -569,7 +556,7 @@ static _Context& _GetContext() {
         if (context.context == nullptr) {
             auto const error = std::string(::SDL_GetError());
             ::SDL_DestroyWindow(context.window);
-            throw std::runtime_error(error);
+            throw std::runtime_error("Failed to create the GL context: " + error);
         }
 
         _LoadFunctions();
@@ -592,16 +579,16 @@ static _Context& _GetContext() {
     return _context;
 }
 
-/* Destroying a window leaves no context current when it was drawn into last,
-   and nothing else may have made another current: every entry point checks. */
 static _Context& _MakeCurrent() {
     PROFILE
 
     auto& context = _GetContext();
 
+    /* Destroying a window leaves no context current when it was drawn into
+       last, and nothing else may have made another current. */
     if (::SDL_GL_GetCurrentContext() != context.context) {
         if (::SDL_GL_MakeCurrent(context.window, context.context) == false) {
-            throw std::runtime_error(::SDL_GetError());
+            throw std::runtime_error(std::string("Failed to make the GL context current: ") + ::SDL_GetError());
         }
     }
 
@@ -638,12 +625,6 @@ static void _DeleteTexture(_Texture* texture) {
     delete texture;
 }
 
-static void _BeginRecording() {
-    PROFILE
-
-    _recordingPainters++;
-}
-
 static void _EndRecording() {
     PROFILE
 
@@ -662,12 +643,12 @@ static void _EndRecording() {
 static GLuint _CompileShader(GLenum stage, unsigned char const* code, unsigned int size) {
     PROFILE
 
-    static auto constexpr _HEADER = "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\n";
+    static auto constexpr _header = "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\n";
 
     auto const prefix = (stage == GL_VERTEX_SHADER) ? "#define QUAD_VERTEX\n" : "";
 
     char const* const strings[] = {
-        _HEADER,
+        _header,
         prefix,
         reinterpret_cast<char const*>(Rocket_GLES_Painter),
         reinterpret_cast<char const*>(code)
@@ -730,19 +711,20 @@ static GLuint _CreateProgram(unsigned char const* code, unsigned int size) {
 
     /* GLSL ES 3.00 has no binding layouts: blocks and the sampler are bound by
        name, every brush and filter block at the brush binding. */
-    static auto constexpr _BLOCKS = std::array<std::tuple<char const*, GLuint>, 8>{{
-        { "StateUniforms",             _STATE_UNIFORMS_BINDING },
-        { "ShapeUniforms",             _SHAPE_UNIFORMS_BINDING },
-        { "ColorBrushUniforms",        _BRUSH_UNIFORMS_BINDING },
-        { "ImageBrushUniforms",        _BRUSH_UNIFORMS_BINDING },
-        { "GradientBrushUniforms",     _BRUSH_UNIFORMS_BINDING },
-        { "BlurFilterUniforms",        _BRUSH_UNIFORMS_BINDING },
-        { "ShadowFilterFieldUniforms", _BRUSH_UNIFORMS_BINDING },
-        { "ShadowFilterUniforms",      _BRUSH_UNIFORMS_BINDING }
+    static auto constexpr _blocks = std::array<std::tuple<char const*, GLuint>, 8>{{
+        { "StateUniforms",             _stateUniformsBinding },
+        { "ShapeUniforms",             _shapeUniformsBinding },
+        { "ColorBrushUniforms",        _brushUniformsBinding },
+        { "ImageBrushUniforms",        _brushUniformsBinding },
+        { "GradientBrushUniforms",     _brushUniformsBinding },
+        { "BlurFilterUniforms",        _brushUniformsBinding },
+        { "ShadowFilterFieldUniforms", _brushUniformsBinding },
+        { "ShadowFilterUniforms",      _brushUniformsBinding }
     }};
 
-    for (auto const& [ name, binding ] : _BLOCKS) {
+    for (auto const& [ name, binding ] : _blocks) {
         auto const index = _gl.GetUniformBlockIndex(program, name);
+
         if (index != GL_INVALID_INDEX) {
             _gl.UniformBlockBinding(program, index, binding);
         }
@@ -764,6 +746,7 @@ static GLuint _GetProgram(_Fragment fragment) {
     static auto _programs = std::map<_Fragment, GLuint>();
 
     auto it = _programs.find(fragment);
+
     if (it != _programs.end()) {
         return it->second;
     }
@@ -834,7 +817,7 @@ static GLuint _GetNerLinSampler() {
 }
 
 static int _GetGaussianTaps(float extent) {
-    return std::clamp(static_cast<int>(std::ceil(extent)), 0, _BLUR_TAP_MAX);
+    return std::clamp(static_cast<int>(std::ceil(extent)), 0, _blurTapMax);
 }
 
 static void _CopyColumn(float* column, float x, float y, float z) {
@@ -844,8 +827,6 @@ static void _CopyColumn(float* column, float x, float y, float z) {
     column[3] = 0.0f;
 }
 
-/* Pixel rows run top down on both kinds of target, but an image's first row
-   is GL's bottom one, so only a window's projection flips Y. */
 static _StateUniforms _MakeStateUniforms(_Target const& target, Mat3 const& transform, float opacity) {
     PROFILE
 
@@ -853,6 +834,8 @@ static _StateUniforms _MakeStateUniforms(_Target const& target, Mat3 const& tran
         static_cast<float>(target.width),
         static_cast<float>(target.height)
     };
+    /* Pixel rows run top down on both kinds of target, but an image's first
+       row is GL's bottom one, so only a window's projection flips Y. */
     auto const flip = (target.texture == nullptr) ? -1.0f : 1.0f;
 
     auto stateUniforms = _StateUniforms{};
@@ -873,31 +856,31 @@ static _ShapeUniforms _MakeShapeUniforms(Shape const& shape, Vec2 const& expand)
     PROFILE
 
     auto rect    = Vec4{};
-    auto borders = Vec4{}; // per-edge outline widths (left, top, right, bottom)
-    auto corners = Vec4{}; // per-corner radii (top-left, top-right, bottom-right, bottom-left)
-    auto type    = 0;      // 0=quad, 1=ellipse, 2=quad outline, 3=ellipse outline
+    auto borders = Vec4{};
+    auto corners = Vec4{};
+    auto type    = _ShapeType::Quad;
 
     shape.match(
         [&](QuadShape const& quadShape) {
             rect    = quadShape.rect;
             corners = _ResolveRadius(quadShape);
-            type    = 0;
+            type    = _ShapeType::Quad;
         },
         [&](EllipseShape const& ellipseShape) {
             rect = ellipseShape.rect;
-            type = 1;
+            type = _ShapeType::Ellipse;
         },
         [&](QuadOutlineShape const& quadOutlineShape) {
             rect    = quadOutlineShape.rect;
             borders = _ResolveBorders(quadOutlineShape);
             corners = _ResolveRadius(quadOutlineShape);
-            type    = 2;
+            type    = _ShapeType::QuadOutline;
         },
         [&](EllipseOutlineShape const& ellipseOutlineShape) {
             auto const width = ellipseOutlineShape.border.value_or(0.0f);
             rect    = ellipseOutlineShape.rect;
             borders = Vec4{ width, width, width, width };
-            type    = 3;
+            type    = _ShapeType::EllipseOutline;
         }
     );
 
@@ -908,11 +891,11 @@ static _ShapeUniforms _MakeShapeUniforms(Shape const& shape, Vec2 const& expand)
             { (rect.getMaxX() + expand.x), (rect.y - expand.y),         0.0f, 0.0f },
             { (rect.getMaxX() + expand.x), (rect.getMaxY() + expand.y), 0.0f, 0.0f }
         },
-        .bounds  = { rect.x, rect.y, rect.width, rect.height }, // unexpanded: localPos and localUV stay in shape space
-        .borders = { borders.left, borders.top, borders.right, borders.bottom },
-        .corners = { corners.data[0], corners.data[1], corners.data[2], corners.data[3] },
-        .type    = type,
-        ._pad0   = {}
+        .bounds   = { rect.x, rect.y, rect.width, rect.height }, // unexpanded: localPos and localUV stay in shape space
+        .borders  = { borders.left, borders.top, borders.right, borders.bottom },
+        .corners  = { corners.data[0], corners.data[1], corners.data[2], corners.data[3] },
+        .type     = type,
+        .padding0 = {}
     };
 }
 
@@ -929,7 +912,6 @@ static _ImageBrushUniforms _MakeImageBrushUniforms(ImageBrush const& imageBrush,
 
     assert(imageBrush.image != nullptr);
 
-    auto const imageSize = imageBrush.image->getSize();
     auto const imageColor = imageBrush.color.value_or(Vec4{});
     auto const imageNPatch = imageBrush.nPatch.value_or(Vec4{});
     auto const positionX = imageBrush.positionX.value_or(ImagePosition::Stretch);
@@ -941,8 +923,8 @@ static _ImageBrushUniforms _MakeImageBrushUniforms(ImageBrush const& imageBrush,
     auto const flipX = imageBrush.flipX.value_or(false);
     auto const flipY = imageBrush.flipY.value_or(false);
 
-    auto imageSrc = Vec4{ {}, imageSize };
-    auto imageDst = Vec4{ {}, imageSize };
+    auto imageSrc = Vec4{ {}, imageBrush.image->getSize() };
+    auto imageDst = Vec4{ {}, imageBrush.image->getSize() };
 
     if (imageBrush.slice.has_value()) {
         imageSrc = imageBrush.slice.value();
@@ -983,14 +965,14 @@ static _ImageBrushUniforms _MakeImageBrushUniforms(ImageBrush const& imageBrush,
     imageDst.y += ((repeatY && (imageDst.height > 0.0f)) ? std::fmod(offsetY, imageDst.height) : offsetY);
 
     return _ImageBrushUniforms{
-        .color  = { imageColor.red, imageColor.green, imageColor.blue, imageColor.alpha },
-        .size   = { imageSize.width, imageSize.height },
-        .flip   = { (flipX ? 1.0f : 0.0f), (flipY ? 1.0f : 0.0f) },
-        .repeat = { (repeatX ? 1.0f : 0.0f), (repeatY ? 1.0f : 0.0f) },
-        ._pad0  = {},
-        .npatch = { imageNPatch.left, imageNPatch.top, imageNPatch.right, imageNPatch.bottom },
-        .source = { imageSrc.x, imageSrc.y, imageSrc.getMaxX(), imageSrc.getMaxY() },
-        .destin = { imageDst.x, imageDst.y, imageDst.getMaxX(), imageDst.getMaxY() }
+        .color    = { imageColor.red, imageColor.green, imageColor.blue, imageColor.alpha },
+        .size     = { imageBrush.image->getSize().width, imageBrush.image->getSize().height },
+        .flip     = { (flipX ? 1.0f : 0.0f), (flipY ? 1.0f : 0.0f) },
+        .repeat   = { (repeatX ? 1.0f : 0.0f), (repeatY ? 1.0f : 0.0f) },
+        .padding0 = {},
+        .npatch   = { imageNPatch.left, imageNPatch.top, imageNPatch.right, imageNPatch.bottom },
+        .source   = { imageSrc.x, imageSrc.y, imageSrc.getMaxX(), imageSrc.getMaxY() },
+        .destin   = { imageDst.x, imageDst.y, imageDst.getMaxX(), imageDst.getMaxY() }
     };
 }
 
@@ -1000,15 +982,12 @@ static GLuint _GetImageSampler(ImageBrush const& imageBrush) {
     auto const filterMin = imageBrush.filterMin.value_or(ImageFilter::Nearest);
     auto const filterMag = imageBrush.filterMag.value_or(ImageFilter::Nearest);
 
-    if (filterMin == ImageFilter::Linear && filterMag == ImageFilter::Linear) {
-        return _GetLinLinSampler();
-    } else if (filterMin == ImageFilter::Linear && filterMag == ImageFilter::Nearest) {
-        return _GetLinNerSampler();
-    } else if (filterMin == ImageFilter::Nearest && filterMag == ImageFilter::Linear) {
-        return _GetNerLinSampler();
-    }
-
-    return _GetNerNerSampler();
+    return (
+        filterMin == ImageFilter::Linear && filterMag == ImageFilter::Linear ? _GetLinLinSampler() :
+        filterMin == ImageFilter::Linear && filterMag == ImageFilter::Nearest ? _GetLinNerSampler() :
+        filterMin == ImageFilter::Nearest && filterMag == ImageFilter::Linear ? _GetNerLinSampler() :
+                                                                                _GetNerNerSampler()
+    );
 }
 
 static _GradientBrushUniforms _MakeGradientBrushUniforms(GradientBrush const& gradientBrush) {
@@ -1062,7 +1041,7 @@ static _BlurFilterUniforms _MakeBlurFilterUniforms(Vec2 const& texelSize, Vec2 c
         .direction = { direction.x, direction.y },
         .sigma     = (filter.getSigma() * axisScale),
         .taps      = _GetGaussianTaps(filter.getExtent() * axisScale),
-        ._pad0     = {}
+        .padding0  = {}
     };
 }
 
@@ -1074,12 +1053,12 @@ static _ShadowFilterFieldUniforms _MakeShadowFilterFieldUniforms(Vec2 const& tex
     return _ShadowFilterFieldUniforms{
         .texel          = { texel.x, texel.y },
         .direction      = { direction.x, direction.y },
-        .spread         = std::clamp((spread * axisScale), -static_cast<float>(_BLUR_TAP_MAX), static_cast<float>(_BLUR_TAP_MAX)),
+        .spread         = std::clamp((spread * axisScale), -static_cast<float>(_blurTapMax), static_cast<float>(_blurTapMax)),
         .sigma          = (filter.getSigma() * axisScale),
         .taps           = _GetGaussianTaps(filter.getExtent() * axisScale),
         .fromSilhouette = (fromSilhouette ? 1 : 0),
         .invert         = ((fromSilhouette && filter.inset) ? 1 : 0),
-        ._pad0          = {}
+        .padding0       = {}
     };
 }
 
@@ -1091,7 +1070,7 @@ static _ShadowFilterUniforms _MakeShadowFilterUniforms(Vec2 const& texel, Shadow
     return _ShadowFilterUniforms{
         .color          = { filter.color.red, filter.color.green, filter.color.blue, filter.color.alpha },
         .opacity        = 1.0f,
-        ._pad0          = 0.0f,
+        .padding0       = 0.0f,
         .texel          = { texel.x, texel.y },
         .offset         = { (offset.x * scale.x), (offset.y * scale.y) },
         .sigma          = (filter.getSigma() * scale.y),
@@ -1099,12 +1078,10 @@ static _ShadowFilterUniforms _MakeShadowFilterUniforms(Vec2 const& texel, Shadow
         .inset          = (filter.inset ? 1 : 0),
         .fromSilhouette = (fromSilhouette ? 1 : 0),
         .invert         = ((fromSilhouette && filter.inset) ? 1 : 0),
-        ._pad1          = 0
+        .padding1       = 0
     };
 }
 
-/* Binds the target a command draws into; false when it is a window that has
-   been destroyed since the command was recorded. */
 static bool _BindTarget(_Context const& context, _Target const& target) {
     PROFILE
 
@@ -1132,9 +1109,9 @@ static void _RunDraw(_Context const& context, _Draw const& draw) {
     _SetBlend(draw.blend);
     _gl.Enable(GL_SCISSOR_TEST);
     _gl.Scissor(draw.scissor[0], draw.scissor[1], draw.scissor[2], draw.scissor[3]);
-    _gl.BindBufferRange(GL_UNIFORM_BUFFER, _STATE_UNIFORMS_BINDING, context.uniformBuffer, static_cast<GLintptr>(draw.state.offset), static_cast<GLsizeiptr>(draw.state.size));
-    _gl.BindBufferRange(GL_UNIFORM_BUFFER, _SHAPE_UNIFORMS_BINDING, context.uniformBuffer, static_cast<GLintptr>(draw.shape.offset), static_cast<GLsizeiptr>(draw.shape.size));
-    _gl.BindBufferRange(GL_UNIFORM_BUFFER, _BRUSH_UNIFORMS_BINDING, context.uniformBuffer, static_cast<GLintptr>(draw.brush.offset), static_cast<GLsizeiptr>(draw.brush.size));
+    _gl.BindBufferRange(GL_UNIFORM_BUFFER, _stateUniformsBinding, context.uniformBuffer, static_cast<GLintptr>(draw.state.offset), static_cast<GLsizeiptr>(draw.state.size));
+    _gl.BindBufferRange(GL_UNIFORM_BUFFER, _shapeUniformsBinding, context.uniformBuffer, static_cast<GLintptr>(draw.shape.offset), static_cast<GLsizeiptr>(draw.shape.size));
+    _gl.BindBufferRange(GL_UNIFORM_BUFFER, _brushUniformsBinding, context.uniformBuffer, static_cast<GLintptr>(draw.brush.offset), static_cast<GLsizeiptr>(draw.brush.size));
 
     if (draw.texture != nullptr) {
         _gl.ActiveTexture(GL_TEXTURE0);
@@ -1153,7 +1130,6 @@ static void _RunClear(_Clear const& clear) {
     _gl.Clear(GL_COLOR_BUFFER_BIT);
 }
 
-/* A window is presented with vsync, set on its own surface the first time it is drawn into. */
 static void _Present(SDL_Window* window) {
     PROFILE
 
@@ -1167,6 +1143,112 @@ static void _Present(SDL_Window* window) {
     }
 
     ::SDL_GL_SwapWindow(window);
+}
+
+_FilterTextures& Painter::_Painter::getFilterTextures(std::uint32_t width, std::uint32_t height) {
+    PROFILE
+
+    assert(width > 0);
+    assert(height > 0);
+
+    auto const key = ((static_cast<std::uint64_t>(width) << 32) | static_cast<std::uint64_t>(height));
+
+    auto it = filterTextures.find(key);
+
+    if (it == filterTextures.end()) {
+        auto first = static_cast<_Texture*>(__CreateTexture(width, height));
+        auto second = static_cast<_Texture*>(__CreateTexture(width, height));
+
+        it = filterTextures.emplace(key, _FilterTextures{
+            0, width, height, { first, second },
+        }).first;
+    }
+
+    it->second.lastUse = ++filterTexturesUse;
+
+    return it->second;
+}
+
+void Painter::_Painter::evictFilterTextures() {
+    PROFILE
+
+    while (filterTextures.size() > static_cast<std::size_t>(_filterTextureCacheMax)) {
+        auto evict = filterTextures.end();
+        for (auto entry = filterTextures.begin(); entry != filterTextures.end(); ++entry) {
+            if ((evict == filterTextures.end()) || (entry->second.lastUse < evict->second.lastUse)) {
+                evict = entry;
+            }
+        }
+
+        __ReleaseTexture(std::get<0>(evict->second.textures));
+        __ReleaseTexture(std::get<1>(evict->second.textures));
+
+        filterTextures.erase(evict);
+    }
+}
+
+template <typename Uniforms>
+_UniformRange Painter::_Painter::pushUniforms(Uniforms const& data) {
+    PROFILE
+
+    auto const alignment = _GetContext().uniformAlignment;
+    auto const offset = (((uniforms.size() + alignment - 1) / alignment) * alignment);
+
+    uniforms.resize(offset + sizeof(Uniforms));
+    std::memcpy(uniforms.data() + offset, &data, sizeof(Uniforms));
+
+    return _UniformRange{ offset, sizeof(Uniforms) };
+}
+
+void Painter::_Painter::replay() {
+    PROFILE
+
+    auto& context = _MakeCurrent();
+
+    if (commands.empty() == false) {
+        _gl.BindBuffer(GL_UNIFORM_BUFFER, context.uniformBuffer);
+        _gl.BufferData(GL_UNIFORM_BUFFER, static_cast<GLsizeiptr>(uniforms.size()), uniforms.data(), GL_STREAM_DRAW);
+
+        auto bound = std::optional<_Target>();
+        auto skipped = false;
+
+        for (auto const& command : commands) {
+            auto const& target = std::visit([](auto const& value) -> _Target const& { return value.target; }, command);
+
+            if (bound != target) {
+                bound = target;
+                skipped = (_BindTarget(context, target) == false);
+            }
+
+            if (skipped) {
+                continue;
+            }
+
+            if (auto const draw = std::get_if<_Draw>(&command)) {
+                _RunDraw(context, *draw);
+            } else if (auto const clear = std::get_if<_Clear>(&command)) {
+                _RunClear(*clear);
+            }
+        }
+    }
+
+    for (auto const id : windows) {
+        auto window = ::SDL_GetWindowFromID(id);
+
+        if ((window != nullptr) && ::SDL_GL_MakeCurrent(window, context.context)) {
+            _Present(window);
+        }
+    }
+
+    drop();
+}
+
+void Painter::_Painter::drop() {
+    PROFILE
+
+    commands.clear();
+    uniforms.clear();
+    windows.clear();
 }
 
 void* __GetDefaultGPUDevice() {
@@ -1244,19 +1326,6 @@ void __ReleaseTexture(void* texture) {
     }
 }
 
-void __UploadTexture(void* texture, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, std::uint8_t const* pixels) {
-    PROFILE
-
-    if ((width == 0) || (height == 0)) {
-        return;
-    }
-
-    _MakeCurrent();
-
-    _gl.BindTexture(GL_TEXTURE_2D, static_cast<_Texture*>(texture)->texture);
-    _gl.TexSubImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(x), static_cast<GLint>(y), static_cast<GLsizei>(width), static_cast<GLsizei>(height), GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-}
-
 void __DownloadTexture(void* texture, std::vector<std::uint8_t>& pixels) {
     PROFILE
 
@@ -1268,6 +1337,19 @@ void __DownloadTexture(void* texture, std::vector<std::uint8_t>& pixels) {
 
     _gl.BindFramebuffer(GL_FRAMEBUFFER, _GetFramebuffer(source));
     _gl.ReadPixels(0, 0, static_cast<GLsizei>(source.width), static_cast<GLsizei>(source.height), GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+}
+
+void __UploadTexture(void* texture, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, std::uint8_t const* pixels) {
+    PROFILE
+
+    if ((width == 0) || (height == 0)) {
+        return;
+    }
+
+    _MakeCurrent();
+
+    _gl.BindTexture(GL_TEXTURE_2D, static_cast<_Texture*>(texture)->texture);
+    _gl.TexSubImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(x), static_cast<GLint>(y), static_cast<GLsizei>(width), static_cast<GLsizei>(height), GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 }
 
 void __CopyTexture(void* source, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, void* destination, std::uint32_t toX, std::uint32_t toY) {
@@ -1290,110 +1372,6 @@ void __CopyTexture(void* source, std::uint32_t x, std::uint32_t y, std::uint32_t
         static_cast<GLint>(toX), static_cast<GLint>(toY), static_cast<GLint>(toX + width), static_cast<GLint>(toY + height),
         GL_COLOR_BUFFER_BIT, GL_NEAREST
     );
-}
-
-_FilterTextures& Painter::_Painter::getFilterTextures(std::uint32_t width, std::uint32_t height) {
-    PROFILE
-
-    assert(width > 0);
-    assert(height > 0);
-
-    auto const key = ((static_cast<std::uint64_t>(width) << 32) | static_cast<std::uint64_t>(height));
-
-    auto it = filterTextures.find(key);
-    if (it == filterTextures.end()) {
-        auto first = static_cast<_Texture*>(__CreateTexture(width, height));
-        auto second = static_cast<_Texture*>(__CreateTexture(width, height));
-
-        it = filterTextures.emplace(key, _FilterTextures{
-            0, width, height, { first, second },
-        }).first;
-    }
-
-    it->second.lastUse = ++filterTexturesUse;
-
-    return it->second;
-}
-
-void Painter::_Painter::evictFilterTextures() {
-    PROFILE
-
-    while (filterTextures.size() > static_cast<std::size_t>(_FILTER_TEXTURE_CACHE_MAX)) {
-        auto evict = filterTextures.end();
-        for (auto entry = filterTextures.begin(); entry != filterTextures.end(); ++entry) {
-            if ((evict == filterTextures.end()) || (entry->second.lastUse < evict->second.lastUse)) {
-                evict = entry;
-            }
-        }
-
-        __ReleaseTexture(std::get<0>(evict->second.textures));
-        __ReleaseTexture(std::get<1>(evict->second.textures));
-
-        filterTextures.erase(evict);
-    }
-}
-
-template <typename Uniforms>
-_UniformRange Painter::_Painter::pushUniforms(Uniforms const& data) {
-    PROFILE
-
-    auto const alignment = _GetContext().uniformAlignment;
-    auto const offset = (((uniforms.size() + alignment - 1) / alignment) * alignment);
-
-    uniforms.resize(offset + sizeof(Uniforms));
-    std::memcpy(uniforms.data() + offset, &data, sizeof(Uniforms));
-
-    return _UniformRange{ offset, sizeof(Uniforms) };
-}
-
-void Painter::_Painter::replay() {
-    PROFILE
-
-    auto& context = _MakeCurrent();
-
-    if (commands.empty() == false) {
-        _gl.BindBuffer(GL_UNIFORM_BUFFER, context.uniformBuffer);
-        _gl.BufferData(GL_UNIFORM_BUFFER, static_cast<GLsizeiptr>(uniforms.size()), uniforms.data(), GL_STREAM_DRAW);
-
-        auto bound = std::optional<_Target>();
-        auto skipped = false;
-
-        for (auto const& command : commands) {
-            auto const& target = std::visit([](auto const& value) -> _Target const& { return value.target; }, command);
-
-            if (bound != target) {
-                bound = target;
-                skipped = (_BindTarget(context, target) == false);
-            }
-
-            if (skipped) {
-                continue;
-            }
-
-            if (auto const draw = std::get_if<_Draw>(&command)) {
-                _RunDraw(context, *draw);
-            } else if (auto const clear = std::get_if<_Clear>(&command)) {
-                _RunClear(*clear);
-            }
-        }
-    }
-
-    for (auto const id : windows) {
-        auto window = ::SDL_GetWindowFromID(id);
-        if ((window != nullptr) && ::SDL_GL_MakeCurrent(window, context.context)) {
-            _Present(window);
-        }
-    }
-
-    drop();
-}
-
-void Painter::_Painter::drop() {
-    PROFILE
-
-    commands.clear();
-    uniforms.clear();
-    windows.clear();
 }
 
 void Painter::__init() {
@@ -1440,7 +1418,7 @@ void Painter::__beginPaint(PaintTarget const& target) {
     PROFILE
 
     if (_impl->passStack.empty()) {
-        _BeginRecording();
+        _recordingPainters++;
     }
 
     auto const premultiply = [](Vec4 const& color) {
@@ -1510,6 +1488,9 @@ void Painter::__endPaint() {
 
     _impl->passStack.pop();
 
+    /* GL runs a draw as soon as it is issued, but a pass must leave its target
+       untouched until the outermost endPaint(), and not at all when the
+       painter is destroyed first: the passes are recorded and replayed here. */
     if (_impl->passStack.empty()) {
         _impl->replay();
         _impl->evictFilterTextures();
@@ -1527,8 +1508,6 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
     if (_impl->passStack.top().has_value() == false) {
         return;
     }
-
-    auto const renderPass = *_impl->passStack.top();
 
     auto const colorBrush = brush.as<ColorBrush>();
     auto const imageBrush = brush.as<ImageBrush>();
@@ -1580,7 +1559,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         blurred == false &&
         shadowFilter == nullptr
     ) {
-        drawShape(renderPass, options.scissor, blend, Vec2{ 1.0f, 1.0f });
+        drawShape(*_impl->passStack.top(), options.scissor, blend, Vec2{ 1.0f, 1.0f });
         return;
     }
 
@@ -1589,11 +1568,11 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
        shape is drawn straight into the small copy through a scaled transform,
        so its coverage is computed at that size rather than resampled. */
     auto const downsample = _FilterDownsample(*options.filter);
-    auto const filterWidth = static_cast<std::uint32_t>(std::ceil(static_cast<float>(renderPass.width) / downsample));
-    auto const filterHeight = static_cast<std::uint32_t>(std::ceil(static_cast<float>(renderPass.height) / downsample));
+    auto const filterWidth = static_cast<std::uint32_t>(std::ceil(static_cast<float>(_impl->passStack.top()->width) / downsample));
+    auto const filterHeight = static_cast<std::uint32_t>(std::ceil(static_cast<float>(_impl->passStack.top()->height) / downsample));
     auto const filterScale = Vec2{
-        (static_cast<float>(filterWidth) / static_cast<float>(renderPass.width)),
-        (static_cast<float>(filterHeight) / static_cast<float>(renderPass.height))
+        (static_cast<float>(filterWidth) / static_cast<float>(_impl->passStack.top()->width)),
+        (static_cast<float>(filterHeight) / static_cast<float>(_impl->passStack.top()->height))
     };
     auto const filterTexel = Vec2{
         (1.0f / static_cast<float>(filterWidth)),
@@ -1646,12 +1625,14 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
            bilinear fetch of the last pass and the shape's antialiased edge. */
         auto const grow = (blurFilter->getExtent() + (3.0f * downsample));
         auto const margin = Vec2{ grow, grow };
-        auto const filterBounds = _FilterBounds(bounds, options.transform.value_or(Mat3{}), margin, Vec2{ static_cast<float>(renderPass.width), static_cast<float>(renderPass.height) });
+        auto const filterBounds = _FilterBounds(bounds, options.transform.value_or(Mat3{}), margin, Vec2{ static_cast<float>(_impl->passStack.top()->width), static_cast<float>(_impl->passStack.top()->height) });
+
         if (filterBounds.has_value() == false) {
             return;
         }
 
         auto const targetScissor = options.scissor.has_value() ? filterBounds->getIntersection(*options.scissor) : *filterBounds;
+
         if (targetScissor.isEmpty()) {
             return;
         }
@@ -1662,21 +1643,22 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
 
         drawShape(scratch(shapeTexture), std::nullopt, Blend::Over, filterScale);
         drawBlur(scratch(blurTexture), shapeTexture, Vec2{ 1.0f, 0.0f }, scratchRect, scratchRect, Blend::Over);
-        drawBlur(renderPass, blurTexture, Vec2{ 0.0f, 1.0f }, *filterBounds, targetScissor, blend);
+        drawBlur(*_impl->passStack.top(), blurTexture, Vec2{ 0.0f, 1.0f }, *filterBounds, targetScissor, blend);
     } else {
-        /* As for the blur, grown by the spread and the offset as well. */
-        auto const shadowSpread = shadowFilter->spread.value_or(Vec2{});
+        auto const spread = shadowFilter->spread.value_or(Vec2{});
         auto const shadowOffset = shadowFilter->offset.value_or(Vec2{});
         auto const margin = Vec2{
-            (shadowFilter->getExtent() + std::abs(shadowSpread.x) + std::abs(shadowOffset.x) + (3.0f * downsample)),
-            (shadowFilter->getExtent() + std::abs(shadowSpread.y) + std::abs(shadowOffset.y) + (3.0f * downsample))
+            (shadowFilter->getExtent() + std::abs(spread.x) + std::abs(shadowOffset.x) + (3.0f * downsample)),
+            (shadowFilter->getExtent() + std::abs(spread.y) + std::abs(shadowOffset.y) + (3.0f * downsample))
         };
-        auto const filterBounds = _FilterBounds(bounds, options.transform.value_or(Mat3{}), margin, Vec2{ static_cast<float>(renderPass.width), static_cast<float>(renderPass.height) });
+        auto const filterBounds = _FilterBounds(bounds, options.transform.value_or(Mat3{}), margin, Vec2{ static_cast<float>(_impl->passStack.top()->width), static_cast<float>(_impl->passStack.top()->height) });
+
         if (filterBounds.has_value() == false) {
             return;
         }
 
         auto const targetScissor = options.scissor.has_value() ? filterBounds->getIntersection(*options.scissor) : *filterBounds;
+
         if (targetScissor.isEmpty()) {
             return;
         }
@@ -1684,7 +1666,6 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         auto const scratchRect = _ToFilterSpace(*filterBounds, filterScale);
 
         auto [ source, target ] = _impl->getFilterTextures(filterWidth, filterHeight).textures;
-        auto const spread = shadowFilter->spread.value_or(Vec2{});
         auto fromSilhouette = true;
 
         drawShape(scratch(source), std::nullopt, Blend::Over, filterScale);
@@ -1705,7 +1686,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
             fieldPass(_Fragment::ShadowFilterBlur, Vec2{ 1.0f, 0.0f }, 0.0f);
         }
 
-        drawShadowComposite(renderPass, source, fromSilhouette, *filterBounds, targetScissor, blend);
+        drawShadowComposite(*_impl->passStack.top(), source, fromSilhouette, *filterBounds, targetScissor, blend);
     }
 }
 

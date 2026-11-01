@@ -22,8 +22,18 @@ struct BlurFilter {
     float getSigma() const;
     /** Distance in pixels the blur reaches from a pixel (the kernel's 3-sigma tail). */
     float getExtent() const;
-    bool operator==(BlurFilter const&) const;
-    bool operator!=(BlurFilter const&) const;
+    /**
+     * Returns true when every field equals the other filter's.
+     *
+     * @param filter The filter to compare with.
+     */
+    bool operator==(BlurFilter const& filter) const;
+    /**
+     * Returns true when any field differs from the other filter's.
+     *
+     * @param filter The filter to compare with.
+     */
+    bool operator!=(BlurFilter const& filter) const;
 };
 
 /** A post-processing filter that renders a blurred, tinted shadow of the painted shape's silhouette (drop or inset) instead of the shape itself. */
@@ -42,8 +52,18 @@ struct ShadowFilter {
     float getSigma() const;
     /** Distance in pixels the blurred shadow reaches beyond the (spread) silhouette (the kernel's 3-sigma tail). */
     float getExtent() const;
-    bool operator==(ShadowFilter const&) const;
-    bool operator!=(ShadowFilter const&) const;
+    /**
+     * Returns true when every field equals the other filter's.
+     *
+     * @param filter The filter to compare with.
+     */
+    bool operator==(ShadowFilter const& filter) const;
+    /**
+     * Returns true when any field differs from the other filter's.
+     *
+     * @param filter The filter to compare with.
+     */
+    bool operator!=(ShadowFilter const& filter) const;
 };
 
 /** A post-processing filter applied to a painted shape. */

@@ -23,7 +23,7 @@ bool Shadow::operator==(Shadow const& shadow) const {
 bool Shadow::operator!=(Shadow const& shadow) const {
     PROFILE
 
-    return !operator==(shadow);
+    return (operator==(shadow) == false);
 }
 
 } /* namespace Rocket */

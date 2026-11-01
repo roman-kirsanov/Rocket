@@ -14,9 +14,9 @@
 #import <CoreGraphics/CoreGraphics.h>
 #import <ImageIO/ImageIO.h>
 #include <Rocket/Base/Profile.hpp>
-#include <Rocket/Paint/Image.hpp>
 #include <Rocket/Paint/Painter.hpp>
 #include <Rocket/Paint/Painter_Private.hpp>
+#include <Rocket/Paint/Image.hpp>
 
 namespace Rocket {
 
@@ -50,11 +50,21 @@ static id<MTLTexture> _CreateTexture(std::uint32_t width, std::uint32_t height) 
     descriptor.usage = (MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget);
     descriptor.storageMode = MTLStorageModePrivate;
 
-    return [_Device() newTextureWithDescriptor: descriptor];
+    auto texture = [_Device() newTextureWithDescriptor: descriptor];
+
+    if (texture == nil) {
+        throw std::runtime_error("Failed to create a GPU texture");
+    }
+
+    return texture;
 }
 
 static void _UploadPixels(id<MTLTexture> texture, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, std::uint8_t const* pixels) {
     PROFILE
+
+    if ((width == 0) || (height == 0)) {
+        return;
+    }
 
     auto const dataSize = (NSUInteger)(width * height * 4);
     auto staging = [_Device() newBufferWithBytes: pixels length: dataSize options: MTLResourceStorageModeShared];
@@ -207,6 +217,13 @@ void Image::__getData(std::vector<std::uint8_t>& data) const {
 void Image::__copyFrom(Image const& image, Vec4 const& slice, Vec2 const& position) {
     PROFILE
 
+    auto const width = (std::uint32_t)slice.width;
+    auto const height = (std::uint32_t)slice.height;
+
+    if ((width == 0) || (height == 0)) {
+        return;
+    }
+
     auto commandBuffer = [_Queue() commandBuffer];
     auto blit = [commandBuffer blitCommandEncoder];
 
@@ -214,7 +231,7 @@ void Image::__copyFrom(Image const& image, Vec4 const& slice, Vec2 const& positi
               sourceSlice: 0
               sourceLevel: 0
              sourceOrigin: MTLOriginMake((NSUInteger)slice.x, (NSUInteger)slice.y, 0)
-               sourceSize: MTLSizeMake((NSUInteger)slice.width, (NSUInteger)slice.height, 1)
+               sourceSize: MTLSizeMake(width, height, 1)
                 toTexture: _impl->texture
          destinationSlice: 0
          destinationLevel: 0

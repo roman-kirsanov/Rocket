@@ -8,67 +8,103 @@
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 
-#include <map>
+#include <algorithm>
 #include <array>
-#include <cmath>
-#include <stack>
-#include <string>
-#include <tuple>
 #include <cassert>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <optional>
-#include <algorithm>
-#include <stdexcept>
+#include <format>
 #include <functional>
+#include <initializer_list>
+#include <map>
+#include <optional>
+#include <stack>
+#include <stdexcept>
+#include <string>
+#include <tuple>
+#include <utility>
+#include <vector>
 #include <windows.h>
 #include <wrl/client.h>
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <Rocket/Base/Profile.hpp>
-#include <Rocket/Paint/Painter.hpp>
 #include <Rocket/Paint/Image.hpp>
+#include <Rocket/Paint/Painter.hpp>
 #include <Rocket/Paint/Painter_Private.hpp>
-#include <Rocket/Paint/Painter_Win32.hpp>
 #include <Rocket/Window/App_Win32.hpp>
 #include <Rocket/Window/Window.hpp>
-#include "QuadVertex.dxil.hpp"
+#include "BlurFilter.dxil.hpp"
 #include "ColorBrush.dxil.hpp"
 #include "ImageBrush.dxil.hpp"
 #include "LinearGradientBrush.dxil.hpp"
+#include "QuadVertex.dxil.hpp"
 #include "RadialGradientBrush.dxil.hpp"
-#include "BlurFilter.dxil.hpp"
-#include "ShadowFilterDilate.dxil.hpp"
 #include "ShadowFilterBlur.dxil.hpp"
 #include "ShadowFilterComposite.dxil.hpp"
+#include "ShadowFilterDilate.dxil.hpp"
+#include <Rocket/Paint/Painter_Win32.hpp>
 
 using Microsoft::WRL::ComPtr;
 
 namespace Rocket {
 
-/* The constant buffers of HLSL/Painter.hlsli, laid out as the uniform blocks
-   of the other backends (std140): vec2 aligns to 8 bytes, vec4, mat3 columns
-   and array elements to 16, so the padding is spelled out and the offsets are
-   checked below. The HLSL structs spell out the same padding. */
+enum class _Fragment {
+    ColorBrush,
+    ImageBrush,
+    LinearGradientBrush,
+    RadialGradientBrush,
+    BlurFilter,
+    ShadowFilterDilate,
+    ShadowFilterBlur,
+    ShadowFilterComposite
+};
+
+enum class _ShapeType : std::int32_t {
+    Quad,
+    Ellipse,
+    QuadOutline,
+    EllipseOutline
+};
+
+enum _RootParameter : UINT {
+    _StateVertexParameter = 0,
+    _ShapeVertexParameter,
+    _StatePixelParameter,
+    _BrushPixelParameter,
+    _ShapePixelParameter,
+    _TexturePixelParameter,
+    _SamplerPixelParameter,
+    _RootParameterCount
+};
+
+enum _Sampler : UINT {
+    _NerNerSampler = 0,
+    _LinLinSampler,
+    _LinNerSampler,
+    _NerLinSampler,
+    _SamplerCount
+};
 
 struct _StateUniforms {
     float resolution[2];
-    float _pad0[2];
-    float projection[12]; // three columns, each padded to four floats
-    float transform[12];  // three columns, each padded to four floats
+    float padding0[2];
+    float projection[12];
+    float transform[12];
     float opacity;
-    float _pad1[3];
+    float padding1[3];
 };
 
 struct _ShapeUniforms {
-    float vertices[4][4]; // .xy used; vec4 for the std140 array stride
+    float vertices[4][4];
     float bounds[4];
-    float borders[4]; // per-edge outline widths (left, top, right, bottom)
-    float corners[4]; // per-corner radii (top-left, top-right, bottom-right, bottom-left)
-    std::int32_t type; // 0=quad, 1=ellipse, 2=quad outline, 3=ellipse outline
-    std::int32_t _pad0[3];
+    float borders[4];
+    float corners[4];
+    _ShapeType type;
+    std::int32_t padding0[3];
 };
 
 struct _ColorBrushUniforms {
@@ -80,24 +116,23 @@ struct _ImageBrushUniforms {
     float size[2];
     float flip[2];
     float repeat[2];
-    float _pad0[2];
+    float padding0[2];
     float npatch[4];
     float source[4];
     float destin[4];
 };
 
-/** Uniforms for the gradient fragment shaders (linear and radial). Colors are premultiplied. */
 struct _GradientBrushUniforms {
     float startPoint[2];
-    float _pad0[2];
+    float padding0[2];
     float startColor[4];
     float stopPoint[2];
-    float _pad1[2];
+    float padding1[2];
     float stopColor[4];
     std::int32_t stopCount;
-    std::int32_t _pad2[3];
+    std::int32_t padding2[3];
     float stopColors[10][4];
-    float stopPositions[3][4]; // position i is stopPositions[i / 4][i % 4]
+    float stopPositions[3][4];
 };
 
 struct _BlurFilterUniforms {
@@ -105,32 +140,32 @@ struct _BlurFilterUniforms {
     float direction[2];
     float sigma;
     std::int32_t taps;
-    std::int32_t _pad0[2];
+    std::int32_t padding0[2];
 };
 
 struct _ShadowFilterUniforms {
     float color[4];
     float opacity;
-    float _pad0;
+    float padding0;
     float texel[2];
-    float offset[2];             // inset field displacement, in pixels
-    float sigma;                 // gaussian standard deviation in texels
-    std::int32_t taps;           // gaussian half-width in taps
-    std::int32_t inset;          // 0 = drop shadow, 1 = inset
-    std::int32_t fromSilhouette; // 1 = source is the shape texture (.a), 0 = a field texture (.r/.g)
-    std::int32_t invert;         // 1 = complement the field (no earlier pass did it)
-    std::int32_t _pad1;
+    float offset[2];
+    float sigma;
+    std::int32_t taps;
+    std::int32_t inset;
+    std::int32_t fromSilhouette;
+    std::int32_t invert;
+    std::int32_t padding1;
 };
 
 struct _ShadowFilterFieldUniforms {
     float texel[2];
-    float direction[2];          // (1, 0) horizontal pass, (0, 1) vertical pass
-    float spread;                // dilate pass: extent in pixels along direction; negative erodes
-    float sigma;                 // blur pass: gaussian standard deviation in texels
-    std::int32_t taps;           // blur pass: gaussian half-width in taps
-    std::int32_t fromSilhouette; // 1 = source is the shape texture (.a), 0 = a field texture (.r/.g)
-    std::int32_t invert;         // 1 = complement the field (first pass of an inset chain)
-    std::int32_t _pad0[3];
+    float direction[2];
+    float spread;
+    float sigma;
+    std::int32_t taps;
+    std::int32_t fromSilhouette;
+    std::int32_t invert;
+    std::int32_t padding0[3];
 };
 
 static_assert(offsetof(_StateUniforms, projection) == 16);
@@ -147,38 +182,6 @@ static_assert(offsetof(_BlurFilterUniforms, sigma) == 16);
 static_assert(offsetof(_ShadowFilterUniforms, texel) == 24);
 static_assert(offsetof(_ShadowFilterUniforms, invert) == 56);
 static_assert(offsetof(_ShadowFilterFieldUniforms, invert) == 32);
-
-enum class _Fragment {
-    ColorBrush,
-    ImageBrush,
-    LinearGradientBrush,
-    RadialGradientBrush,
-    BlurFilter,
-    ShadowFilterDilate,
-    ShadowFilterBlur,
-    ShadowFilterComposite
-};
-
-/** The root parameters, in the order of the root signature. Register spaces are the GLSL descriptor sets. */
-enum _RootParameter : UINT {
-    _StateVertexParameter = 0,   // b0, space1
-    _ShapeVertexParameter,       // b1, space1
-    _StatePixelParameter,        // b0, space3
-    _BrushPixelParameter,        // b1, space3
-    _ShapePixelParameter,        // b2, space3
-    _TexturePixelParameter,      // t0, space2
-    _SamplerPixelParameter,      // s0, space2
-    _RootParameterCount
-};
-
-/** The four sampler variants (minification, magnification), in the sampler heap's order. */
-enum _Sampler : UINT {
-    _NerNerSampler = 0,
-    _LinLinSampler,
-    _LinNerSampler,
-    _NerLinSampler,
-    _SamplerCount
-};
 
 struct _Texture {
     ComPtr<ID3D12Resource> resource;
@@ -203,7 +206,6 @@ struct _UploadAllocation {
     D3D12_GPU_VIRTUAL_ADDRESS gpu = 0;
 };
 
-/** What a command list has bound, so a draw sets only what changed: every command costs, the software rasterizer's most of all. */
 struct _Bindings {
     ID3D12PipelineState* pipeline = nullptr;
     std::optional<D3D12_RECT> scissor;
@@ -211,10 +213,9 @@ struct _Bindings {
     UINT srv = UINT_MAX;
     UINT sampler = UINT_MAX;
     D3D12_GPU_VIRTUAL_ADDRESS parameters[_RootParameterCount] = {};
-    std::vector<std::uint8_t> uniforms[_RootParameterCount]; // the bytes last uploaded for each parameter
+    std::vector<std::uint8_t> uploadedUniforms[_RootParameterCount];
 };
 
-/** A command list and what it allocated while being recorded; its pages and allocator are recycled once the GPU has run it. */
 struct _Recording {
     ComPtr<ID3D12GraphicsCommandList> list;
     ComPtr<ID3D12CommandAllocator> allocator;
@@ -230,13 +231,12 @@ struct _Swapchain {
     std::uint64_t fenceValues[2] = { 0, 0 };
     std::uint32_t width = 0;
     std::uint32_t height = 0;
-    int references = 0; // passes on it recorded but not yet submitted: it cannot be resized under them
-    HANDLE frameWait = nullptr; // signaled when a presented frame is shown and the swapchain can take the next one
-    bool waiting = false; // a frame was presented and its signal not taken yet
+    int references = 0;
+    HANDLE frameWait = nullptr;
+    bool waiting = false;
     ULONGLONG presentTime = 0;
 };
 
-/** Something released once the GPU, and every list being recorded when it was released, is done with it. */
 struct _Deferred {
     std::uint64_t fence = 0;
     std::function<void()> release;
@@ -248,7 +248,7 @@ struct _RenderPass {
     DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
     ID3D12Resource* texture = nullptr;
     D3D12_CPU_DESCRIPTOR_HANDLE rtv = {};
-    D3D12_RESOURCE_STATES restState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE; // where the texture rests outside its passes
+    D3D12_RESOURCE_STATES restState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     _Recording* recording = nullptr;
     bool open = false;
     bool commit = false;
@@ -267,26 +267,25 @@ struct _FilterTextures {
 struct Painter::_Painter {
     _Recording recording;
     std::vector<std::pair<ComPtr<ID3D12CommandAllocator>, std::uint64_t>> allocators;
-    std::vector<_Swapchain*> presents; // swapchains to present once the outermost pass is submitted
+    std::vector<_Swapchain*> presents;
     std::stack<std::optional<_RenderPass>> renderPassStack;
-    std::map<std::uint64_t, _FilterTextures> filterTextures; // keyed by (width << 32) | height
+    std::map<std::uint64_t, _FilterTextures> filterTextures;
     std::uint64_t filterTexturesUse = 0;
     _FilterTextures& getFilterTextures(std::uint32_t width, std::uint32_t height);
     void evictFilterTextures();
 };
 
-/** The device and what every painter and image shares: queue, fence, descriptor heaps, pipelines and recycled memory. */
 struct _Context {
     ComPtr<IDXGIFactory4> factory;
     ComPtr<ID3D12Device> device;
     ComPtr<ID3D12CommandQueue> queue;
     ComPtr<ID3D12Fence> fence;
     HANDLE fenceEvent = nullptr;
-    std::uint64_t fenceValue = 0; // the last value signaled
+    std::uint64_t fenceValue = 0;
     ComPtr<ID3D12RootSignature> rootSignature;
-    ComPtr<ID3D12DescriptorHeap> srvHeap;      // shader visible: one SRV per texture
-    ComPtr<ID3D12DescriptorHeap> samplerHeap;  // shader visible: the four samplers
-    ComPtr<ID3D12DescriptorHeap> rtvHeap;      // one RTV per texture and per swapchain buffer
+    ComPtr<ID3D12DescriptorHeap> srvHeap;
+    ComPtr<ID3D12DescriptorHeap> samplerHeap;
+    ComPtr<ID3D12DescriptorHeap> rtvHeap;
     UINT srvSize = 0;
     UINT samplerSize = 0;
     UINT rtvSize = 0;
@@ -295,30 +294,32 @@ struct _Context {
     UINT nextSrv = 0;
     UINT nextRtv = 0;
     std::map<std::uint64_t, ComPtr<ID3D12PipelineState>> pipelines;
-    std::vector<std::pair<_UploadPage, std::uint64_t>> freePages; // with the fence value after which they are free
-    _Recording transfer; // uploads, copies and downloads, submitted before any other list
+    std::vector<std::pair<_UploadPage, std::uint64_t>> freePages;
+    _Recording transfer;
     std::vector<std::pair<ComPtr<ID3D12CommandAllocator>, std::uint64_t>> transferAllocators;
     int openRecordings = 0;
-    std::vector<std::function<void()>> waiting; // released while a list was being recorded
+    std::vector<std::function<void()>> waiting;
     std::vector<_Deferred> deferred;
     std::map<HWND, _Swapchain*> swapchains;
 };
 
-static auto constexpr _BLUR_TAP_MAX = 64;
-static auto constexpr _FILTER_TEXTURE_CACHE_MAX = 8;
-static auto constexpr _SRV_CAPACITY = UINT(65536);
-static auto constexpr _RTV_CAPACITY = UINT(65536);
-static auto constexpr _UPLOAD_PAGE_SIZE = std::uint64_t(1) << 20;
-static auto constexpr _TEXTURE_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
-static auto constexpr _SWAPCHAIN_BUFFERS = UINT(2);
-static auto constexpr _SWAPCHAIN_FLAGS = UINT(DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT);
-static auto constexpr _FRAME_WAIT_MAX_MS = ULONGLONG(100);
+static auto constexpr _blurTapMax = 64;
+static auto constexpr _filterTextureCacheMax = 8;
+static auto constexpr _srvCapacity = UINT(65536);
+static auto constexpr _rtvCapacity = UINT(65536);
+static auto constexpr _uploadPageSize = std::uint64_t(1) << 20;
+static auto constexpr _textureFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+static auto constexpr _swapchainBuffers = UINT(2);
+static auto constexpr _swapchainFlags = UINT(DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT);
+static auto constexpr _frameWaitMaxMs = ULONGLONG(100);
 
 static void _Check(HRESULT result, char const* what) {
     PROFILE
 
     if (FAILED(result)) {
-        throw std::runtime_error(std::string(what) + " failed (HRESULT " + std::to_string(static_cast<std::uint32_t>(result)) + ")");
+        throw std::runtime_error(
+            std::format("Failed to {} (HRESULT 0x{:08X})", what, static_cast<std::uint32_t>(result))
+        );
     }
 }
 
@@ -391,28 +392,28 @@ static D3D12_RENDER_TARGET_BLEND_DESC _GetBlend(Blend blend) {
 
     switch (blend) {
         case Blend::Over:
-            // dst = src + dst * (1 - srcA)
+            /* dst = src + dst * (1 - srcA) */
             state.SrcBlend = D3D12_BLEND_ONE;
             state.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
             state.SrcBlendAlpha = D3D12_BLEND_ONE;
             state.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
             break;
         case Blend::Add:
-            // dst = src + dst; the target's alpha is kept
+            /* dst = src + dst; the target's alpha is kept */
             state.SrcBlend = D3D12_BLEND_ONE;
             state.DestBlend = D3D12_BLEND_ONE;
             state.SrcBlendAlpha = D3D12_BLEND_ZERO;
             state.DestBlendAlpha = D3D12_BLEND_ONE;
             break;
         case Blend::Multiply:
-            // dst = src * dst + dst * (1 - srcA): where the source is transparent the target stays
+            /* dst = src * dst + dst * (1 - srcA): where the source is transparent the target stays */
             state.SrcBlend = D3D12_BLEND_DEST_COLOR;
             state.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
             state.SrcBlendAlpha = D3D12_BLEND_ZERO;
             state.DestBlendAlpha = D3D12_BLEND_ONE;
             break;
         case Blend::Screen:
-            // dst = src + dst * (1 - src)
+            /* dst = src + dst * (1 - src) */
             state.SrcBlend = D3D12_BLEND_ONE;
             state.DestBlend = D3D12_BLEND_INV_SRC_COLOR;
             state.SrcBlendAlpha = D3D12_BLEND_ZERO;
@@ -423,9 +424,6 @@ static D3D12_RENDER_TARGET_BLEND_DESC _GetBlend(Blend blend) {
     return state;
 }
 
-/* A kernel samples one texel per tap out to its extent, capped at
-   _BLUR_TAP_MAX: the power of two a filter's passes are downscaled by to bring
-   its widest kernel under the cap */
 static float _FilterDownsample(Filter const& filter) {
     PROFILE
 
@@ -447,7 +445,7 @@ static float _FilterDownsample(Filter const& filter) {
     }
 
     while (
-        (kernelExtent / downsample) > static_cast<float>(_BLUR_TAP_MAX)
+        (kernelExtent / downsample) > static_cast<float>(_blurTapMax)
     ) {
         downsample *= 2.0f;
     }
@@ -455,9 +453,6 @@ static float _FilterDownsample(Filter const& filter) {
     return downsample;
 }
 
-/* device-space rect a filtered draw can touch: the transformed shape bounds
-   grown by what the kernels reach, snapped outward to whole target pixels and
-   clipped to the target; nullopt when none of it lands on the target */
 static std::optional<Vec4> _FilterBounds(Vec4 const& bounds, Mat3 const& transform, Vec2 const& margin, Vec2 const& target) {
     PROFILE
 
@@ -492,7 +487,7 @@ static Vec4 _ToFilterSpace(Vec4 const& rect, Vec2 const& scale) {
 }
 
 static int _GetGaussianTaps(float extent) {
-    return std::clamp(static_cast<int>(std::ceil(extent)), 0, _BLUR_TAP_MAX);
+    return std::clamp(static_cast<int>(std::ceil(extent)), 0, _blurTapMax);
 }
 
 static ComPtr<IDXGIAdapter1> _GetAdapter(IDXGIFactory4* factory) {
@@ -529,7 +524,7 @@ static ComPtr<IDXGIAdapter1> _GetAdapter(IDXGIFactory4* factory) {
     }
 
     auto adapter = ComPtr<IDXGIAdapter1>();
-    _Check(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter)), "EnumWarpAdapter");
+    _Check(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter)), "get the WARP adapter");
 
     return adapter;
 }
@@ -570,10 +565,10 @@ static ComPtr<ID3D12RootSignature> _CreateRootSignature(ID3D12Device* device) {
     auto blob = ComPtr<ID3DBlob>();
     auto error = ComPtr<ID3DBlob>();
 
-    _Check(::D3D12SerializeRootSignature(&description, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error), "D3D12SerializeRootSignature");
+    _Check(::D3D12SerializeRootSignature(&description, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error), "serialize the root signature");
 
     auto signature = ComPtr<ID3D12RootSignature>();
-    _Check(device->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&signature)), "CreateRootSignature");
+    _Check(device->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&signature)), "create the root signature");
 
     return signature;
 }
@@ -589,7 +584,7 @@ static ComPtr<ID3D12DescriptorHeap> _CreateHeap(ID3D12Device* device, D3D12_DESC
     };
 
     auto heap = ComPtr<ID3D12DescriptorHeap>();
-    _Check(device->CreateDescriptorHeap(&description, IID_PPV_ARGS(&heap)), "CreateDescriptorHeap");
+    _Check(device->CreateDescriptorHeap(&description, IID_PPV_ARGS(&heap)), "create a descriptor heap");
 
     return heap;
 }
@@ -597,12 +592,11 @@ static ComPtr<ID3D12DescriptorHeap> _CreateHeap(ID3D12Device* device, D3D12_DESC
 static void _CreateSamplers(_Context& context) {
     PROFILE
 
-    auto const filters = std::array<D3D12_FILTER, _SamplerCount>{
-        D3D12_FILTER_MIN_MAG_MIP_POINT,              // nearest, nearest
-        D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT,       // linear, linear
-        D3D12_FILTER_MIN_LINEAR_MAG_MIP_POINT,       // linear, nearest
-        D3D12_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT  // nearest, linear
-    };
+    auto filters = std::array<D3D12_FILTER, _SamplerCount>{};
+    filters[_NerNerSampler] = D3D12_FILTER_MIN_MAG_MIP_POINT;
+    filters[_LinLinSampler] = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+    filters[_LinNerSampler] = D3D12_FILTER_MIN_LINEAR_MAG_MIP_POINT;
+    filters[_NerLinSampler] = D3D12_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT;
 
     auto handle = context.samplerHeap->GetCPUDescriptorHandleForHeapStart();
 
@@ -630,20 +624,20 @@ static _Context& _GetContext() {
 
         auto context = new _Context{};
 
-        _Check(::CreateDXGIFactory2(0, IID_PPV_ARGS(&context->factory)), "CreateDXGIFactory2");
+        _Check(::CreateDXGIFactory2(0, IID_PPV_ARGS(&context->factory)), "create the DXGI factory");
 
         auto const adapter = _GetAdapter(context->factory.Get());
-        _Check(::D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&context->device)), "D3D12CreateDevice");
+        _Check(::D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&context->device)), "create the D3D12 device");
 
         auto const queueDescription = D3D12_COMMAND_QUEUE_DESC{ D3D12_COMMAND_LIST_TYPE_DIRECT, 0, D3D12_COMMAND_QUEUE_FLAG_NONE, 0 };
-        _Check(context->device->CreateCommandQueue(&queueDescription, IID_PPV_ARGS(&context->queue)), "CreateCommandQueue");
-        _Check(context->device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&context->fence)), "CreateFence");
+        _Check(context->device->CreateCommandQueue(&queueDescription, IID_PPV_ARGS(&context->queue)), "create the command queue");
+        _Check(context->device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&context->fence)), "create the fence");
 
         context->fenceEvent = ::CreateEventW(nullptr, FALSE, FALSE, nullptr);
         context->rootSignature = _CreateRootSignature(context->device.Get());
-        context->srvHeap = _CreateHeap(context->device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, _SRV_CAPACITY, true);
+        context->srvHeap = _CreateHeap(context->device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, _srvCapacity, true);
         context->samplerHeap = _CreateHeap(context->device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, _SamplerCount, true);
-        context->rtvHeap = _CreateHeap(context->device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, _RTV_CAPACITY, false);
+        context->rtvHeap = _CreateHeap(context->device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, _rtvCapacity, false);
         context->srvSize = context->device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         context->samplerSize = context->device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
         context->rtvSize = context->device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
@@ -662,7 +656,7 @@ static void _WaitForFence(std::uint64_t value) {
     auto& context = _GetContext();
 
     if (context.fence->GetCompletedValue() < value) {
-        _Check(context.fence->SetEventOnCompletion(value, context.fenceEvent), "SetEventOnCompletion");
+        _Check(context.fence->SetEventOnCompletion(value, context.fenceEvent), "wait for the fence");
         ::WaitForSingleObject(context.fenceEvent, INFINITE);
     }
 }
@@ -673,7 +667,7 @@ static std::uint64_t _Signal() {
     auto& context = _GetContext();
 
     context.fenceValue++;
-    _Check(context.queue->Signal(context.fence.Get(), context.fenceValue), "Signal");
+    _Check(context.queue->Signal(context.fence.Get(), context.fenceValue), "signal the fence");
 
     return context.fenceValue;
 }
@@ -698,13 +692,13 @@ static void _CollectDeferred() {
     }
 }
 
-/* What was released while lists were being recorded may be in any of them:
-   it waits until none is left, then for the GPU to run the last one. */
 static void _RetireWaiting() {
     PROFILE
 
     auto& context = _GetContext();
 
+    /* what was released while lists were being recorded may be in any of
+       them: it waits until none is left, then for the GPU to run the last one */
     if ((context.openRecordings > 0) || context.waiting.empty()) {
         return;
     }
@@ -740,7 +734,7 @@ static UINT _AllocateSlot(std::vector<UINT>& freeSlots, UINT& next, UINT capacit
     }
 
     if (next >= capacity) {
-        throw std::runtime_error("Out of texture descriptors");
+        throw std::runtime_error("Failed to allocate a descriptor: out of descriptors");
     }
 
     return next++;
@@ -797,7 +791,7 @@ static ComPtr<ID3D12Resource> _CreateBuffer(D3D12_HEAP_TYPE type, std::uint64_t 
     };
 
     auto buffer = ComPtr<ID3D12Resource>();
-    _Check(_GetContext().device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &description, state, nullptr, IID_PPV_ARGS(&buffer)), "CreateCommittedResource");
+    _Check(_GetContext().device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &description, state, nullptr, IID_PPV_ARGS(&buffer)), "create a buffer");
 
     return buffer;
 }
@@ -808,17 +802,21 @@ static _UploadAllocation _Allocate(_Recording& recording, std::uint64_t size, st
     auto& context = _GetContext();
 
     if (recording.pages.empty() == false) {
-        auto& page = recording.pages.back();
-        auto const offset = _Align(page.used, alignment);
+        auto const offset = _Align(recording.pages.back().used, alignment);
 
-        if ((offset + size) <= page.size) {
-            page.used = offset + size;
-            return _UploadAllocation{ page.buffer.Get(), offset, (page.cpu + offset), (page.gpu + offset) };
+        if ((offset + size) <= recording.pages.back().size) {
+            recording.pages.back().used = offset + size;
+            return _UploadAllocation{
+                recording.pages.back().buffer.Get(),
+                offset,
+                (recording.pages.back().cpu + offset),
+                (recording.pages.back().gpu + offset)
+            };
         }
     }
 
     auto const completed = context.fence->GetCompletedValue();
-    auto const needed = std::max(_UPLOAD_PAGE_SIZE, _Align(size, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT));
+    auto const needed = std::max(_uploadPageSize, _Align(size, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT));
     auto page = _UploadPage{};
 
     auto const found = std::ranges::find_if(context.freePages, [&](auto const& entry) {
@@ -834,15 +832,18 @@ static _UploadAllocation _Allocate(_Recording& recording, std::uint64_t size, st
         page.gpu = page.buffer->GetGPUVirtualAddress();
 
         auto const range = D3D12_RANGE{ 0, 0 };
-        _Check(page.buffer->Map(0, &range, reinterpret_cast<void**>(&page.cpu)), "Map");
+        _Check(page.buffer->Map(0, &range, reinterpret_cast<void**>(&page.cpu)), "map an upload page");
     }
 
     page.used = size;
     recording.pages.push_back(std::move(page));
 
-    auto& current = recording.pages.back();
-
-    return _UploadAllocation{ current.buffer.Get(), 0, current.cpu, current.gpu };
+    return _UploadAllocation{
+        recording.pages.back().buffer.Get(),
+        0,
+        recording.pages.back().cpu,
+        recording.pages.back().gpu
+    };
 }
 
 static void _RecyclePages(_Recording& recording, std::uint64_t fence) {
@@ -866,14 +867,14 @@ static ComPtr<ID3D12CommandAllocator> _GetAllocator(std::vector<std::pair<ComPtr
 
     for (auto& [ allocator, fence ] : allocators) {
         if (fence <= completed) {
-            fence = UINT64_MAX; // taken
-            _Check(allocator->Reset(), "ID3D12CommandAllocator::Reset");
+            fence = UINT64_MAX;
+            _Check(allocator->Reset(), "reset a command allocator");
             return allocator;
         }
     }
 
     auto allocator = ComPtr<ID3D12CommandAllocator>();
-    _Check(context.device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&allocator)), "CreateCommandAllocator");
+    _Check(context.device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&allocator)), "create a command allocator");
     allocators.emplace_back(allocator, UINT64_MAX);
 
     return allocator;
@@ -899,9 +900,9 @@ static void _OpenRecording(_Recording& recording, std::vector<std::pair<ComPtr<I
     recording.allocator = _GetAllocator(allocators);
 
     if (recording.list == nullptr) {
-        _Check(context.device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, recording.allocator.Get(), nullptr, IID_PPV_ARGS(&recording.list)), "CreateCommandList");
+        _Check(context.device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, recording.allocator.Get(), nullptr, IID_PPV_ARGS(&recording.list)), "create a command list");
     } else {
-        _Check(recording.list->Reset(recording.allocator.Get(), nullptr), "ID3D12GraphicsCommandList::Reset");
+        _Check(recording.list->Reset(recording.allocator.Get(), nullptr), "reset a command list");
     }
 
     ID3D12DescriptorHeap* const heaps[] = { context.srvHeap.Get(), context.samplerHeap.Get() };
@@ -912,7 +913,6 @@ static void _OpenRecording(_Recording& recording, std::vector<std::pair<ComPtr<I
     context.openRecordings++;
 }
 
-/* Closes the list and runs it; returns the fence value it is done at. */
 static std::uint64_t _SubmitRecording(_Recording& recording, std::vector<std::pair<ComPtr<ID3D12CommandAllocator>, std::uint64_t>>& allocators) {
     PROFILE
 
@@ -920,7 +920,7 @@ static std::uint64_t _SubmitRecording(_Recording& recording, std::vector<std::pa
 
     assert(recording.open);
 
-    _Check(recording.list->Close(), "ID3D12GraphicsCommandList::Close");
+    _Check(recording.list->Close(), "close a command list");
 
     ID3D12CommandList* const lists[] = { recording.list.Get() };
     context.queue->ExecuteCommandLists(1, lists);
@@ -937,22 +937,20 @@ static std::uint64_t _SubmitRecording(_Recording& recording, std::vector<std::pa
     return fence;
 }
 
-/* Drops a list that was never run: what it allocated is free at once. */
 static void _DiscardRecording(_Recording& recording, std::vector<std::pair<ComPtr<ID3D12CommandAllocator>, std::uint64_t>>& allocators) {
     PROFILE
-
-    auto& context = _GetContext();
 
     assert(recording.open);
 
     recording.list->Close();
 
+    /* the list never ran: what it allocated is free at once */
     _ReturnAllocator(allocators, recording.allocator.Get(), 0);
     _RecyclePages(recording, 0);
 
     recording.allocator.Reset();
     recording.open = false;
-    context.openRecordings--;
+    _GetContext().openRecordings--;
 }
 
 static _Recording& _GetTransfer() {
@@ -967,7 +965,6 @@ static _Recording& _GetTransfer() {
     return context.transfer;
 }
 
-/* Runs the pending uploads and copies, before anything submitted after them. */
 static void _FlushTransfer() {
     PROFILE
 
@@ -1035,7 +1032,7 @@ static ComPtr<ID3D12PipelineState> _CreatePipeline(_Fragment fragment, DXGI_FORM
     description.SampleDesc = DXGI_SAMPLE_DESC{ 1, 0 };
 
     auto pipeline = ComPtr<ID3D12PipelineState>();
-    _Check(context.device->CreateGraphicsPipelineState(&description, IID_PPV_ARGS(&pipeline)), "CreateGraphicsPipelineState");
+    _Check(context.device->CreateGraphicsPipelineState(&description, IID_PPV_ARGS(&pipeline)), "create a pipeline");
 
     return pipeline;
 }
@@ -1083,15 +1080,15 @@ static void _SetScissor(_RenderPass const& renderPass, std::optional<Vec4> const
         rect.bottom = rect.top + std::max(0, bottom - top);
     }
 
-    auto& bound = renderPass.recording->bindings.scissor;
-
     if (
-        (bound.has_value() == false) ||
-        (bound->left != rect.left) || (bound->top != rect.top) ||
-        (bound->right != rect.right) || (bound->bottom != rect.bottom)
+        (renderPass.recording->bindings.scissor.has_value() == false) ||
+        (renderPass.recording->bindings.scissor->left != rect.left) ||
+        (renderPass.recording->bindings.scissor->top != rect.top) ||
+        (renderPass.recording->bindings.scissor->right != rect.right) ||
+        (renderPass.recording->bindings.scissor->bottom != rect.bottom)
     ) {
         _GetList(renderPass)->RSSetScissorRects(1, &rect);
-        bound = rect;
+        renderPass.recording->bindings.scissor = rect;
     }
 }
 
@@ -1107,22 +1104,21 @@ static void _SetViewport(_RenderPass const& renderPass, Vec4 const& viewport) {
         1.0f
     };
 
-    auto& bound = renderPass.recording->bindings.viewport;
-
-    if ((bound.has_value() == false) || (std::memcmp(&*bound, &viewportInfo, sizeof(D3D12_VIEWPORT)) != 0)) {
+    if (
+        (renderPass.recording->bindings.viewport.has_value() == false) ||
+        (std::memcmp(&*renderPass.recording->bindings.viewport, &viewportInfo, sizeof(D3D12_VIEWPORT)) != 0)
+    ) {
         _GetList(renderPass)->RSSetViewports(1, &viewportInfo);
-        bound = viewportInfo;
+        renderPass.recording->bindings.viewport = viewportInfo;
     }
 }
 
 static void _SetPipeline(_RenderPass const& renderPass, ID3D12PipelineState* pipeline) {
     PROFILE
 
-    auto& bound = renderPass.recording->bindings.pipeline;
-
-    if (bound != pipeline) {
+    if (renderPass.recording->bindings.pipeline != pipeline) {
         _GetList(renderPass)->SetPipelineState(pipeline);
-        bound = pipeline;
+        renderPass.recording->bindings.pipeline = pipeline;
     }
 }
 
@@ -1132,48 +1128,44 @@ static void _BindTexture(_RenderPass const& renderPass, _Texture const* texture,
     assert(texture != nullptr);
 
     auto const list = _GetList(renderPass);
-    auto& bindings = renderPass.recording->bindings;
 
-    if (bindings.srv != texture->srv) {
+    if (renderPass.recording->bindings.srv != texture->srv) {
         list->SetGraphicsRootDescriptorTable(_TexturePixelParameter, _GetSrvGpu(texture->srv));
-        bindings.srv = texture->srv;
+        renderPass.recording->bindings.srv = texture->srv;
     }
 
-    if (bindings.sampler != sampler) {
+    if (renderPass.recording->bindings.sampler != sampler) {
         list->SetGraphicsRootDescriptorTable(_SamplerPixelParameter, _GetSamplerGpu(sampler));
-        bindings.sampler = sampler;
+        renderPass.recording->bindings.sampler = sampler;
     }
 }
 
 static void _BindUniforms(_RenderPass const& renderPass, D3D12_GPU_VIRTUAL_ADDRESS address, std::initializer_list<UINT> parameters) {
     PROFILE
 
-    auto& bound = renderPass.recording->bindings.parameters;
-
     for (auto const parameter : parameters) {
-        if (bound[parameter] != address) {
+        if (renderPass.recording->bindings.parameters[parameter] != address) {
             _GetList(renderPass)->SetGraphicsRootConstantBufferView(parameter, address);
-            bound[parameter] = address;
+            renderPass.recording->bindings.parameters[parameter] = address;
         }
     }
 }
 
-/* Uploads one uniform block for this draw and binds it to the given root
-   parameters. Successive draws often push the same block (the state, a glyph
-   color): then the one already uploaded stays bound. */
 template <typename Uniforms>
 static void _PushUniforms(_RenderPass const& renderPass, Uniforms const& uniforms, std::initializer_list<UINT> parameters) {
     PROFILE
 
-    auto& bindings = renderPass.recording->bindings;
     auto const bytes = reinterpret_cast<std::uint8_t const*>(&uniforms);
     auto const first = *parameters.begin();
-    auto& last = bindings.uniforms[first];
 
+    /* successive draws often push the same block (the state, a glyph color):
+       then the one already uploaded stays bound */
     auto const same =
-        (last.size() == sizeof(Uniforms)) &&
-        (std::memcmp(last.data(), bytes, sizeof(Uniforms)) == 0) &&
-        std::ranges::all_of(parameters, [&](UINT parameter) { return bindings.parameters[parameter] == bindings.parameters[first]; });
+        (renderPass.recording->bindings.uploadedUniforms[first].size() == sizeof(Uniforms)) &&
+        (std::memcmp(renderPass.recording->bindings.uploadedUniforms[first].data(), bytes, sizeof(Uniforms)) == 0) &&
+        std::ranges::all_of(parameters, [&](UINT parameter) {
+            return renderPass.recording->bindings.parameters[parameter] == renderPass.recording->bindings.parameters[first];
+        });
 
     if (same) {
         return;
@@ -1182,18 +1174,16 @@ static void _PushUniforms(_RenderPass const& renderPass, Uniforms const& uniform
     auto const allocation = _Allocate(*renderPass.recording, sizeof(Uniforms), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
     std::memcpy(allocation.cpu, bytes, sizeof(Uniforms));
 
-    last.assign(bytes, (bytes + sizeof(Uniforms)));
+    renderPass.recording->bindings.uploadedUniforms[first].assign(bytes, (bytes + sizeof(Uniforms)));
     _BindUniforms(renderPass, allocation.gpu, parameters);
 }
 
 static void _OpenRenderPass(_RenderPass& renderPass, std::optional<Vec4> const& clear) {
     PROFILE
 
-    auto const list = renderPass.recording->list.Get();
-
-    _Barrier(list, renderPass.texture, renderPass.restState, D3D12_RESOURCE_STATE_RENDER_TARGET);
-    list->OMSetRenderTargets(1, &renderPass.rtv, FALSE, nullptr);
-    list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    _Barrier(renderPass.recording->list.Get(), renderPass.texture, renderPass.restState, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    renderPass.recording->list->OMSetRenderTargets(1, &renderPass.rtv, FALSE, nullptr);
+    renderPass.recording->list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 
     if (clear.has_value()) {
         /* the target is premultiplied; the clear color is straight RGBA */
@@ -1204,7 +1194,7 @@ static void _OpenRenderPass(_RenderPass& renderPass, std::optional<Vec4> const& 
             clear->alpha
         };
 
-        list->ClearRenderTargetView(renderPass.rtv, color, 0, nullptr);
+        renderPass.recording->list->ClearRenderTargetView(renderPass.rtv, color, 0, nullptr);
     }
 
     renderPass.open = true;
@@ -1225,7 +1215,7 @@ static void _BeginRenderPass(_RenderPass& renderPass, _Recording& recording, _Te
 
     renderPass.width = texture->width;
     renderPass.height = texture->height;
-    renderPass.format = _TEXTURE_FORMAT;
+    renderPass.format = _textureFormat;
     renderPass.texture = texture->resource.Get();
     renderPass.rtv = _GetRtv(texture->rtv);
     renderPass.restState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
@@ -1248,7 +1238,6 @@ static void _EndRenderPass(_RenderPass& renderPass) {
     renderPass.format = DXGI_FORMAT_UNKNOWN;
 }
 
-/* A suspended target goes back to its resting state, so a nested pass can sample it. */
 static void _SuspendRenderPass(_RenderPass& renderPass) {
     PROFILE
 
@@ -1295,29 +1284,29 @@ static void _PushShapeUniforms(_RenderPass const& renderPass, Shape const& shape
     auto rect    = Vec4{};
     auto borders = Vec4{};
     auto corners = Vec4{};
-    auto type    = 0;
+    auto type    = _ShapeType::Quad;
 
     shape.match(
         [&](QuadShape const& quadShape) {
             rect    = quadShape.rect;
             corners = _ResolveRadius(quadShape);
-            type    = 0;
+            type    = _ShapeType::Quad;
         },
         [&](EllipseShape const& ellipseShape) {
             rect = ellipseShape.rect;
-            type = 1;
+            type = _ShapeType::Ellipse;
         },
         [&](QuadOutlineShape const& quadOutlineShape) {
             rect    = quadOutlineShape.rect;
             borders = _ResolveBorders(quadOutlineShape);
             corners = _ResolveRadius(quadOutlineShape);
-            type    = 2;
+            type    = _ShapeType::QuadOutline;
         },
         [&](EllipseOutlineShape const& ellipseOutlineShape) {
             auto const width = ellipseOutlineShape.border.value_or(0.0f);
             rect    = ellipseOutlineShape.rect;
             borders = Vec4{ width, width, width, width };
-            type    = 3;
+            type    = _ShapeType::EllipseOutline;
         }
     );
 
@@ -1328,7 +1317,7 @@ static void _PushShapeUniforms(_RenderPass const& renderPass, Shape const& shape
             { (rect.getMaxX() + expand.x), (rect.y - expand.y),         0.0f, 0.0f },
             { (rect.getMaxX() + expand.x), (rect.getMaxY() + expand.y), 0.0f, 0.0f }
         },
-        .bounds  = { rect.x, rect.y, rect.width, rect.height }, // unexpanded: localPos and localUV stay in shape space
+        .bounds  = { rect.x, rect.y, rect.width, rect.height }, /* unexpanded: localPos and localUV stay in shape space */
         .borders = { borders.left, borders.top, borders.right, borders.bottom },
         .corners = { corners.data[0], corners.data[1], corners.data[2], corners.data[3] },
         .type    = type
@@ -1356,7 +1345,6 @@ static void _PushImageBrushUniforms(_RenderPass const& renderPass, ImageBrush co
 
     assert(imageBrush.image != nullptr);
 
-    auto const imageSize = imageBrush.image->getSize();
     auto const imageColor = imageBrush.color.value_or(Vec4{});
     auto const imageNPatch = imageBrush.nPatch.value_or(Vec4{});
     auto const filterMin = imageBrush.filterMin.value_or(ImageFilter::Nearest);
@@ -1370,8 +1358,8 @@ static void _PushImageBrushUniforms(_RenderPass const& renderPass, ImageBrush co
     auto const flipX = imageBrush.flipX.value_or(false);
     auto const flipY = imageBrush.flipY.value_or(false);
 
-    auto imageSrc = Vec4{ {}, imageSize };
-    auto imageDst = Vec4{ {}, imageSize };
+    auto imageSrc = Vec4{ {}, imageBrush.image->getSize() };
+    auto imageDst = Vec4{ {}, imageBrush.image->getSize() };
 
     if (imageBrush.slice.has_value()) {
         imageSrc = imageBrush.slice.value();
@@ -1406,31 +1394,28 @@ static void _PushImageBrushUniforms(_RenderPass const& renderPass, ImageBrush co
         imageDst.height = bounds.height;
     }
 
-    // A repeated axis wraps the offset by one tile: the tiles look the same,
-    // and the shader keeps its float precision however large the offset grows.
+    /* a repeated axis wraps the offset by one tile: the tiles look the same,
+       and the shader keeps its float precision however large the offset grows */
     imageDst.x += ((repeatX && (imageDst.width > 0.0f)) ? std::fmod(offsetX, imageDst.width) : offsetX);
     imageDst.y += ((repeatY && (imageDst.height > 0.0f)) ? std::fmod(offsetY, imageDst.height) : offsetY);
 
     auto const imageUniforms = _ImageBrushUniforms{
         .color  = { imageColor.red, imageColor.green, imageColor.blue, imageColor.alpha },
-        .size   = { imageSize.width, imageSize.height },
+        .size   = { imageBrush.image->getSize().width, imageBrush.image->getSize().height },
         .flip   = { (flipX ? 1.0f : 0.0f), (flipY ? 1.0f : 0.0f) },
         .repeat = { (repeatX ? 1.0f : 0.0f), (repeatY ? 1.0f : 0.0f) },
-        ._pad0  = {},
+        .padding0  = {},
         .npatch = { imageNPatch.left, imageNPatch.top, imageNPatch.right, imageNPatch.bottom },
         .source = { imageSrc.x, imageSrc.y, imageSrc.getMaxX(), imageSrc.getMaxY() },
         .destin = { imageDst.x, imageDst.y, imageDst.getMaxX(), imageDst.getMaxY() }
     };
 
-    auto sampler = _NerNerSampler;
-
-    if (filterMin == ImageFilter::Linear && filterMag == ImageFilter::Linear) {
-        sampler = _LinLinSampler;
-    } else if (filterMin == ImageFilter::Linear && filterMag == ImageFilter::Nearest) {
-        sampler = _LinNerSampler;
-    } else if (filterMin == ImageFilter::Nearest && filterMag == ImageFilter::Linear) {
-        sampler = _NerLinSampler;
-    }
+    auto const sampler = (
+        ((filterMin == ImageFilter::Linear) && (filterMag == ImageFilter::Linear)) ? _LinLinSampler :
+        ((filterMin == ImageFilter::Linear) && (filterMag == ImageFilter::Nearest)) ? _LinNerSampler :
+        ((filterMin == ImageFilter::Nearest) && (filterMag == ImageFilter::Linear)) ? _NerLinSampler :
+                                                                                      _NerNerSampler
+    );
 
     _BindTexture(renderPass, static_cast<_Texture const*>(imageBrush.image->getTexture()), sampler);
     _PushUniforms(renderPass, imageUniforms, { _BrushPixelParameter });
@@ -1450,8 +1435,8 @@ static void _PushGradientBrushUniforms(_RenderPass const& renderPass, GradientBr
         stopColor  = std::get<1>(gradientBrush.stops[stopCount - 1]);
     }
 
-    // Stops are premultiplied here so the shader interpolates in premultiplied
-    // space: a fade to transparent then loses coverage without darkening.
+    /* stops are premultiplied here so the shader interpolates in premultiplied
+       space: a fade to transparent then loses coverage without darkening */
     auto const premultiply = [](float* out, Vec4 const& c) {
         out[0] = (c.red * c.alpha);
         out[1] = (c.green * c.alpha);
@@ -1487,7 +1472,7 @@ static void _PushBlurFilterUniforms(_RenderPass const& renderPass, Vec2 const& t
         .direction = { direction.x, direction.y },
         .sigma     = (filter.getSigma() * axisScale),
         .taps      = _GetGaussianTaps(filter.getExtent() * axisScale),
-        ._pad0     = {}
+        .padding0     = {}
     };
 
     _PushUniforms(renderPass, blurUniforms, { _BrushPixelParameter });
@@ -1501,12 +1486,12 @@ static void _PushShadowFilterFieldUniforms(_RenderPass const& renderPass, Vec2 c
     auto const fieldUniforms = _ShadowFilterFieldUniforms{
         .texel          = { texel.x, texel.y },
         .direction      = { direction.x, direction.y },
-        .spread         = std::clamp((spread * axisScale), -static_cast<float>(_BLUR_TAP_MAX), static_cast<float>(_BLUR_TAP_MAX)),
+        .spread         = std::clamp((spread * axisScale), -static_cast<float>(_blurTapMax), static_cast<float>(_blurTapMax)),
         .sigma          = (filter.getSigma() * axisScale),
         .taps           = _GetGaussianTaps(filter.getExtent() * axisScale),
         .fromSilhouette = (fromSilhouette ? 1 : 0),
         .invert         = ((fromSilhouette && filter.inset) ? 1 : 0),
-        ._pad0          = {}
+        .padding0          = {}
     };
 
     _PushUniforms(renderPass, fieldUniforms, { _BrushPixelParameter });
@@ -1520,7 +1505,7 @@ static void _PushShadowFilterUniforms(_RenderPass const& renderPass, Vec2 const&
     auto const shadowUniforms = _ShadowFilterUniforms{
         .color          = { filter.color.red, filter.color.green, filter.color.blue, filter.color.alpha },
         .opacity        = 1.0f,
-        ._pad0          = 0.0f,
+        .padding0          = 0.0f,
         .texel          = { texel.x, texel.y },
         .offset         = { (offset.x * scale.x), (offset.y * scale.y) },
         .sigma          = (filter.getSigma() * scale.y),
@@ -1528,16 +1513,95 @@ static void _PushShadowFilterUniforms(_RenderPass const& renderPass, Vec2 const&
         .inset          = (filter.inset ? 1 : 0),
         .fromSilhouette = (fromSilhouette ? 1 : 0),
         .invert         = ((fromSilhouette && filter.inset) ? 1 : 0),
-        ._pad1          = 0
+        .padding1          = 0
     };
 
     _PushUniforms(renderPass, shadowUniforms, { _BrushPixelParameter });
 }
 
-static void _Draw(_RenderPass const& renderPass) {
+static void _ReleaseSwapchainBuffers(_Swapchain& swapchain) {
     PROFILE
 
-    _GetList(renderPass)->DrawInstanced(4, 1, 0, 0);
+    _WaitForFence(_GetContext().fenceValue);
+
+    for (auto i = UINT(0); i < _swapchainBuffers; i++) {
+        swapchain.buffers[i].Reset();
+        swapchain.fenceValues[i] = 0;
+    }
+}
+
+static void _AcquireSwapchainBuffers(_Swapchain& swapchain) {
+    PROFILE
+
+    auto& context = _GetContext();
+
+    for (auto i = UINT(0); i < _swapchainBuffers; i++) {
+        _Check(swapchain.swapchain->GetBuffer(i, IID_PPV_ARGS(&swapchain.buffers[i])), "get a swapchain buffer");
+        context.device->CreateRenderTargetView(swapchain.buffers[i].Get(), nullptr, _GetRtv(swapchain.rtvs[i]));
+    }
+}
+
+static _Swapchain* _GetSwapchain(HWND hwnd) {
+    PROFILE
+
+    auto& context = _GetContext();
+    auto client = RECT{};
+
+    ::GetClientRect(hwnd, &client);
+
+    auto const width = static_cast<std::uint32_t>(std::max(0L, client.right));
+    auto const height = static_cast<std::uint32_t>(std::max(0L, client.bottom));
+
+    if ((width == 0) || (height == 0)) {
+        return nullptr;
+    }
+
+    auto it = context.swapchains.find(hwnd);
+
+    if (it == context.swapchains.end()) {
+        auto swapchain = new _Swapchain{};
+        auto const description = DXGI_SWAP_CHAIN_DESC1{
+            width, height, _textureFormat, FALSE, DXGI_SAMPLE_DESC{ 1, 0 },
+            DXGI_USAGE_RENDER_TARGET_OUTPUT, _swapchainBuffers, DXGI_SCALING_STRETCH,
+            DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_ALPHA_MODE_IGNORE, _swapchainFlags
+        };
+        auto swapchain1 = ComPtr<IDXGISwapChain1>();
+
+        _Check(context.factory->CreateSwapChainForHwnd(context.queue.Get(), hwnd, &description, nullptr, nullptr, &swapchain1), "create the swapchain");
+        _Check(swapchain1.As(&swapchain->swapchain), "get the IDXGISwapChain3 interface of the swapchain");
+        _Check(swapchain->swapchain->SetMaximumFrameLatency(1), "set the frame latency of the swapchain");
+
+        /* the object starts signaled for the first frame, which has no frame before it to wait for */
+        swapchain->frameWait = swapchain->swapchain->GetFrameLatencyWaitableObject();
+        ::WaitForSingleObject(swapchain->frameWait, 0);
+
+        /* the window decides about full screen itself */
+        context.factory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER);
+
+        for (auto i = UINT(0); i < _swapchainBuffers; i++) {
+            swapchain->rtvs[i] = _AllocateSlot(context.freeRtvs, context.nextRtv, _rtvCapacity);
+        }
+
+        swapchain->width = width;
+        swapchain->height = height;
+
+        _AcquireSwapchainBuffers(*swapchain);
+
+        it = context.swapchains.emplace(hwnd, swapchain).first;
+    }
+
+    /* resized only while no pass recorded on it waits to be submitted: those
+       hold its buffers, and a window painted twice in one frame keeps its size */
+    if (((it->second->width != width) || (it->second->height != height)) && (it->second->references == 0)) {
+        _ReleaseSwapchainBuffers(*it->second);
+        _Check(it->second->swapchain->ResizeBuffers(_swapchainBuffers, width, height, _textureFormat, _swapchainFlags), "resize the swapchain buffers");
+        _AcquireSwapchainBuffers(*it->second);
+
+        it->second->width = width;
+        it->second->height = height;
+    }
+
+    return it->second;
 }
 
 void* __GetDefaultGPUDevice() {
@@ -1549,7 +1613,7 @@ void* __GetDefaultGPUDevice() {
 int __GetDefaultTextureFormat() {
     PROFILE
 
-    return (int)_TEXTURE_FORMAT;
+    return (int)_textureFormat;
 }
 
 void* __CreateTexture(std::uint32_t width, std::uint32_t height) {
@@ -1564,15 +1628,15 @@ void* __CreateTexture(std::uint32_t width, std::uint32_t height) {
     auto const heap = D3D12_HEAP_PROPERTIES{ D3D12_HEAP_TYPE_DEFAULT, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 0, 0 };
     auto const description = D3D12_RESOURCE_DESC{
         D3D12_RESOURCE_DIMENSION_TEXTURE2D, 0, texture->width, texture->height, 1, 1,
-        _TEXTURE_FORMAT, DXGI_SAMPLE_DESC{ 1, 0 },
+        _textureFormat, DXGI_SAMPLE_DESC{ 1, 0 },
         D3D12_TEXTURE_LAYOUT_UNKNOWN, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
     };
-    auto const clear = D3D12_CLEAR_VALUE{ _TEXTURE_FORMAT, { 0.0f, 0.0f, 0.0f, 0.0f } };
+    auto const clear = D3D12_CLEAR_VALUE{ _textureFormat, { 0.0f, 0.0f, 0.0f, 0.0f } };
 
-    _Check(context.device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &description, D3D12_RESOURCE_STATE_RENDER_TARGET, &clear, IID_PPV_ARGS(&texture->resource)), "CreateCommittedResource");
+    _Check(context.device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &description, D3D12_RESOURCE_STATE_RENDER_TARGET, &clear, IID_PPV_ARGS(&texture->resource)), "create a texture");
 
-    texture->srv = _AllocateSlot(context.freeSrvs, context.nextSrv, _SRV_CAPACITY);
-    texture->rtv = _AllocateSlot(context.freeRtvs, context.nextRtv, _RTV_CAPACITY);
+    texture->srv = _AllocateSlot(context.freeSrvs, context.nextSrv, _srvCapacity);
+    texture->rtv = _AllocateSlot(context.freeRtvs, context.nextRtv, _rtvCapacity);
 
     context.device->CreateShaderResourceView(texture->resource.Get(), nullptr, _GetSrvCpu(texture->srv));
     context.device->CreateRenderTargetView(texture->resource.Get(), nullptr, _GetRtv(texture->rtv));
@@ -1624,7 +1688,7 @@ void __DownloadTexture(void* handle, std::vector<std::uint8_t>& pixels) {
     destination.pResource = readback.Get();
     destination.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
     destination.PlacedFootprint.Offset = 0;
-    destination.PlacedFootprint.Footprint = D3D12_SUBRESOURCE_FOOTPRINT{ _TEXTURE_FORMAT, texture->width, texture->height, 1, static_cast<UINT>(rowPitch) };
+    destination.PlacedFootprint.Footprint = D3D12_SUBRESOURCE_FOOTPRINT{ _textureFormat, texture->width, texture->height, 1, static_cast<UINT>(rowPitch) };
 
     _Barrier(transfer.list.Get(), texture->resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_SOURCE);
     transfer.list->CopyTextureRegion(&destination, 0, 0, 0, &source, nullptr);
@@ -1636,7 +1700,7 @@ void __DownloadTexture(void* handle, std::vector<std::uint8_t>& pixels) {
     auto mapped = static_cast<std::uint8_t*>(nullptr);
     auto const range = D3D12_RANGE{ 0, static_cast<SIZE_T>(rowPitch * texture->height) };
 
-    _Check(readback->Map(0, &range, reinterpret_cast<void**>(&mapped)), "Map");
+    _Check(readback->Map(0, &range, reinterpret_cast<void**>(&mapped)), "map the readback buffer");
 
     /* rows are padded to the pitch the GPU copies them with: packed tight here */
     pixels.resize(static_cast<std::size_t>(rowBytes * texture->height));
@@ -1673,7 +1737,7 @@ void __UploadTexture(void* handle, std::uint32_t x, std::uint32_t y, std::uint32
     source.pResource = allocation.buffer;
     source.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
     source.PlacedFootprint.Offset = allocation.offset;
-    source.PlacedFootprint.Footprint = D3D12_SUBRESOURCE_FOOTPRINT{ _TEXTURE_FORMAT, width, height, 1, static_cast<UINT>(rowPitch) };
+    source.PlacedFootprint.Footprint = D3D12_SUBRESOURCE_FOOTPRINT{ _textureFormat, width, height, 1, static_cast<UINT>(rowPitch) };
 
     auto destination = D3D12_TEXTURE_COPY_LOCATION{};
     destination.pResource = texture->resource.Get();
@@ -1715,98 +1779,6 @@ void __CopyTexture(void* sourceHandle, std::uint32_t x, std::uint32_t y, std::ui
     _Barrier(transfer.list.Get(), sourceTexture->resource.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 }
 
-/* Lets go of a swapchain's buffers, which ResizeBuffers and releasing need. */
-static void _ReleaseSwapchainBuffers(_Swapchain& swapchain) {
-    PROFILE
-
-    auto& context = _GetContext();
-
-    _WaitForFence(context.fenceValue);
-
-    for (auto i = UINT(0); i < _SWAPCHAIN_BUFFERS; i++) {
-        swapchain.buffers[i].Reset();
-        swapchain.fenceValues[i] = 0;
-    }
-}
-
-static void _AcquireSwapchainBuffers(_Swapchain& swapchain) {
-    PROFILE
-
-    auto& context = _GetContext();
-
-    for (auto i = UINT(0); i < _SWAPCHAIN_BUFFERS; i++) {
-        _Check(swapchain.swapchain->GetBuffer(i, IID_PPV_ARGS(&swapchain.buffers[i])), "IDXGISwapChain::GetBuffer");
-        context.device->CreateRenderTargetView(swapchain.buffers[i].Get(), nullptr, _GetRtv(swapchain.rtvs[i]));
-    }
-}
-
-/* The window's swapchain at the size of its content area, made on its first
-   pass; nullptr while there is nothing to present to (a minimized window). */
-static _Swapchain* _GetSwapchain(HWND hwnd) {
-    PROFILE
-
-    auto& context = _GetContext();
-    auto client = RECT{};
-
-    ::GetClientRect(hwnd, &client);
-
-    auto const width = static_cast<std::uint32_t>(std::max(0L, client.right));
-    auto const height = static_cast<std::uint32_t>(std::max(0L, client.bottom));
-
-    if ((width == 0) || (height == 0)) {
-        return nullptr;
-    }
-
-    auto it = context.swapchains.find(hwnd);
-
-    if (it == context.swapchains.end()) {
-        auto swapchain = new _Swapchain{};
-        auto const description = DXGI_SWAP_CHAIN_DESC1{
-            width, height, _TEXTURE_FORMAT, FALSE, DXGI_SAMPLE_DESC{ 1, 0 },
-            DXGI_USAGE_RENDER_TARGET_OUTPUT, _SWAPCHAIN_BUFFERS, DXGI_SCALING_STRETCH,
-            DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_ALPHA_MODE_IGNORE, _SWAPCHAIN_FLAGS
-        };
-        auto swapchain1 = ComPtr<IDXGISwapChain1>();
-
-        _Check(context.factory->CreateSwapChainForHwnd(context.queue.Get(), hwnd, &description, nullptr, nullptr, &swapchain1), "CreateSwapChainForHwnd");
-        _Check(swapchain1.As(&swapchain->swapchain), "IDXGISwapChain3");
-        _Check(swapchain->swapchain->SetMaximumFrameLatency(1), "IDXGISwapChain2::SetMaximumFrameLatency");
-
-        /* the object starts signaled for the first frame, which has no frame before it to wait for */
-        swapchain->frameWait = swapchain->swapchain->GetFrameLatencyWaitableObject();
-        ::WaitForSingleObject(swapchain->frameWait, 0);
-
-        /* the window decides about full screen itself */
-        context.factory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER);
-
-        for (auto i = UINT(0); i < _SWAPCHAIN_BUFFERS; i++) {
-            swapchain->rtvs[i] = _AllocateSlot(context.freeRtvs, context.nextRtv, _RTV_CAPACITY);
-        }
-
-        swapchain->width = width;
-        swapchain->height = height;
-
-        _AcquireSwapchainBuffers(*swapchain);
-
-        it = context.swapchains.emplace(hwnd, swapchain).first;
-    }
-
-    auto& swapchain = *it->second;
-
-    /* resized only while no pass recorded on it waits to be submitted: those
-       hold its buffers, and a window painted twice in one frame keeps its size */
-    if (((swapchain.width != width) || (swapchain.height != height)) && (swapchain.references == 0)) {
-        _ReleaseSwapchainBuffers(swapchain);
-        _Check(swapchain.swapchain->ResizeBuffers(_SWAPCHAIN_BUFFERS, width, height, _TEXTURE_FORMAT, _SWAPCHAIN_FLAGS), "IDXGISwapChain::ResizeBuffers");
-        _AcquireSwapchainBuffers(swapchain);
-
-        swapchain.width = width;
-        swapchain.height = height;
-    }
-
-    return &swapchain;
-}
-
 void __ReleaseWindowTarget(void* handle) {
     PROFILE
 
@@ -1821,7 +1793,7 @@ void __ReleaseWindowTarget(void* handle) {
 
     _ReleaseSwapchainBuffers(*swapchain);
 
-    for (auto i = UINT(0); i < _SWAPCHAIN_BUFFERS; i++) {
+    for (auto i = UINT(0); i < _swapchainBuffers; i++) {
         context.freeRtvs.push_back(swapchain->rtvs[i]);
     }
 
@@ -1841,7 +1813,7 @@ void* __GetWindowFrameWait(void* handle) {
     }
 
     /* a signal that does not come (a frame DXGI dropped) does not stop the window for good */
-    if ((::GetTickCount64() - it->second->presentTime) > _FRAME_WAIT_MAX_MS) {
+    if ((::GetTickCount64() - it->second->presentTime) > _frameWaitMaxMs) {
         it->second->waiting = false;
         return nullptr;
     }
@@ -1868,6 +1840,7 @@ _FilterTextures& Painter::_Painter::getFilterTextures(std::uint32_t width, std::
     auto const key = ((static_cast<std::uint64_t>(width) << 32) | static_cast<std::uint64_t>(height));
 
     auto it = filterTextures.find(key);
+
     if (it == filterTextures.end()) {
         auto first = static_cast<_Texture*>(__CreateTexture(width, height));
         auto second = static_cast<_Texture*>(__CreateTexture(width, height));
@@ -1885,7 +1858,7 @@ _FilterTextures& Painter::_Painter::getFilterTextures(std::uint32_t width, std::
 void Painter::_Painter::evictFilterTextures() {
     PROFILE
 
-    while (filterTextures.size() > static_cast<std::size_t>(_FILTER_TEXTURE_CACHE_MAX)) {
+    while (filterTextures.size() > static_cast<std::size_t>(_filterTextureCacheMax)) {
         auto evict = filterTextures.end();
         for (auto entry = filterTextures.begin(); entry != filterTextures.end(); ++entry) {
             if ((evict == filterTextures.end()) || (entry->second.lastUse < evict->second.lastUse)) {
@@ -1946,7 +1919,6 @@ void Painter::__beginPaint(PaintTarget const& target) {
         }
     }
 
-    /* the outermost pass opens the command list every nested pass shares */
     auto const openRecording = [&]() {
         if (_impl->recording.open) {
             return false;
@@ -1996,19 +1968,16 @@ void Painter::__beginPaint(PaintTarget const& target) {
             }
 
             _impl->renderPassStack.emplace(_RenderPass{});
+            _impl->renderPassStack.top()->commit = commit;
+            _impl->renderPassStack.top()->width = swapchain->width;
+            _impl->renderPassStack.top()->height = swapchain->height;
+            _impl->renderPassStack.top()->format = _textureFormat;
+            _impl->renderPassStack.top()->texture = swapchain->buffers[index].Get();
+            _impl->renderPassStack.top()->rtv = _GetRtv(swapchain->rtvs[index]);
+            _impl->renderPassStack.top()->restState = D3D12_RESOURCE_STATE_PRESENT;
+            _impl->renderPassStack.top()->recording = &_impl->recording;
 
-            auto& renderPass = *_impl->renderPassStack.top();
-
-            renderPass.commit = commit;
-            renderPass.width = swapchain->width;
-            renderPass.height = swapchain->height;
-            renderPass.format = _TEXTURE_FORMAT;
-            renderPass.texture = swapchain->buffers[index].Get();
-            renderPass.rtv = _GetRtv(swapchain->rtvs[index]);
-            renderPass.restState = D3D12_RESOURCE_STATE_PRESENT;
-            renderPass.recording = &_impl->recording;
-
-            _OpenRenderPass(renderPass, windowTarget.clearColor);
+            _OpenRenderPass(*_impl->renderPassStack.top(), windowTarget.clearColor);
         }
     );
 }
@@ -2018,12 +1987,9 @@ void Painter::__endPaint() {
 
     if (_impl->renderPassStack.empty() == false) {
         if (_impl->renderPassStack.top().has_value()) {
-            auto& renderPass = *_impl->renderPassStack.top();
-            auto const commit = renderPass.commit;
+            _EndRenderPass(*_impl->renderPassStack.top());
 
-            _EndRenderPass(renderPass);
-
-            if (commit) {
+            if (_impl->renderPassStack.top()->commit) {
                 /* what was uploaded before runs before what was painted */
                 _FlushTransfer();
 
@@ -2035,16 +2001,15 @@ void Painter::__endPaint() {
                 /* the last window waits for its vertical blank; the others
                    would make every frame wait once per window */
                 for (auto i = std::size_t(0); i < presents.size(); i++) {
-                    auto const swapchain = presents[i];
                     auto const last = ((i + 1) == presents.size());
 
-                    swapchain->fenceValues[swapchain->swapchain->GetCurrentBackBufferIndex()] = fence;
-                    swapchain->references--;
+                    presents[i]->fenceValues[presents[i]->swapchain->GetCurrentBackBufferIndex()] = fence;
+                    presents[i]->references--;
 
                     /* DXGI_STATUS_OCCLUDED (a hidden window) is not an error, but
                        nothing is shown then, so there is no signal to wait for */
-                    swapchain->waiting = (swapchain->swapchain->Present((last ? 1 : 0), 0) == S_OK);
-                    swapchain->presentTime = ::GetTickCount64();
+                    presents[i]->waiting = (presents[i]->swapchain->Present((last ? 1 : 0), 0) == S_OK);
+                    presents[i]->presentTime = ::GetTickCount64();
                 }
 
                 _RetireWaiting();
@@ -2078,8 +2043,6 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
     }
 
     assert(_impl->renderPassStack.top()->open);
-
-    auto& renderPass = *_impl->renderPassStack.top();
 
     auto const colorBrush = brush.as<ColorBrush>();
     auto const imageBrush = brush.as<ImageBrush>();
@@ -2118,7 +2081,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _PushStateUniforms(pass, resolution, transform, options.opacity.value_or(1.0f));
         _PushShapeUniforms(pass, shape, _EdgeExpansion(transform), true);
 
-        _Draw(pass);
+        _GetList(pass)->DrawInstanced(4, 1, 0, 0);
     };
 
     auto const blurred = (blurFilter != nullptr) && (blurFilter->radius > 0.0f);
@@ -2127,7 +2090,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         blurred == false &&
         shadowFilter == nullptr
     ) {
-        drawShape(renderPass, options.scissor, blend, Vec2{ 1.0f, 1.0f });
+        drawShape(*_impl->renderPassStack.top(), options.scissor, blend, Vec2{ 1.0f, 1.0f });
         return;
     }
 
@@ -2136,11 +2099,11 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
        shape is drawn straight into the small copy through a scaled transform,
        so its coverage is computed at that size rather than resampled. */
     auto const downsample = _FilterDownsample(*options.filter);
-    auto const filterWidth = static_cast<std::uint32_t>(std::ceil(static_cast<float>(renderPass.width) / downsample));
-    auto const filterHeight = static_cast<std::uint32_t>(std::ceil(static_cast<float>(renderPass.height) / downsample));
+    auto const filterWidth = static_cast<std::uint32_t>(std::ceil(static_cast<float>(_impl->renderPassStack.top()->width) / downsample));
+    auto const filterHeight = static_cast<std::uint32_t>(std::ceil(static_cast<float>(_impl->renderPassStack.top()->height) / downsample));
     auto const filterScale = Vec2{
-        (static_cast<float>(filterWidth) / static_cast<float>(renderPass.width)),
-        (static_cast<float>(filterHeight) / static_cast<float>(renderPass.height))
+        (static_cast<float>(filterWidth) / static_cast<float>(_impl->renderPassStack.top()->width)),
+        (static_cast<float>(filterHeight) / static_cast<float>(_impl->renderPassStack.top()->height))
     };
     auto const filterTexel = Vec2{
         (1.0f / static_cast<float>(filterWidth)),
@@ -2164,7 +2127,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _PushShapeUniforms(pass, Shape{ QuadShape{ rect } }, Vec2{}, false);
         _PushBlurFilterUniforms(pass, filterTexel, direction, *blurFilter, filterScale);
 
-        _Draw(pass);
+        _GetList(pass)->DrawInstanced(4, 1, 0, 0);
     };
 
     auto const drawShadowField = [&](_RenderPass& pass, _Texture const* source, _Fragment fragment, Vec2 const& direction, float spread, bool fromSilhouette, Vec4 const& rect) {
@@ -2184,7 +2147,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _PushShapeUniforms(pass, Shape{ QuadShape{ rect } }, Vec2{}, false);
         _PushShadowFilterFieldUniforms(pass, filterTexel, direction, spread, *shadowFilter, fromSilhouette, filterScale);
 
-        _Draw(pass);
+        _GetList(pass)->DrawInstanced(4, 1, 0, 0);
     };
 
     auto const drawShadowComposite = [&](_RenderPass& pass, _Texture const* source, bool fromSilhouette, Vec4 const& rect, std::optional<Vec4> const& scissor, Blend mode) {
@@ -2211,7 +2174,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         _PushShapeUniforms(pass, Shape{ QuadShape{ quad } }, Vec2{}, false);
         _PushShadowFilterUniforms(pass, filterTexel, *shadowFilter, fromSilhouette, filterScale);
 
-        _Draw(pass);
+        _GetList(pass)->DrawInstanced(4, 1, 0, 0);
     };
 
     if (blurred) {
@@ -2220,19 +2183,21 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
            bilinear fetch of the last pass and the shape's antialiased edge. */
         auto const grow = (blurFilter->getExtent() + (3.0f * downsample));
         auto const margin = Vec2{ grow, grow };
-        auto const filterBounds = _FilterBounds(bounds, options.transform.value_or(Mat3{}), margin, Vec2{ static_cast<float>(renderPass.width), static_cast<float>(renderPass.height) });
+        auto const filterBounds = _FilterBounds(bounds, options.transform.value_or(Mat3{}), margin, Vec2{ static_cast<float>(_impl->renderPassStack.top()->width), static_cast<float>(_impl->renderPassStack.top()->height) });
+
         if (filterBounds.has_value() == false) {
             return;
         }
 
         auto const targetScissor = options.scissor.has_value() ? filterBounds->getIntersection(*options.scissor) : *filterBounds;
+
         if (targetScissor.isEmpty()) {
             return;
         }
 
         auto const scratchRect = _ToFilterSpace(*filterBounds, filterScale);
 
-        _SuspendRenderPass(renderPass);
+        _SuspendRenderPass(*_impl->renderPassStack.top());
 
         auto const& [ shapeTexture, blurTexture ] = _impl->getFilterTextures(filterWidth, filterHeight).textures;
         auto const clearColor = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f };
@@ -2247,33 +2212,34 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         drawBlur(blurPass, shapeTexture, Vec2{ 1.0f, 0.0f }, scratchRect, scratchRect, Blend::Over);
         _EndRenderPass(blurPass);
 
-        _ResumeRenderPass(renderPass);
-        drawBlur(renderPass, blurTexture, Vec2{ 0.0f, 1.0f }, *filterBounds, targetScissor, blend);
+        _ResumeRenderPass(*_impl->renderPassStack.top());
+        drawBlur(*_impl->renderPassStack.top(), blurTexture, Vec2{ 0.0f, 1.0f }, *filterBounds, targetScissor, blend);
     } else {
         /* As for the blur, grown by the spread and the offset as well. */
-        auto const shadowSpread = shadowFilter->spread.value_or(Vec2{});
+        auto const spread = shadowFilter->spread.value_or(Vec2{});
         auto const shadowOffset = shadowFilter->offset.value_or(Vec2{});
         auto const margin = Vec2{
-            (shadowFilter->getExtent() + std::abs(shadowSpread.x) + std::abs(shadowOffset.x) + (3.0f * downsample)),
-            (shadowFilter->getExtent() + std::abs(shadowSpread.y) + std::abs(shadowOffset.y) + (3.0f * downsample))
+            (shadowFilter->getExtent() + std::abs(spread.x) + std::abs(shadowOffset.x) + (3.0f * downsample)),
+            (shadowFilter->getExtent() + std::abs(spread.y) + std::abs(shadowOffset.y) + (3.0f * downsample))
         };
-        auto const filterBounds = _FilterBounds(bounds, options.transform.value_or(Mat3{}), margin, Vec2{ static_cast<float>(renderPass.width), static_cast<float>(renderPass.height) });
+        auto const filterBounds = _FilterBounds(bounds, options.transform.value_or(Mat3{}), margin, Vec2{ static_cast<float>(_impl->renderPassStack.top()->width), static_cast<float>(_impl->renderPassStack.top()->height) });
+
         if (filterBounds.has_value() == false) {
             return;
         }
 
         auto const targetScissor = options.scissor.has_value() ? filterBounds->getIntersection(*options.scissor) : *filterBounds;
+
         if (targetScissor.isEmpty()) {
             return;
         }
 
         auto const scratchRect = _ToFilterSpace(*filterBounds, filterScale);
 
-        _SuspendRenderPass(renderPass);
+        _SuspendRenderPass(*_impl->renderPassStack.top());
 
         auto [ source, target ] = _impl->getFilterTextures(filterWidth, filterHeight).textures;
         auto const clearColor = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f };
-        auto const spread = shadowFilter->spread.value_or(Vec2{});
         auto fromSilhouette = true;
 
         auto shapePass = _RenderPass{};
@@ -2300,8 +2266,8 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
             fieldPass(_Fragment::ShadowFilterBlur, Vec2{ 1.0f, 0.0f }, 0.0f);
         }
 
-        _ResumeRenderPass(renderPass);
-        drawShadowComposite(renderPass, source, fromSilhouette, *filterBounds, targetScissor, blend);
+        _ResumeRenderPass(*_impl->renderPassStack.top());
+        drawShadowComposite(*_impl->renderPassStack.top(), source, fromSilhouette, *filterBounds, targetScissor, blend);
     }
 }
 

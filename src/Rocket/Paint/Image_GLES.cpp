@@ -13,8 +13,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
 #include <Rocket/Base/Profile.hpp>
-#include <Rocket/Paint/Image.hpp>
 #include <Rocket/Paint/Painter_GLES.hpp>
+#include <Rocket/Paint/Image.hpp>
 
 namespace Rocket {
 
@@ -56,7 +56,7 @@ void Image::__init(std::string const& path) {
     // does every other image's pixels.
     auto pixels = std::vector<std::uint8_t>((std::size_t)width * height * 4);
 
-    for (std::uint32_t row = 0; row < height; row++) {
+    for (auto row = std::uint32_t(0); row < height; row++) {
         std::memcpy(
             pixels.data() + ((std::size_t)row * width * 4),
             static_cast<std::uint8_t const*>(surface->pixels) + ((std::size_t)row * surface->pitch),

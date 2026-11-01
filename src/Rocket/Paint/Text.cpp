@@ -1,26 +1,33 @@
-#include <cmath>
+/*
+ * Copyright (c) 2026 Roman Kirsanov
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+#include <algorithm>
 #include <cassert>
 #include <cfloat>
+#include <cmath>
 #include <limits>
-#include <algorithm>
 #include <Rocket/Base/Profile.hpp>
 #include <Rocket/Base/String.hpp>
-#include <Rocket/Paint/Text.hpp>
 #include <Rocket/Paint/Color.hpp>
 #include <Rocket/Paint/Painter.hpp>
+#include <Rocket/Paint/Text.hpp>
 
 namespace Rocket {
 
-static auto constexpr _TEXT_CARET_WIDTH = 2.0f;
-static auto constexpr _TEXT_SECURE_BULLET = 0x2022u;
-static auto constexpr _TEXT_UNDO_LIMIT = 200uz;
-
-enum _EditKind {
-    _EDIT_NONE,
-    _EDIT_INSERT,
-    _EDIT_DELETE_BACKWARD,
-    _EDIT_DELETE_FORWARD
+enum class _EditKind {
+    None,
+    Insert,
+    DeleteBackward,
+    DeleteForward
 };
+
+static auto constexpr _caretWidth = 2.0f;
+static auto constexpr _secureBullet = 0x2022u;
+static auto constexpr _undoLimit = 200uz;
 
 static Vec4 _SnapToPixelGrid(Vec4 const& rect) {
     PROFILE
@@ -48,7 +55,7 @@ bool TextStyle::operator==(TextStyle const& options) const {
 }
 
 bool TextStyle::operator!=(TextStyle const& options) const {
-    return !operator==(options);
+    return (operator==(options) == false);
 }
 
 Text::~Text() {
@@ -242,7 +249,7 @@ std::optional<TextGlyph> Text::getGlyphAtPosition(Vec2 const& position) const {
         }
     }
 
-    if (lineFound) {
+    if (lineFound != nullptr) {
         auto glyphDistance = FLT_MAX;
         auto glyphFound = (TextGlyph const*)nullptr;
 
@@ -262,7 +269,7 @@ std::optional<TextGlyph> Text::getGlyphAtPosition(Vec2 const& position) const {
             }
         }
 
-        if (glyphFound) {
+        if (glyphFound != nullptr) {
             return *glyphFound;
         }
     }
@@ -273,10 +280,10 @@ std::optional<TextGlyph> Text::getGlyphAtPosition(Vec2 const& position) const {
 std::vector<Vec4> const& Text::getSelectionRects() const {
     PROFILE
 
-    static auto const empty = std::vector<Vec4>();
+    static auto const _empty = std::vector<Vec4>();
 
     if (_editState == nullptr) {
-        return empty;
+        return _empty;
     }
 
     _updateEdit();
@@ -287,10 +294,10 @@ std::vector<Vec4> const& Text::getSelectionRects() const {
 Vec4 const& Text::getCaretRect() const {
     PROFILE
 
-    static auto const empty = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f };
+    static auto const _empty = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f };
 
     if (_editState == nullptr) {
-        return empty;
+        return _empty;
     }
 
     _updateEdit();
@@ -469,7 +476,7 @@ void Text::setString(std::string const& string) {
             _editState->caretXGoal = std::nullopt;
             _editState->undoStack.clear();
             _editState->redoStack.clear();
-            _editState->lastEditKind = _EDIT_NONE;
+            _editState->lastEditKind = static_cast<int>(_EditKind::None);
 
             _setCaretAffinity(false);
             _setCaret(_editState->caret);
@@ -520,7 +527,7 @@ void Text::setEditable(bool editable) {
         _editState->mouseIsDown = false;
         _editState->caretAffinity = false;
         _editState->caretXGoal = std::nullopt;
-        _editState->lastEditKind = _EDIT_NONE;
+        _editState->lastEditKind = static_cast<int>(_EditKind::None);
         _editState->lastEditCaret = 0;
     } else {
         _editState.reset();
@@ -620,6 +627,7 @@ bool Text::input(std::string const& string) {
         auto writeIndex = 0llu;
         for (auto readIndex = 0llu; readIndex < _stringCodepoints.size(); readIndex += 1) {
             auto const codepoint = _stringCodepoints[readIndex];
+
             if (codepoint == '\r') {
                 if (((readIndex + 1) < _stringCodepoints.size()) && (_stringCodepoints[readIndex + 1] == '\n')) {
                     readIndex += 1;
@@ -636,6 +644,7 @@ bool Text::input(std::string const& string) {
         auto writeIndex = 0llu;
         for (auto readIndex = 0llu; readIndex < _stringCodepoints.size(); readIndex += 1) {
             auto const codepoint = _stringCodepoints[readIndex];
+
             if (codepoint == '\r') {
                 if (((readIndex + 1) < _stringCodepoints.size()) && (_stringCodepoints[readIndex + 1] == '\n')) {
                     readIndex += 1;
@@ -654,7 +663,7 @@ bool Text::input(std::string const& string) {
 
     auto const startsWord = (_stringCodepoints.size() == 1) && (CodepointIsWhitespace(_stringCodepoints.front()) == false);
 
-    _pushUndo(_EDIT_INSERT, startsWord);
+    _pushUndo(static_cast<int>(_EditKind::Insert), startsWord);
 
     _editState->caretXGoal = std::nullopt;
     _setCaretAffinity(false);
@@ -679,7 +688,7 @@ void Text::moveUp(bool selection) {
         return;
     }
 
-    _editState->lastEditKind = _EDIT_NONE;
+    _editState->lastEditKind = static_cast<int>(_EditKind::None);
 
     if (_multiline.value_or(true) == false) {
         moveLineStart(selection);
@@ -744,7 +753,7 @@ void Text::moveLeft(bool selection) {
         return;
     }
 
-    _editState->lastEditKind = _EDIT_NONE;
+    _editState->lastEditKind = static_cast<int>(_EditKind::None);
     _editState->caretXGoal = std::nullopt;
     _setCaretAffinity(false);
 
@@ -775,7 +784,7 @@ void Text::moveRight(bool selection) {
         return;
     }
 
-    _editState->lastEditKind = _EDIT_NONE;
+    _editState->lastEditKind = static_cast<int>(_EditKind::None);
     _editState->caretXGoal = std::nullopt;
     _setCaretAffinity(false);
 
@@ -806,7 +815,7 @@ void Text::moveDown(bool selection) {
         return;
     }
 
-    _editState->lastEditKind = _EDIT_NONE;
+    _editState->lastEditKind = static_cast<int>(_EditKind::None);
 
     if (_multiline.value_or(true) == false) {
         moveLineEnd(selection);
@@ -871,7 +880,7 @@ void Text::moveWordLeft(bool selection) {
         return;
     }
 
-    _editState->lastEditKind = _EDIT_NONE;
+    _editState->lastEditKind = static_cast<int>(_EditKind::None);
     _editState->caretXGoal = std::nullopt;
     _setCaretAffinity(false);
 
@@ -903,7 +912,7 @@ void Text::moveWordRight(bool selection) {
         return;
     }
 
-    _editState->lastEditKind = _EDIT_NONE;
+    _editState->lastEditKind = static_cast<int>(_EditKind::None);
     _editState->caretXGoal = std::nullopt;
     _setCaretAffinity(false);
 
@@ -935,7 +944,7 @@ void Text::moveLineStart(bool selection) {
         return;
     }
 
-    _editState->lastEditKind = _EDIT_NONE;
+    _editState->lastEditKind = static_cast<int>(_EditKind::None);
 
     auto const& glyphs = getGlyphs();
     auto const& lines = getLines();
@@ -973,7 +982,7 @@ void Text::moveLineEnd(bool selection) {
         return;
     }
 
-    _editState->lastEditKind = _EDIT_NONE;
+    _editState->lastEditKind = static_cast<int>(_EditKind::None);
 
     auto const& glyphs = getGlyphs();
     auto const& lines = getLines();
@@ -1024,7 +1033,7 @@ void Text::moveDocumentStart(bool selection) {
         return;
     }
 
-    _editState->lastEditKind = _EDIT_NONE;
+    _editState->lastEditKind = static_cast<int>(_EditKind::None);
     _editState->caretXGoal = std::nullopt;
     _setCaretAffinity(false);
 
@@ -1043,7 +1052,7 @@ void Text::moveDocumentEnd(bool selection) {
         return;
     }
 
-    _editState->lastEditKind = _EDIT_NONE;
+    _editState->lastEditKind = static_cast<int>(_EditKind::None);
     _editState->caretXGoal = std::nullopt;
     _setCaretAffinity(false);
 
@@ -1066,7 +1075,7 @@ bool Text::deleteForward() {
     _setCaretAffinity(false);
 
     if (isSelectedRange()) {
-        _pushUndo(_EDIT_DELETE_FORWARD, false);
+        _pushUndo(static_cast<int>(_EditKind::DeleteForward), false);
         _removeSelection();
         _invalidateData();
     } else {
@@ -1074,7 +1083,7 @@ bool Text::deleteForward() {
             return false;
         }
 
-        _pushUndo(_EDIT_DELETE_FORWARD, true);
+        _pushUndo(static_cast<int>(_EditKind::DeleteForward), true);
         _eraseCodepoints(_editState->caret, GraphemeNext(_codepoints, _editState->caret));
         _invalidateData();
     }
@@ -1095,7 +1104,7 @@ bool Text::deleteBackward() {
     _setCaretAffinity(false);
 
     if (isSelectedRange()) {
-        _pushUndo(_EDIT_DELETE_BACKWARD, false);
+        _pushUndo(static_cast<int>(_EditKind::DeleteBackward), false);
         _removeSelection();
         _invalidateData();
     } else {
@@ -1103,7 +1112,7 @@ bool Text::deleteBackward() {
             return false;
         }
 
-        _pushUndo(_EDIT_DELETE_BACKWARD, true);
+        _pushUndo(static_cast<int>(_EditKind::DeleteBackward), true);
 
         auto const index = GraphemePrev(_codepoints, _editState->caret);
 
@@ -1129,7 +1138,7 @@ bool Text::deleteWordForward() {
     _setCaretAffinity(false);
 
     if (isSelectedRange()) {
-        _pushUndo(_EDIT_DELETE_FORWARD, false);
+        _pushUndo(static_cast<int>(_EditKind::DeleteForward), false);
         _removeSelection();
         _invalidateData();
     } else {
@@ -1137,7 +1146,7 @@ bool Text::deleteWordForward() {
             return false;
         }
 
-        _pushUndo(_EDIT_NONE, false);
+        _pushUndo(static_cast<int>(_EditKind::None), false);
 
         auto const index = _getWordBoundaryRight(_editState->caret);
 
@@ -1161,7 +1170,7 @@ bool Text::deleteWordBackward() {
     _setCaretAffinity(false);
 
     if (isSelectedRange()) {
-        _pushUndo(_EDIT_DELETE_BACKWARD, false);
+        _pushUndo(static_cast<int>(_EditKind::DeleteBackward), false);
         _removeSelection();
         _invalidateData();
     } else {
@@ -1169,7 +1178,7 @@ bool Text::deleteWordBackward() {
             return false;
         }
 
-        _pushUndo(_EDIT_NONE, false);
+        _pushUndo(static_cast<int>(_EditKind::None), false);
 
         auto const index = _getWordBoundaryLeft(_editState->caret);
 
@@ -1195,7 +1204,7 @@ bool Text::deleteLineBackward() {
     _setCaretAffinity(false);
 
     if (isSelectedRange()) {
-        _pushUndo(_EDIT_DELETE_BACKWARD, false);
+        _pushUndo(static_cast<int>(_EditKind::DeleteBackward), false);
         _removeSelection();
         _invalidateData();
     } else {
@@ -1211,7 +1220,7 @@ bool Text::deleteLineBackward() {
             return false;
         }
 
-        _pushUndo(_EDIT_NONE, false);
+        _pushUndo(static_cast<int>(_EditKind::None), false);
         _eraseCodepoints(index, _editState->caret);
         _setCaret(index);
         _setAnchor(index);
@@ -1234,7 +1243,7 @@ bool Text::deleteLineForward() {
     _setCaretAffinity(false);
 
     if (isSelectedRange()) {
-        _pushUndo(_EDIT_DELETE_FORWARD, false);
+        _pushUndo(static_cast<int>(_EditKind::DeleteForward), false);
         _removeSelection();
         _invalidateData();
     } else {
@@ -1256,7 +1265,7 @@ bool Text::deleteLineForward() {
             index = std::min(_getMaxIndex(), _editState->caret + 1); /* at a line end: the break itself goes */
         }
 
-        _pushUndo(_EDIT_NONE, false);
+        _pushUndo(static_cast<int>(_EditKind::None), false);
         _eraseCodepoints(_editState->caret, index);
         _invalidateData();
     }
@@ -1296,7 +1305,7 @@ void Text::selectWordAt(std::int64_t index) {
     _setCaretAffinity(false);
     _setAnchor(start);
     _setCaret(end);
-    _editState->lastEditKind = _EDIT_NONE;
+    _editState->lastEditKind = static_cast<int>(_EditKind::None);
 }
 
 void Text::selectParagraphAt(std::int64_t index) {
@@ -1320,7 +1329,7 @@ void Text::selectParagraphAt(std::int64_t index) {
     _setCaretAffinity(false);
     _setAnchor(start);
     _setCaret(end);
-    _editState->lastEditKind = _EDIT_NONE;
+    _editState->lastEditKind = static_cast<int>(_EditKind::None);
 }
 
 bool Text::undo() {
@@ -1338,7 +1347,7 @@ bool Text::undo() {
     auto const snapshot = _editState->undoStack.back();
     _editState->undoStack.pop_back();
     _applySnapshot(snapshot);
-    _editState->lastEditKind = _EDIT_NONE;
+    _editState->lastEditKind = static_cast<int>(_EditKind::None);
 
     return true;
 }
@@ -1358,7 +1367,7 @@ bool Text::redo() {
     auto const snapshot = _editState->redoStack.back();
     _editState->redoStack.pop_back();
     _applySnapshot(snapshot);
-    _editState->lastEditKind = _EDIT_NONE;
+    _editState->lastEditKind = static_cast<int>(_EditKind::None);
 
     return true;
 }
@@ -1382,7 +1391,7 @@ void Text::selectAll() {
         return;
     }
 
-    _editState->lastEditKind = _EDIT_NONE;
+    _editState->lastEditKind = static_cast<int>(_EditKind::None);
     _editState->caretXGoal = std::nullopt;
     _setCaretAffinity(false);
     _setAnchor(0);
@@ -1401,7 +1410,7 @@ void Text::mouseDown(Vec2 const& position, bool extend, int clickCount) {
     }
 
     _editState->caretXGoal = std::nullopt;
-    _editState->lastEditKind = _EDIT_NONE;
+    _editState->lastEditKind = static_cast<int>(_EditKind::None);
 
     auto const& glyphs = getGlyphs();
     auto const& lines = getLines();
@@ -1503,9 +1512,9 @@ bool Text::paste(std::string const& string) {
         return false;
     }
 
-    _editState->lastEditKind = _EDIT_NONE; /* a paste is its own undo group */
+    _editState->lastEditKind = static_cast<int>(_EditKind::None); /* a paste is its own undo group */
     auto const edited = input(string);
-    _editState->lastEditKind = _EDIT_NONE;
+    _editState->lastEditKind = static_cast<int>(_EditKind::None);
 
     return edited;
 }
@@ -1540,8 +1549,12 @@ bool Text::cut(std::string& string) {
     copy(string);
 
     if (isSelectedRange()) {
-        _pushUndo(_EDIT_NONE, false);
-        _deleteSelection();
+        _pushUndo(static_cast<int>(_EditKind::None), false);
+
+        _editState->caretXGoal = std::nullopt;
+        _setCaretAffinity(false);
+        _removeSelection();
+        _invalidateData();
         _endEdit();
 
         return true;
@@ -1576,15 +1589,14 @@ std::int64_t Text::_getCaretRow() const {
         return 0;
     }
 
-    auto const caret = _editState->caret;
-    auto const beforeTextEnd = (caret < (std::int64_t)glyphs.size());
-    auto const hasPrevGlyph = ((caret > 0) && beforeTextEnd);
-    auto const afterBreakline = (hasPrevGlyph && (glyphs[caret - 1].codepoint == U'\n'));
-    auto const atLineEnd = (hasPrevGlyph && (caret == lines[glyphs[caret - 1].rowIndex].endIndex));
-    auto row = beforeTextEnd ? glyphs[caret].rowIndex : lines.back().rowIndex;
+    auto const beforeTextEnd = (_editState->caret < (std::int64_t)glyphs.size());
+    auto const hasPrevGlyph = ((_editState->caret > 0) && beforeTextEnd);
+    auto const afterBreakline = (hasPrevGlyph && (glyphs[_editState->caret - 1].codepoint == U'\n'));
+    auto const atLineEnd = (hasPrevGlyph && (_editState->caret == lines[glyphs[_editState->caret - 1].rowIndex].endIndex));
+    auto row = beforeTextEnd ? glyphs[_editState->caret].rowIndex : lines.back().rowIndex;
 
     if (_editState->caretAffinity && atLineEnd && (afterBreakline == false)) {
-        row = glyphs[caret - 1].rowIndex;
+        row = glyphs[_editState->caret - 1].rowIndex;
     }
 
     return row;
@@ -1860,7 +1872,7 @@ void Text::_updateIndex() const {
         auto const& lineInfo = font->getLine(fontSize);
 
         for (auto index = segmentStart; index < segmentEnd; index++) {
-            auto const codepoint = (secure ? _TEXT_SECURE_BULLET : _codepoints[index]);
+            auto const codepoint = (secure ? _secureBullet : _codepoints[index]);
             auto const& glyphInfo = font->getGlyph(codepoint, fontSize);
 
             _index.push_back({
@@ -1896,7 +1908,7 @@ void Text::_updateLayout() const {
 
     auto const secure = _secure.value_or(false);
     auto const renderedCodepoint = [&](std::int64_t index) {
-        return (secure ? _TEXT_SECURE_BULLET : _codepoints[index]);
+        return (secure ? _secureBullet : _codepoints[index]);
     };
 
     auto prevIsWhitespace = false;
@@ -1989,6 +2001,7 @@ void Text::_updateLayout() const {
 
             if (wrap == false) {
                 auto const& prevEntry = _index[index - 1];
+
                 if (
                     (prevEntry.font == indexEntry.font) &&
                     (prevEntry.size == indexEntry.size)
@@ -2075,9 +2088,10 @@ void Text::_updateLayout() const {
         line.descent = maxDescent;
         line.leading = maxLeading;
 
-        line.rect.x = 0;
+        line.rect.x = 0.0f;
         line.rect.width = maxWidth;
         line.rect.height = (maxAscent + maxDescent);
+
         if (i > 0) {
             auto const& prevLine = _lines[i - 1];
             line.rect.y = (prevLine.rect.getMaxY() + prevLine.leading);
@@ -2114,7 +2128,8 @@ void Text::_updateLayout() const {
         auto const remainder = std::floorf(availWidth - line.rect.width);
         auto const offset = paddingLeft + (
             _alignment == TextAlignment::Center ? std::max(0.0f, std::floorf(remainder / 2.0f)) :
-            _alignment == TextAlignment::End ? std::max(0.0f, remainder) : 0.0f
+            _alignment == TextAlignment::End ? std::max(0.0f, remainder) :
+                                               0.0f
         );
 
         if (offset != 0.0f) {
@@ -2131,7 +2146,8 @@ void Text::_updateLayout() const {
         auto const remainder = std::floorf(availHeight - maxTextHeight);
         auto const offset = paddingTop + (
             _justify == TextJustify::Center ? std::max(0.0f, std::floorf(remainder / 2.0f)) :
-            _justify == TextJustify::End ? std::max(0.0f, remainder) : 0.0f
+            _justify == TextJustify::End ? std::max(0.0f, remainder) :
+                                           0.0f
         );
 
         if (offset != 0.0f) {
@@ -2174,7 +2190,7 @@ void Text::_updateImage() const {
 
         if (
             (glyph.whitespace == false) &&
-            (glyph.color.alpha > 0)
+            (glyph.color.alpha > 0.0f)
         ) {
             painter.paint(QuadShape{ _SnapToPixelGrid(glyph.bitmapRect) }, ImageBrush{
                 .image = glyph.image,
@@ -2201,7 +2217,7 @@ void Text::_updateEdit() const {
     _needsEdit = false;
 
     auto const scale = getScale().value_or(1.0f);
-    auto const caretWidth = (_TEXT_CARET_WIDTH * scale);
+    auto const caretWidth = (_caretWidth * scale);
     auto const& glyphs = getGlyphs();
     auto const& lines = getLines();
 
@@ -2214,11 +2230,10 @@ void Text::_updateEdit() const {
         _editState->caretRect.width = caretWidth;
         _editState->caretRect.height = (lineInfo.ascent + lineInfo.descent);
     } else {
-        auto const caret = _editState->caret;
-        auto const beforeTextEnd = (caret < (std::int64_t)glyphs.size());
-        auto const hasPrevGlyph = ((caret > 0) && beforeTextEnd);
-        auto const afterBreakline = (hasPrevGlyph && (glyphs[caret - 1].codepoint == U'\n'));
-        auto const atLineEnd = (hasPrevGlyph && (caret == lines[glyphs[caret - 1].rowIndex].endIndex));
+        auto const beforeTextEnd = (_editState->caret < (std::int64_t)glyphs.size());
+        auto const hasPrevGlyph = ((_editState->caret > 0) && beforeTextEnd);
+        auto const afterBreakline = (hasPrevGlyph && (glyphs[_editState->caret - 1].codepoint == U'\n'));
+        auto const atLineEnd = (hasPrevGlyph && (_editState->caret == lines[glyphs[_editState->caret - 1].rowIndex].endIndex));
         auto const affinity = (
             _editState->caretAffinity &&
             atLineEnd &&
@@ -2226,19 +2241,17 @@ void Text::_updateEdit() const {
         );
 
         if (affinity) {
-            _editState->caretRect = glyphs[caret - 1].rect;
+            _editState->caretRect = glyphs[_editState->caret - 1].rect;
             _editState->caretRect.x = _editState->caretRect.getMaxX();
             _editState->caretRect.width = caretWidth;
         } else if (beforeTextEnd) {
-            _editState->caretRect = glyphs[caret].rect;
+            _editState->caretRect = glyphs[_editState->caret].rect;
             _editState->caretRect.width = caretWidth;
         } else if (glyphs.back().codepoint == U'\n') {
-            auto const& line = lines.back();
-
             _editState->caretRect = {};
-            _editState->caretRect.origin = line.rect.origin;
+            _editState->caretRect.origin = lines.back().rect.origin;
             _editState->caretRect.width = caretWidth;
-            _editState->caretRect.height = line.rect.height;
+            _editState->caretRect.height = lines.back().rect.height;
         } else {
             _editState->caretRect = glyphs.back().rect;
             _editState->caretRect.x = _editState->caretRect.getMaxX();
@@ -2349,24 +2362,24 @@ void Text::_invalidateEdit() {
 void Text::_pushUndo(int kind, bool coalesce) {
     PROFILE
 
-    auto& edit = *_editState;
     auto const continues = (
         coalesce &&
-        (kind != _EDIT_NONE) &&
-        (kind == edit.lastEditKind) &&
-        (edit.caret == edit.lastEditCaret) &&
+        (kind != static_cast<int>(_EditKind::None)) &&
+        (kind == _editState->lastEditKind) &&
+        (_editState->caret == _editState->lastEditCaret) &&
         (isSelectedRange() == false)
     );
 
     if (continues == false) {
-        edit.undoStack.push_back(getSnapshot());
-        if (edit.undoStack.size() > _TEXT_UNDO_LIMIT) {
-            edit.undoStack.erase(edit.undoStack.begin());
+        _editState->undoStack.push_back(getSnapshot());
+
+        if (_editState->undoStack.size() > _undoLimit) {
+            _editState->undoStack.erase(_editState->undoStack.begin());
         }
     }
 
-    edit.redoStack.clear();
-    edit.lastEditKind = kind;
+    _editState->redoStack.clear();
+    _editState->lastEditKind = kind;
 }
 
 void Text::_endEdit() {
@@ -2386,13 +2399,13 @@ void Text::_applySnapshot(TextEditSnapshot const& snapshot) {
     _invalidateData();
     _invalidateEdit();
 
-    setStyles(snapshot.styles); /* change-gated, so identical styles don't invalidate */
+    setStyles(snapshot.styles);
 }
 
 void Text::_setCaret(std::int64_t caret) {
     PROFILE
 
-    auto const value = std::clamp(caret, std::int64_t{ 0 }, _getMaxIndex());
+    auto const value = std::clamp(caret, (std::int64_t)0, _getMaxIndex());
 
     if (_editState->caret != value) {
         _editState->caret = value;
@@ -2403,7 +2416,7 @@ void Text::_setCaret(std::int64_t caret) {
 void Text::_setAnchor(std::int64_t anchor) {
     PROFILE
 
-    auto const value = std::clamp(anchor, std::int64_t{ 0 }, _getMaxIndex());
+    auto const value = std::clamp(anchor, (std::int64_t)0, _getMaxIndex());
 
     if (_editState->anchor != value) {
         _editState->anchor = value;
@@ -2430,17 +2443,6 @@ void Text::_removeSelection() {
 
     _setCaret(fromIndex);
     _setAnchor(fromIndex);
-}
-
-void Text::_deleteSelection() {
-    PROFILE
-
-    _editState->caretXGoal = std::nullopt;
-    _setCaretAffinity(false);
-
-    _removeSelection();
-
-    _invalidateData();
 }
 
 void Text::_insertCodepoints(std::int64_t index, std::vector<std::uint32_t> const& codepoints) {

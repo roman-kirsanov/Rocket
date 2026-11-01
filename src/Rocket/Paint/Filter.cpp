@@ -12,8 +12,6 @@
 
 namespace Rocket {
 
-/* both kernels run out to three standard deviations; the radius-to-sigma
-   mapping differs because it follows the CSS feature each filter mirrors */
 static float _GetGaussianExtent(float sigma) {
     return std::ceil(sigma * 3.0f);
 }
@@ -35,7 +33,7 @@ bool BlurFilter::operator==(BlurFilter const& filter) const {
 bool BlurFilter::operator!=(BlurFilter const& filter) const {
     PROFILE
 
-    return !operator==(filter);
+    return (operator==(filter) == false);
 }
 
 float ShadowFilter::getSigma() const {
@@ -61,7 +59,7 @@ bool ShadowFilter::operator==(ShadowFilter const& filter) const {
 bool ShadowFilter::operator!=(ShadowFilter const& filter) const {
     PROFILE
 
-    return !operator==(filter);
+    return (operator==(filter) == false);
 }
 
 } /* namespace Rocket */

@@ -9,6 +9,7 @@
 #include <cmath>
 #include <stack>
 #include <tuple>
+#include <format>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -18,10 +19,9 @@
 #include <stdexcept>
 #include <SDL3/SDL.h>
 #include <Rocket/Base/Profile.hpp>
-#include <Rocket/Paint/Painter.hpp>
 #include <Rocket/Paint/Image.hpp>
+#include <Rocket/Paint/Painter.hpp>
 #include <Rocket/Paint/Painter_Private.hpp>
-#include <Rocket/Paint/Painter_SDL3.hpp>
 #include <Rocket/Window/App_SDL3.hpp>
 #include <Rocket/Window/Window.hpp>
 #include "QuadVertex.spv.hpp"
@@ -33,35 +33,44 @@
 #include "ShadowFilterDilate.spv.hpp"
 #include "ShadowFilterBlur.spv.hpp"
 #include "ShadowFilterComposite.spv.hpp"
+#include <Rocket/Paint/Painter_SDL3.hpp>
 
 namespace Rocket {
 
-/* How many times a new window is offered to the GPU device, and how long to wait between
-   the tries: under load the Vulkan driver can fail to describe a new window's surface for
-   a moment (seen with NVIDIA on Wayland, as an error SDL has no name for) */
-static auto constexpr _CLAIM_ATTEMPTS = 5;
-static auto constexpr _CLAIM_RETRY_DELAY_MS = 20;
+enum class _Fragment {
+    ColorBrush,
+    ImageBrush,
+    LinearGradientBrush,
+    RadialGradientBrush,
+    BlurFilter,
+    ShadowFilterDilate,
+    ShadowFilterBlur,
+    ShadowFilterComposite
+};
 
-/* The uniform blocks of GLSL/Painter.glsl in std140 layout: vec2 aligns to 8
-   bytes, vec4, mat3 columns and array elements to 16, so the padding is spelled
-   out and the offsets are checked below. */
+enum class _ShapeType : std::int32_t {
+    Quad,
+    Ellipse,
+    QuadOutline,
+    EllipseOutline
+};
 
 struct _StateUniforms {
     float resolution[2];
-    float _pad0[2];
-    float projection[12]; // three columns, each padded to four floats
-    float transform[12];  // three columns, each padded to four floats
+    float padding0[2];
+    float projection[12];
+    float transform[12];
     float opacity;
-    float _pad1[3];
+    float padding1[3];
 };
 
 struct _ShapeUniforms {
-    float vertices[4][4]; // .xy used; vec4 for the std140 array stride
+    float vertices[4][4];
     float bounds[4];
-    float borders[4]; // per-edge outline widths (left, top, right, bottom)
-    float corners[4]; // per-corner radii (top-left, top-right, bottom-right, bottom-left)
-    std::int32_t type; // 0=quad, 1=ellipse, 2=quad outline, 3=ellipse outline
-    std::int32_t _pad0[3];
+    float borders[4];
+    float corners[4];
+    _ShapeType type;
+    std::int32_t padding0[3];
 };
 
 struct _ColorBrushUniforms {
@@ -73,24 +82,23 @@ struct _ImageBrushUniforms {
     float size[2];
     float flip[2];
     float repeat[2];
-    float _pad0[2];
+    float padding0[2];
     float npatch[4];
     float source[4];
     float destin[4];
 };
 
-/** Colors are premultiplied. */
 struct _GradientBrushUniforms {
     float startPoint[2];
-    float _pad0[2];
+    float padding0[2];
     float startColor[4];
     float stopPoint[2];
-    float _pad1[2];
+    float padding1[2];
     float stopColor[4];
     std::int32_t stopCount;
-    std::int32_t _pad2[3];
+    std::int32_t padding2[3];
     float stopColors[10][4];
-    float stopPositions[3][4]; // position i is stopPositions[i / 4][i % 4]
+    float stopPositions[3][4];
 };
 
 struct _BlurFilterUniforms {
@@ -98,32 +106,32 @@ struct _BlurFilterUniforms {
     float direction[2];
     float sigma;
     std::int32_t taps;
-    std::int32_t _pad0[2];
+    std::int32_t padding0[2];
 };
 
 struct _ShadowFilterUniforms {
     float color[4];
     float opacity;
-    float _pad0;
+    float padding0;
     float texel[2];
-    float offset[2];             // inset field displacement, in pixels
-    float sigma;                 // gaussian standard deviation in texels
-    std::int32_t taps;           // gaussian half-width in taps
-    std::int32_t inset;          // 0 = drop shadow, 1 = inset
-    std::int32_t fromSilhouette; // 1 = source is the shape texture (.a), 0 = a field texture (.r/.g)
-    std::int32_t invert;         // 1 = complement the field (no earlier pass did it)
-    std::int32_t _pad1;
+    float offset[2];
+    float sigma;
+    std::int32_t taps;
+    std::int32_t inset;
+    std::int32_t fromSilhouette;
+    std::int32_t invert;
+    std::int32_t padding1;
 };
 
 struct _ShadowFilterFieldUniforms {
     float texel[2];
-    float direction[2];          // (1, 0) horizontal pass, (0, 1) vertical pass
-    float spread;                // dilate pass: extent in pixels along direction; negative erodes
-    float sigma;                 // blur pass: gaussian standard deviation in texels
-    std::int32_t taps;           // blur pass: gaussian half-width in taps
-    std::int32_t fromSilhouette; // 1 = source is the shape texture (.a), 0 = a field texture (.r/.g)
-    std::int32_t invert;         // 1 = complement the field (first pass of an inset chain)
-    std::int32_t _pad0[3];
+    float direction[2];
+    float spread;
+    float sigma;
+    std::int32_t taps;
+    std::int32_t fromSilhouette;
+    std::int32_t invert;
+    std::int32_t padding0[3];
 };
 
 static_assert(offsetof(_StateUniforms, projection) == 16);
@@ -140,17 +148,6 @@ static_assert(offsetof(_BlurFilterUniforms, sigma) == 16);
 static_assert(offsetof(_ShadowFilterUniforms, texel) == 24);
 static_assert(offsetof(_ShadowFilterUniforms, invert) == 56);
 static_assert(offsetof(_ShadowFilterFieldUniforms, invert) == 32);
-
-enum class _Fragment {
-    ColorBrush,
-    ImageBrush,
-    LinearGradientBrush,
-    RadialGradientBrush,
-    BlurFilter,
-    ShadowFilterDilate,
-    ShadowFilterBlur,
-    ShadowFilterComposite
-};
 
 struct _RenderPass {
     std::uint32_t width = 0;
@@ -174,21 +171,23 @@ struct _FilterTextures {
 
 struct Painter::_Painter {
     SDL_GPUCommandBuffer* commandBuffer = nullptr;
-    bool swapchainAcquired = false; // the command buffer holds a window's swapchain texture: it can only be submitted
+    bool swapchainAcquired = false;
     std::stack<std::optional<_RenderPass>> renderPassStack;
-    std::map<std::uint64_t, _FilterTextures> filterTextures; // keyed by (width << 32) | height
+    std::map<std::uint64_t, _FilterTextures> filterTextures;
     std::uint64_t filterTexturesUse = 0;
     _FilterTextures& getFilterTextures(std::uint32_t width, std::uint32_t height);
     void evictFilterTextures();
 };
 
-static auto constexpr _BLUR_TAP_MAX = 64;
-static auto constexpr _FILTER_TEXTURE_CACHE_MAX = 8;
-static auto constexpr _STATE_VERTEX_UNIFORMS_INDEX   = 0;
-static auto constexpr _SHAPE_VERTEX_UNIFORMS_INDEX   = 1;
-static auto constexpr _STATE_FRAGMENT_UNIFORMS_INDEX = 0;
-static auto constexpr _BRUSH_FRAGMENT_UNIFORMS_INDEX = 1;
-static auto constexpr _SHAPE_FRAGMENT_UNIFORMS_INDEX = 2;
+static auto constexpr _claimAttempts = 5;
+static auto constexpr _claimRetryDelayMs = 20;
+static auto constexpr _blurTapMax = 64;
+static auto constexpr _filterTextureCacheMax = 8;
+static auto constexpr _stateVertexUniformsIndex   = 0;
+static auto constexpr _shapeVertexUniformsIndex   = 1;
+static auto constexpr _stateFragmentUniformsIndex = 0;
+static auto constexpr _brushFragmentUniformsIndex = 1;
+static auto constexpr _shapeFragmentUniformsIndex = 2;
 
 static Vec4 _ResolveBorders(QuadOutlineShape const& shape) {
     PROFILE
@@ -256,14 +255,12 @@ static SDL_GPUColorTargetBlendState _GetBlend(Blend blend) {
             state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
             break;
         case Blend::Add:
-            // dst = src + dst; the target's alpha is kept
             state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
             state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
             state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
             state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
             break;
         case Blend::Multiply:
-            // dst = src * dst + dst * (1 - srcA): where the source is transparent the target stays
             state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_DST_COLOR;
             state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
             state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
@@ -313,9 +310,6 @@ static void _SetScissor(_RenderPass const& renderPass, std::optional<Vec4> const
     ::SDL_SetGPUScissor(renderPass.pass, &scissorInfo);
 }
 
-/* A kernel samples one texel per tap out to its extent, capped at
-   _BLUR_TAP_MAX: the power of two a filter's passes are downscaled by to bring
-   its widest kernel under the cap */
 static float _FilterDownsample(Filter const& filter) {
     PROFILE
 
@@ -336,8 +330,11 @@ static float _FilterDownsample(Filter const& filter) {
         });
     }
 
+    /* A kernel samples one texel per tap out to its extent, and the taps are
+       capped: the passes are downscaled by a power of two until the widest
+       kernel fits under the cap. */
     while (
-        (kernelExtent / downsample) > static_cast<float>(_BLUR_TAP_MAX)
+        (kernelExtent / downsample) > static_cast<float>(_blurTapMax)
     ) {
         downsample *= 2.0f;
     }
@@ -345,9 +342,6 @@ static float _FilterDownsample(Filter const& filter) {
     return downsample;
 }
 
-/* device-space rect a filtered draw can touch: the transformed shape bounds
-   grown by what the kernels reach, snapped outward to whole target pixels and
-   clipped to the target; nullopt when none of it lands on the target */
 static std::optional<Vec4> _FilterBounds(Vec4 const& bounds, Mat3 const& transform, Vec2 const& margin, Vec2 const& target) {
     PROFILE
 
@@ -419,7 +413,7 @@ static SDL_GPUShader* _CreateShader(std::uint8_t const* code, std::size_t size, 
     auto shader = ::SDL_CreateGPUShader(_GetDevice(), &info);
 
     if (shader == nullptr) {
-        throw std::runtime_error(::SDL_GetError());
+        throw std::runtime_error(std::format("Failed to create a shader: {}", ::SDL_GetError()));
     }
 
     return shader;
@@ -439,6 +433,7 @@ static SDL_GPUShader* _GetFragmentShader(_Fragment fragment) {
     static auto _shaders = std::map<_Fragment, SDL_GPUShader*>();
 
     auto it = _shaders.find(fragment);
+
     if (it != _shaders.end()) {
         return it->second;
     }
@@ -478,7 +473,7 @@ static SDL_GPUSampler* _CreateSampler(SDL_GPUFilter minFilter, SDL_GPUFilter mag
     auto sampler = ::SDL_CreateGPUSampler(_GetDevice(), &info);
 
     if (sampler == nullptr) {
-        throw std::runtime_error(::SDL_GetError());
+        throw std::runtime_error(std::format("Failed to create a sampler: {}", ::SDL_GetError()));
     }
 
     return sampler;
@@ -504,7 +499,7 @@ static SDL_GPUGraphicsPipeline* _CreatePipeline(_Fragment fragment, SDL_GPUTextu
     auto pipeline = ::SDL_CreateGPUGraphicsPipeline(_GetDevice(), &info);
 
     if (pipeline == nullptr) {
-        throw std::runtime_error(::SDL_GetError());
+        throw std::runtime_error(std::format("Failed to create a pipeline: {}", ::SDL_GetError()));
     }
 
     return pipeline;
@@ -517,6 +512,7 @@ static SDL_GPUGraphicsPipeline* _GetPipeline(_Fragment fragment, SDL_GPUTextureF
 
     auto const key = (((std::uint64_t)fragment) << 40) | (((std::uint64_t)format) << 8) | (std::uint64_t)blend;
     auto it = _pipelines.find(key);
+
     if (it == _pipelines.end()) {
         it = _pipelines.emplace(key, _CreatePipeline(fragment, format, blend)).first;
     }
@@ -568,7 +564,7 @@ static void _BindTexture(_RenderPass const& renderPass, SDL_GPUTexture* texture,
 }
 
 static int _GetGaussianTaps(float extent) {
-    return std::clamp(static_cast<int>(std::ceil(extent)), 0, _BLUR_TAP_MAX);
+    return std::clamp(static_cast<int>(std::ceil(extent)), 0, _blurTapMax);
 }
 
 static void _OpenRenderPass(_RenderPass& renderPass, std::optional<Vec4> const& clear) {
@@ -582,7 +578,8 @@ static void _OpenRenderPass(_RenderPass& renderPass, std::optional<Vec4> const& 
 
     if (clear.has_value()) {
         target.load_op = SDL_GPU_LOADOP_CLEAR;
-        target.clear_color = SDL_FColor{ /* the target is premultiplied; the clear color is straight RGBA */
+        /* the target is premultiplied; the clear color is straight RGBA */
+        target.clear_color = SDL_FColor{
             (clear->red * clear->alpha),
             (clear->green * clear->alpha),
             (clear->blue * clear->alpha),
@@ -593,7 +590,7 @@ static void _OpenRenderPass(_RenderPass& renderPass, std::optional<Vec4> const& 
     renderPass.pass = ::SDL_BeginGPURenderPass(renderPass.commandBuffer, &target, 1, nullptr);
 
     if (renderPass.pass == nullptr) {
-        throw std::runtime_error(::SDL_GetError());
+        throw std::runtime_error(std::format("Failed to begin a render pass: {}", ::SDL_GetError()));
     }
 }
 
@@ -680,8 +677,8 @@ static void _PushStateUniforms(_RenderPass const& renderPass, Vec2 const& resolu
     _CopyColumn(&stateUniforms.transform[8], transform.data[6], transform.data[7], transform.data[8]);
     stateUniforms.opacity = opacity;
 
-    ::SDL_PushGPUVertexUniformData(renderPass.commandBuffer, _STATE_VERTEX_UNIFORMS_INDEX, &stateUniforms, sizeof(_StateUniforms));
-    ::SDL_PushGPUFragmentUniformData(renderPass.commandBuffer, _STATE_FRAGMENT_UNIFORMS_INDEX, &stateUniforms, sizeof(_StateUniforms));
+    ::SDL_PushGPUVertexUniformData(renderPass.commandBuffer, _stateVertexUniformsIndex, &stateUniforms, sizeof(_StateUniforms));
+    ::SDL_PushGPUFragmentUniformData(renderPass.commandBuffer, _stateFragmentUniformsIndex, &stateUniforms, sizeof(_StateUniforms));
 }
 
 static void _PushShapeUniforms(_RenderPass const& renderPass, Shape const& shape, Vec2 const& expand, bool fragment) {
@@ -690,31 +687,31 @@ static void _PushShapeUniforms(_RenderPass const& renderPass, Shape const& shape
     assert(renderPass.pass != nullptr);
 
     auto rect    = Vec4{};
-    auto borders = Vec4{}; // per-edge outline widths (left, top, right, bottom)
-    auto corners = Vec4{}; // per-corner radii (top-left, top-right, bottom-right, bottom-left)
-    auto type    = 0;      // 0=quad, 1=ellipse, 2=quad outline, 3=ellipse outline
+    auto borders = Vec4{};
+    auto corners = Vec4{};
+    auto type    = _ShapeType::Quad;
 
     shape.match(
         [&](QuadShape const& quadShape) {
             rect    = quadShape.rect;
             corners = _ResolveRadius(quadShape);
-            type    = 0;
+            type    = _ShapeType::Quad;
         },
         [&](EllipseShape const& ellipseShape) {
             rect = ellipseShape.rect;
-            type = 1;
+            type = _ShapeType::Ellipse;
         },
         [&](QuadOutlineShape const& quadOutlineShape) {
             rect    = quadOutlineShape.rect;
             borders = _ResolveBorders(quadOutlineShape);
             corners = _ResolveRadius(quadOutlineShape);
-            type    = 2;
+            type    = _ShapeType::QuadOutline;
         },
         [&](EllipseOutlineShape const& ellipseOutlineShape) {
             auto const width = ellipseOutlineShape.border.value_or(0.0f);
             rect    = ellipseOutlineShape.rect;
             borders = Vec4{ width, width, width, width };
-            type    = 3;
+            type    = _ShapeType::EllipseOutline;
         }
     );
 
@@ -731,10 +728,10 @@ static void _PushShapeUniforms(_RenderPass const& renderPass, Shape const& shape
         .type    = type
     };
 
-    ::SDL_PushGPUVertexUniformData(renderPass.commandBuffer, _SHAPE_VERTEX_UNIFORMS_INDEX, &shapeUniforms, sizeof(_ShapeUniforms));
+    ::SDL_PushGPUVertexUniformData(renderPass.commandBuffer, _shapeVertexUniformsIndex, &shapeUniforms, sizeof(_ShapeUniforms));
 
     if (fragment) {
-        ::SDL_PushGPUFragmentUniformData(renderPass.commandBuffer, _SHAPE_FRAGMENT_UNIFORMS_INDEX, &shapeUniforms, sizeof(_ShapeUniforms));
+        ::SDL_PushGPUFragmentUniformData(renderPass.commandBuffer, _shapeFragmentUniformsIndex, &shapeUniforms, sizeof(_ShapeUniforms));
     }
 }
 
@@ -747,7 +744,7 @@ static void _PushColorBrushUniforms(_RenderPass const& renderPass, ColorBrush co
         .color = { colorBrush.color.red, colorBrush.color.green, colorBrush.color.blue, colorBrush.color.alpha }
     };
 
-    ::SDL_PushGPUFragmentUniformData(renderPass.commandBuffer, _BRUSH_FRAGMENT_UNIFORMS_INDEX, &colorUniforms, sizeof(_ColorBrushUniforms));
+    ::SDL_PushGPUFragmentUniformData(renderPass.commandBuffer, _brushFragmentUniformsIndex, &colorUniforms, sizeof(_ColorBrushUniforms));
 }
 
 static void _PushImageBrushUniforms(_RenderPass const& renderPass, ImageBrush const& imageBrush, Vec4 const& bounds) {
@@ -756,7 +753,6 @@ static void _PushImageBrushUniforms(_RenderPass const& renderPass, ImageBrush co
     assert(renderPass.pass != nullptr);
     assert(imageBrush.image != nullptr);
 
-    auto const imageSize = imageBrush.image->getSize();
     auto const imageColor = imageBrush.color.value_or(Vec4{});
     auto const imageNPatch = imageBrush.nPatch.value_or(Vec4{});
     auto const filterMin = imageBrush.filterMin.value_or(ImageFilter::Nearest);
@@ -770,8 +766,8 @@ static void _PushImageBrushUniforms(_RenderPass const& renderPass, ImageBrush co
     auto const flipX = imageBrush.flipX.value_or(false);
     auto const flipY = imageBrush.flipY.value_or(false);
 
-    auto imageSrc = Vec4{ {}, imageSize };
-    auto imageDst = Vec4{ {}, imageSize };
+    auto imageSrc = Vec4{ {}, imageBrush.image->getSize() };
+    auto imageDst = Vec4{ {}, imageBrush.image->getSize() };
 
     if (imageBrush.slice.has_value()) {
         imageSrc = imageBrush.slice.value();
@@ -813,27 +809,24 @@ static void _PushImageBrushUniforms(_RenderPass const& renderPass, ImageBrush co
 
     auto const imageUniforms = _ImageBrushUniforms{
         .color  = { imageColor.red, imageColor.green, imageColor.blue, imageColor.alpha },
-        .size   = { imageSize.width, imageSize.height },
+        .size   = { imageBrush.image->getSize().width, imageBrush.image->getSize().height },
         .flip   = { (flipX ? 1.0f : 0.0f), (flipY ? 1.0f : 0.0f) },
         .repeat = { (repeatX ? 1.0f : 0.0f), (repeatY ? 1.0f : 0.0f) },
-        ._pad0  = {},
+        .padding0  = {},
         .npatch = { imageNPatch.left, imageNPatch.top, imageNPatch.right, imageNPatch.bottom },
         .source = { imageSrc.x, imageSrc.y, imageSrc.getMaxX(), imageSrc.getMaxY() },
         .destin = { imageDst.x, imageDst.y, imageDst.getMaxX(), imageDst.getMaxY() }
     };
 
-    auto sampler = _GetNerNerSampler();
-
-    if (filterMin == ImageFilter::Linear && filterMag == ImageFilter::Linear) {
-        sampler = _GetLinLinSampler();
-    } else if (filterMin == ImageFilter::Linear && filterMag == ImageFilter::Nearest) {
-        sampler = _GetLinNerSampler();
-    } else if (filterMin == ImageFilter::Nearest && filterMag == ImageFilter::Linear) {
-        sampler = _GetNerLinSampler();
-    }
+    auto const sampler = (
+        (filterMin == ImageFilter::Linear && filterMag == ImageFilter::Linear) ? _GetLinLinSampler() :
+        (filterMin == ImageFilter::Linear && filterMag == ImageFilter::Nearest) ? _GetLinNerSampler() :
+        (filterMin == ImageFilter::Nearest && filterMag == ImageFilter::Linear) ? _GetNerLinSampler() :
+                                                                                  _GetNerNerSampler()
+    );
 
     _BindTexture(renderPass, static_cast<SDL_GPUTexture*>(imageBrush.image->getTexture()), sampler);
-    ::SDL_PushGPUFragmentUniformData(renderPass.commandBuffer, _BRUSH_FRAGMENT_UNIFORMS_INDEX, &imageUniforms, sizeof(_ImageBrushUniforms));
+    ::SDL_PushGPUFragmentUniformData(renderPass.commandBuffer, _brushFragmentUniformsIndex, &imageUniforms, sizeof(_ImageBrushUniforms));
 }
 
 static void _PushGradientBrushUniforms(_RenderPass const& renderPass, GradientBrush const& gradientBrush) {
@@ -876,7 +869,7 @@ static void _PushGradientBrushUniforms(_RenderPass const& renderPass, GradientBr
         gradientUniforms.stopPositions[i / 4][i % 4] = position;
     }
 
-    ::SDL_PushGPUFragmentUniformData(renderPass.commandBuffer, _BRUSH_FRAGMENT_UNIFORMS_INDEX, &gradientUniforms, sizeof(_GradientBrushUniforms));
+    ::SDL_PushGPUFragmentUniformData(renderPass.commandBuffer, _brushFragmentUniformsIndex, &gradientUniforms, sizeof(_GradientBrushUniforms));
 }
 
 static void _PushBlurFilterUniforms(_RenderPass const& renderPass, Vec2 const& texelSize, Vec2 const& direction, BlurFilter const& filter, Vec2 const& scale) {
@@ -889,10 +882,10 @@ static void _PushBlurFilterUniforms(_RenderPass const& renderPass, Vec2 const& t
         .direction = { direction.x, direction.y },
         .sigma     = (filter.getSigma() * axisScale),
         .taps      = _GetGaussianTaps(filter.getExtent() * axisScale),
-        ._pad0     = {}
+        .padding0     = {}
     };
 
-    ::SDL_PushGPUFragmentUniformData(renderPass.commandBuffer, _BRUSH_FRAGMENT_UNIFORMS_INDEX, &blurUniforms, sizeof(_BlurFilterUniforms));
+    ::SDL_PushGPUFragmentUniformData(renderPass.commandBuffer, _brushFragmentUniformsIndex, &blurUniforms, sizeof(_BlurFilterUniforms));
 }
 
 static void _PushShadowFilterFieldUniforms(_RenderPass const& renderPass, Vec2 const& texel, Vec2 const& direction, float spread, ShadowFilter const& filter, bool fromSilhouette, Vec2 const& scale) {
@@ -903,15 +896,15 @@ static void _PushShadowFilterFieldUniforms(_RenderPass const& renderPass, Vec2 c
     auto const fieldUniforms = _ShadowFilterFieldUniforms{
         .texel          = { texel.x, texel.y },
         .direction      = { direction.x, direction.y },
-        .spread         = std::clamp((spread * axisScale), -static_cast<float>(_BLUR_TAP_MAX), static_cast<float>(_BLUR_TAP_MAX)),
+        .spread         = std::clamp((spread * axisScale), -static_cast<float>(_blurTapMax), static_cast<float>(_blurTapMax)),
         .sigma          = (filter.getSigma() * axisScale),
         .taps           = _GetGaussianTaps(filter.getExtent() * axisScale),
         .fromSilhouette = (fromSilhouette ? 1 : 0),
         .invert         = ((fromSilhouette && filter.inset) ? 1 : 0),
-        ._pad0          = {}
+        .padding0          = {}
     };
 
-    ::SDL_PushGPUFragmentUniformData(renderPass.commandBuffer, _BRUSH_FRAGMENT_UNIFORMS_INDEX, &fieldUniforms, sizeof(_ShadowFilterFieldUniforms));
+    ::SDL_PushGPUFragmentUniformData(renderPass.commandBuffer, _brushFragmentUniformsIndex, &fieldUniforms, sizeof(_ShadowFilterFieldUniforms));
 }
 
 static void _PushShadowFilterUniforms(_RenderPass const& renderPass, Vec2 const& texel, ShadowFilter const& filter, bool fromSilhouette, Vec2 const& scale) {
@@ -922,7 +915,7 @@ static void _PushShadowFilterUniforms(_RenderPass const& renderPass, Vec2 const&
     auto const shadowUniforms = _ShadowFilterUniforms{
         .color          = { filter.color.red, filter.color.green, filter.color.blue, filter.color.alpha },
         .opacity        = 1.0f,
-        ._pad0          = 0.0f,
+        .padding0          = 0.0f,
         .texel          = { texel.x, texel.y },
         .offset         = { (offset.x * scale.x), (offset.y * scale.y) },
         .sigma          = (filter.getSigma() * scale.y),
@@ -930,10 +923,10 @@ static void _PushShadowFilterUniforms(_RenderPass const& renderPass, Vec2 const&
         .inset          = (filter.inset ? 1 : 0),
         .fromSilhouette = (fromSilhouette ? 1 : 0),
         .invert         = ((fromSilhouette && filter.inset) ? 1 : 0),
-        ._pad1          = 0
+        .padding1          = 0
     };
 
-    ::SDL_PushGPUFragmentUniformData(renderPass.commandBuffer, _BRUSH_FRAGMENT_UNIFORMS_INDEX, &shadowUniforms, sizeof(_ShadowFilterUniforms));
+    ::SDL_PushGPUFragmentUniformData(renderPass.commandBuffer, _brushFragmentUniformsIndex, &shadowUniforms, sizeof(_ShadowFilterUniforms));
 }
 
 void* __GetDefaultGPUDevice() {
@@ -945,7 +938,7 @@ void* __GetDefaultGPUDevice() {
         auto device = ::SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, false, nullptr);
 
         if (device == nullptr) {
-            throw std::runtime_error(::SDL_GetError());
+            throw std::runtime_error(std::format("Failed to create the GPU device: {}", ::SDL_GetError()));
         }
 
         return device;
@@ -963,12 +956,14 @@ int __GetDefaultTextureFormat() {
 bool __ClaimWindow(SDL_Window* window) {
     PROFILE
 
-    auto const device = static_cast<SDL_GPUDevice*>(__GetDefaultGPUDevice());
-    auto claimed = ::SDL_ClaimWindowForGPUDevice(device, window);
+    auto claimed = ::SDL_ClaimWindowForGPUDevice(_GetDevice(), window);
 
-    for (auto attempt = 1; (claimed == false) && (attempt < _CLAIM_ATTEMPTS); attempt++) {
-        ::SDL_Delay(_CLAIM_RETRY_DELAY_MS);
-        claimed = ::SDL_ClaimWindowForGPUDevice(device, window);
+    /* Under load the Vulkan driver can fail to describe a new window's surface
+       for a moment (seen with NVIDIA on Wayland, as an error SDL has no name
+       for), so the window is offered again after a short wait. */
+    for (auto attempt = 1; (claimed == false) && (attempt < _claimAttempts); attempt++) {
+        ::SDL_Delay(_claimRetryDelayMs);
+        claimed = ::SDL_ClaimWindowForGPUDevice(_GetDevice(), window);
     }
 
     return claimed;
@@ -977,7 +972,7 @@ bool __ClaimWindow(SDL_Window* window) {
 void __ReleaseWindow(SDL_Window* window) {
     PROFILE
 
-    ::SDL_ReleaseWindowFromGPUDevice(static_cast<SDL_GPUDevice*>(__GetDefaultGPUDevice()), window);
+    ::SDL_ReleaseWindowFromGPUDevice(_GetDevice(), window);
 }
 
 std::uint64_t __GetWindowFlags() {
@@ -995,6 +990,7 @@ _FilterTextures& Painter::_Painter::getFilterTextures(std::uint32_t width, std::
     auto const key = ((static_cast<std::uint64_t>(width) << 32) | static_cast<std::uint64_t>(height));
 
     auto it = filterTextures.find(key);
+
     if (it == filterTextures.end()) {
         auto info = SDL_GPUTextureCreateInfo{};
         info.type = SDL_GPU_TEXTURETYPE_2D;
@@ -1010,7 +1006,7 @@ _FilterTextures& Painter::_Painter::getFilterTextures(std::uint32_t width, std::
         auto second = ::SDL_CreateGPUTexture(_GetDevice(), &info);
 
         if ((first == nullptr) || (second == nullptr)) {
-            throw std::runtime_error(::SDL_GetError());
+            throw std::runtime_error(std::format("Failed to create the filter textures: {}", ::SDL_GetError()));
         }
 
         it = filterTextures.emplace(key, _FilterTextures{
@@ -1026,7 +1022,7 @@ _FilterTextures& Painter::_Painter::getFilterTextures(std::uint32_t width, std::
 void Painter::_Painter::evictFilterTextures() {
     PROFILE
 
-    while (filterTextures.size() > static_cast<std::size_t>(_FILTER_TEXTURE_CACHE_MAX)) {
+    while (filterTextures.size() > static_cast<std::size_t>(_filterTextureCacheMax)) {
         auto evict = filterTextures.end();
         for (auto entry = filterTextures.begin(); entry != filterTextures.end(); ++entry) {
             if ((evict == filterTextures.end()) || (entry->second.lastUse < evict->second.lastUse)) {
@@ -1056,14 +1052,13 @@ void Painter::__done() {
     }
 
     while (_impl->renderPassStack.empty() == false) {
-        auto& renderPass = _impl->renderPassStack.top();
-        if (renderPass.has_value() && (renderPass->pass != nullptr)) {
-            _EndRenderPass(*renderPass);
+        if (_impl->renderPassStack.top().has_value() && (_impl->renderPassStack.top()->pass != nullptr)) {
+            _EndRenderPass(*_impl->renderPassStack.top());
         }
         _impl->renderPassStack.pop();
     }
 
-    /* The open passes are abandoned: their command buffer is cancelled, so
+    /* The open passes are abandoned: their command buffer is canceled, so
        every target keeps its previous content. SDL_GPU cannot cancel a command
        buffer that holds a window's swapchain texture, so that one is submitted
        instead, and the window shows what was painted so far. */
@@ -1101,7 +1096,7 @@ void Painter::__beginPaint(PaintTarget const& target) {
         _impl->commandBuffer = ::SDL_AcquireGPUCommandBuffer(_GetDevice());
 
         if (_impl->commandBuffer == nullptr) {
-            throw std::runtime_error(::SDL_GetError());
+            throw std::runtime_error(std::format("Failed to acquire a command buffer: {}", ::SDL_GetError()));
         }
 
         return true;
@@ -1170,10 +1165,9 @@ void Painter::__endPaint() {
 
     if (_impl->renderPassStack.empty() == false) {
         if (_impl->renderPassStack.top().has_value()) {
-            auto& renderPass = *_impl->renderPassStack.top();
-            auto const commit = renderPass.commit;
+            auto const commit = _impl->renderPassStack.top()->commit;
 
-            _EndRenderPass(renderPass);
+            _EndRenderPass(*_impl->renderPassStack.top());
 
             if (commit) {
                 ::SDL_SubmitGPUCommandBuffer(_impl->commandBuffer); /* presents the swapchain texture, if any */
@@ -1208,8 +1202,6 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
     }
 
     assert(_impl->renderPassStack.top()->pass != nullptr);
-
-    auto& renderPass = *_impl->renderPassStack.top();
 
     auto const colorBrush = brush.as<ColorBrush>();
     auto const imageBrush = brush.as<ImageBrush>();
@@ -1257,7 +1249,7 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
         blurred == false &&
         shadowFilter == nullptr
     ) {
-        drawShape(renderPass, options.scissor, blend, Vec2{ 1.0f, 1.0f });
+        drawShape(*_impl->renderPassStack.top(), options.scissor, blend, Vec2{ 1.0f, 1.0f });
         return;
     }
 
@@ -1266,11 +1258,11 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
        shape is drawn straight into the small copy through a scaled transform,
        so its coverage is computed at that size rather than resampled. */
     auto const downsample = _FilterDownsample(*options.filter);
-    auto const filterWidth = static_cast<std::uint32_t>(std::ceil(static_cast<float>(renderPass.width) / downsample));
-    auto const filterHeight = static_cast<std::uint32_t>(std::ceil(static_cast<float>(renderPass.height) / downsample));
+    auto const filterWidth = static_cast<std::uint32_t>(std::ceil(static_cast<float>(_impl->renderPassStack.top()->width) / downsample));
+    auto const filterHeight = static_cast<std::uint32_t>(std::ceil(static_cast<float>(_impl->renderPassStack.top()->height) / downsample));
     auto const filterScale = Vec2{
-        (static_cast<float>(filterWidth) / static_cast<float>(renderPass.width)),
-        (static_cast<float>(filterHeight) / static_cast<float>(renderPass.height))
+        (static_cast<float>(filterWidth) / static_cast<float>(_impl->renderPassStack.top()->width)),
+        (static_cast<float>(filterHeight) / static_cast<float>(_impl->renderPassStack.top()->height))
     };
     auto const filterTexel = Vec2{
         (1.0f / static_cast<float>(filterWidth)),
@@ -1350,72 +1342,75 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
            bilinear fetch of the last pass and the shape's antialiased edge. */
         auto const grow = (blurFilter->getExtent() + (3.0f * downsample));
         auto const margin = Vec2{ grow, grow };
-        auto const filterBounds = _FilterBounds(bounds, options.transform.value_or(Mat3{}), margin, Vec2{ static_cast<float>(renderPass.width), static_cast<float>(renderPass.height) });
+        auto const filterBounds = _FilterBounds(bounds, options.transform.value_or(Mat3{}), margin, Vec2{ static_cast<float>(_impl->renderPassStack.top()->width), static_cast<float>(_impl->renderPassStack.top()->height) });
+
         if (filterBounds.has_value() == false) {
             return;
         }
 
         auto const targetScissor = options.scissor.has_value() ? filterBounds->getIntersection(*options.scissor) : *filterBounds;
+
         if (targetScissor.isEmpty()) {
             return;
         }
 
         auto const scratchRect = _ToFilterSpace(*filterBounds, filterScale);
 
-        _SuspendRenderPass(renderPass);
+        _SuspendRenderPass(*_impl->renderPassStack.top());
 
         auto const& [ shapeTexture, blurTexture ] = _impl->getFilterTextures(filterWidth, filterHeight).textures;
         auto const filterFormat = (SDL_GPUTextureFormat)__GetDefaultTextureFormat();
         auto const clearColor = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f };
 
         auto shapePass = _RenderPass{};
-        _BeginRenderPass(shapePass, renderPass.commandBuffer, shapeTexture, filterWidth, filterHeight, filterFormat, clearColor);
+        _BeginRenderPass(shapePass, _impl->renderPassStack.top()->commandBuffer, shapeTexture, filterWidth, filterHeight, filterFormat, clearColor);
         drawShape(shapePass, std::nullopt, Blend::Over, filterScale);
         _EndRenderPass(shapePass);
 
         auto blurPass = _RenderPass{};
-        _BeginRenderPass(blurPass, renderPass.commandBuffer, blurTexture, filterWidth, filterHeight, filterFormat, clearColor);
+        _BeginRenderPass(blurPass, _impl->renderPassStack.top()->commandBuffer, blurTexture, filterWidth, filterHeight, filterFormat, clearColor);
         drawBlur(blurPass, shapeTexture, Vec2{ 1.0f, 0.0f }, scratchRect, scratchRect, Blend::Over);
         _EndRenderPass(blurPass);
 
-        _ResumeRenderPass(renderPass);
-        drawBlur(renderPass, blurTexture, Vec2{ 0.0f, 1.0f }, *filterBounds, targetScissor, blend);
+        _ResumeRenderPass(*_impl->renderPassStack.top());
+        drawBlur(*_impl->renderPassStack.top(), blurTexture, Vec2{ 0.0f, 1.0f }, *filterBounds, targetScissor, blend);
     } else {
         /* As for the blur, grown by the spread and the offset as well. */
-        auto const shadowSpread = shadowFilter->spread.value_or(Vec2{});
+        auto const spread = shadowFilter->spread.value_or(Vec2{});
         auto const shadowOffset = shadowFilter->offset.value_or(Vec2{});
         auto const margin = Vec2{
-            (shadowFilter->getExtent() + std::abs(shadowSpread.x) + std::abs(shadowOffset.x) + (3.0f * downsample)),
-            (shadowFilter->getExtent() + std::abs(shadowSpread.y) + std::abs(shadowOffset.y) + (3.0f * downsample))
+            (shadowFilter->getExtent() + std::abs(spread.x) + std::abs(shadowOffset.x) + (3.0f * downsample)),
+            (shadowFilter->getExtent() + std::abs(spread.y) + std::abs(shadowOffset.y) + (3.0f * downsample))
         };
-        auto const filterBounds = _FilterBounds(bounds, options.transform.value_or(Mat3{}), margin, Vec2{ static_cast<float>(renderPass.width), static_cast<float>(renderPass.height) });
+        auto const filterBounds = _FilterBounds(bounds, options.transform.value_or(Mat3{}), margin, Vec2{ static_cast<float>(_impl->renderPassStack.top()->width), static_cast<float>(_impl->renderPassStack.top()->height) });
+
         if (filterBounds.has_value() == false) {
             return;
         }
 
         auto const targetScissor = options.scissor.has_value() ? filterBounds->getIntersection(*options.scissor) : *filterBounds;
+
         if (targetScissor.isEmpty()) {
             return;
         }
 
         auto const scratchRect = _ToFilterSpace(*filterBounds, filterScale);
 
-        _SuspendRenderPass(renderPass);
+        _SuspendRenderPass(*_impl->renderPassStack.top());
 
         auto [ source, target ] = _impl->getFilterTextures(filterWidth, filterHeight).textures;
         auto const filterFormat = (SDL_GPUTextureFormat)__GetDefaultTextureFormat();
         auto const clearColor = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f };
-        auto const spread = shadowFilter->spread.value_or(Vec2{});
         auto fromSilhouette = true;
 
         auto shapePass = _RenderPass{};
-        _BeginRenderPass(shapePass, renderPass.commandBuffer, source, filterWidth, filterHeight, filterFormat, clearColor);
+        _BeginRenderPass(shapePass, _impl->renderPassStack.top()->commandBuffer, source, filterWidth, filterHeight, filterFormat, clearColor);
         drawShape(shapePass, std::nullopt, Blend::Over, filterScale);
         _EndRenderPass(shapePass);
 
         auto const fieldPass = [&](_Fragment fragment, Vec2 const& direction, float extent) {
             auto pass = _RenderPass{};
-            _BeginRenderPass(pass, renderPass.commandBuffer, target, filterWidth, filterHeight, filterFormat, clearColor);
+            _BeginRenderPass(pass, _impl->renderPassStack.top()->commandBuffer, target, filterWidth, filterHeight, filterFormat, clearColor);
             drawShadowField(pass, source, fragment, direction, extent, fromSilhouette, scratchRect);
             _EndRenderPass(pass);
             std::swap(source, target);
@@ -1432,8 +1427,8 @@ void Painter::__paint(Shape const& shape, Brush const& brush, PaintOptions const
             fieldPass(_Fragment::ShadowFilterBlur, Vec2{ 1.0f, 0.0f }, 0.0f);
         }
 
-        _ResumeRenderPass(renderPass);
-        drawShadowComposite(renderPass, source, fromSilhouette, *filterBounds, targetScissor, blend);
+        _ResumeRenderPass(*_impl->renderPassStack.top());
+        drawShadowComposite(*_impl->renderPassStack.top(), source, fromSilhouette, *filterBounds, targetScissor, blend);
     }
 }
 

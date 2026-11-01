@@ -20,14 +20,14 @@ void ConvertSVGToBitmap(std::string const& svg, Vec2 const& size, Vec4 const& co
     auto width = std::max(1, static_cast<int>(size.width));
     auto height = std::max(1, static_cast<int>(size.height));
 
-    if (auto document = lunasvg::Document::loadFromData(svg.data())) {
+    if (auto document = lunasvg::Document::loadFromData(svg.data()); document != nullptr) {
         if (color.alpha > 0.0f) {
             document->applyStyleSheet(
                 std::format(
                     "svg {{ color: rgba({}, {}, {}, {}); }}",
-                    static_cast<int>(color.red * 255),
-                    static_cast<int>(color.green * 255),
-                    static_cast<int>(color.blue * 255),
+                    static_cast<int>(color.red * 255.0f),
+                    static_cast<int>(color.green * 255.0f),
+                    static_cast<int>(color.blue * 255.0f),
                     static_cast<float>(color.alpha)
                 )
             );

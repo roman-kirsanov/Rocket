@@ -41,14 +41,14 @@ Vec4 ColorFromHex(std::string const& hex) {
         return {};
     }
 
-    auto len = hex.size();
-    if (len != 4 && len != 5 && len != 7 && len != 9) {
+    if (hex.size() != 4 && hex.size() != 5 && hex.size() != 7 && hex.size() != 9) {
         return {};
     }
 
     auto nhex = std::string();
-    if (len == 4 || len == 5) {
-        for (std::size_t i = 1; i < len; i++) {
+
+    if (hex.size() == 4 || hex.size() == 5) {
+        for (auto i = std::size_t(1); i < hex.size(); i++) {
             nhex += hex[i];
             nhex += hex[i];
         }

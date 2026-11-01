@@ -93,6 +93,7 @@ struct FontGlyph {
  */
 class Font {
 public:
+    /** Destroys the font, releasing its FreeType face and glyph atlas images. */
     ~Font();
 
     /**

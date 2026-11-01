@@ -9,14 +9,14 @@
 
 #include <optional>
 #include <Rocket/Base/Enum.hpp>
+#include <Rocket/Math/Mat3.hpp>
 #include <Rocket/Math/Vec2.hpp>
 #include <Rocket/Math/Vec4.hpp>
-#include <Rocket/Math/Mat3.hpp>
 #include <Rocket/Paint/Brush.hpp>
-#include <Rocket/Paint/Shape.hpp>
-#include <Rocket/Paint/Shadow.hpp>
 #include <Rocket/Paint/Filter.hpp>
 #include <Rocket/Paint/Image.hpp>
+#include <Rocket/Paint/Shadow.hpp>
+#include <Rocket/Paint/Shape.hpp>
 
 namespace Rocket {
 
@@ -101,7 +101,10 @@ struct PaintOptions {
  */
 class Painter {
 public:
+    /** Destroys the painter, abandoning any passes still open. */
     ~Painter();
+
+    /** Constructs a painter with no pass active; GPU pipelines are created on first use. */
     Painter();
 
     Painter(Painter &&) = delete;
