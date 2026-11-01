@@ -207,12 +207,13 @@ static FT_Error _FontSvgPresetSlot(FT_GlyphSlot slot, FT_Bool cache, FT_Pointer*
     return state->err;
 }
 
-struct Font::_Font {
+struct _Font {
     ::FT_Face face;
 };
 
 Font::Font(std::string const& path, std::size_t index)
-    : _data()
+    : _impl(new _Font{})
+    , _data()
     , _images()
     , _lineCache()
     , _glyphCache()
@@ -227,7 +228,6 @@ Font::Font(std::string const& path, std::size_t index)
     , _monohinting(false)
     , _hasKerning(false)
     , _fontIndex(index)
-    , _impl(new _Font{})
 {
     if (std::filesystem::is_regular_file(path)) {
         auto file = std::ifstream(path, std::ios::binary);

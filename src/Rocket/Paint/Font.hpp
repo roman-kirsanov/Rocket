@@ -230,7 +230,7 @@ public:
      */
     static Font& Add(std::string const& family, FontWeight weight, FontStyle style, std::uint8_t const* data, std::size_t size, std::size_t index);
 private:
-    struct _Font;
+    struct _Font* _impl;
     mutable std::vector<std::uint8_t> _data;
     mutable std::vector<std::unique_ptr<Image>> _images;
     mutable std::unordered_map<std::uint32_t, FontLine> _lineCache;
@@ -246,7 +246,6 @@ private:
     bool _monohinting;
     bool _hasKerning;
     int _fontIndex;
-    _Font* _impl;
 
     std::uint32_t _getCharIndex(std::uint32_t) const;
     void _setPixelSize(std::uint32_t) const;

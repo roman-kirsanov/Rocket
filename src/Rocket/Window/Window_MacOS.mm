@@ -1043,7 +1043,7 @@ void Window::__done() {
 void Window::__init() {
     PROFILE
 
-    _impl = new Window::_Window{
+    _impl = new _Window{
         .window = nullptr,
         .size = { 0.0f, 0.0f },
         .position = { 0.0f, 0.0f },

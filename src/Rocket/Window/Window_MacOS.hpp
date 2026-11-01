@@ -38,7 +38,7 @@
 
 namespace Rocket {
 
-struct Window::_Window {
+struct _Window {
     __NSWindow* window;
     Vec2 size;
     Vec2 position;
