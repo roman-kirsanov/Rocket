@@ -5,6 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+// curl.h includes windows.h on Windows, whose min and max macros break std::min.
+#define NOMINMAX
+
 #include <cctype>
 #include <cstring>
 #include <algorithm>

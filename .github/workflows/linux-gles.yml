@@ -15,9 +15,13 @@ jobs:
       - run: |
           sudo apt-get update
           sudo apt-get install -y \
-            clang g++-14 cmake ninja-build libssl-dev \
+            clang-19 g++-14 cmake ninja-build libssl-dev \
             libdrm-dev libgbm-dev libegl1-mesa-dev libgles2-mesa-dev \
             libasound2-dev libpulse-dev libudev-dev
+          # clang 18, the default on Ubuntu 24.04, crashes on lambdas with an
+          # explicit object parameter (this auto).
+          sudo ln -sf /usr/bin/clang-19 /usr/local/bin/clang
+          sudo ln -sf /usr/bin/clang++-19 /usr/local/bin/clang++
       - run: |
           cmake -S . -B .build/Release -G Ninja \
             -D CMAKE_C_COMPILER=clang -D CMAKE_CXX_COMPILER=clang++ \
