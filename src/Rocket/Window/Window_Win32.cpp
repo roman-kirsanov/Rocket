@@ -494,22 +494,35 @@ std::string __GetLayoutKeycode(Scancode scancode) {
     return GetDefaultKeycode(scancode);
 }
 
+std::vector<void*> __GetPaintedWindows() {
+    PROFILE
+
+    auto handles = std::vector<void*>();
+
+    for (auto const window : Window::GetWindows()) {
+        if (window->getVisible() && (::IsIconic(static_cast<HWND>(window->getHandle())) == FALSE)) {
+            handles.push_back(window->getHandle());
+        }
+    }
+
+    return handles;
+}
+
+void __PaintWindows(std::vector<void*> const& handles) {
+    PROFILE
+
+    for (auto const handle : handles) {
+        /* a window painted before may have closed, hidden or minimized this one */
+        if (auto const painted = __GetPaintedWindows(); std::ranges::find(painted, handle) != painted.end()) {
+            ::SendMessageW(static_cast<HWND>(handle), _wmRocketPaint, 0, 0);
+        }
+    }
+}
+
 void __PaintWindows() {
     PROFILE
 
-    auto const windows = Window::GetWindows();
-
-    for (auto const window : windows) {
-        if (std::ranges::find(Window::GetWindows(), window) == Window::GetWindows().end()) {
-            continue;
-        }
-
-        auto const hwnd = static_cast<HWND>(window->getHandle());
-
-        if (window->getVisible() && (::IsIconic(hwnd) == FALSE)) {
-            ::SendMessageW(hwnd, _wmRocketPaint, 0, 0);
-        }
-    }
+    __PaintWindows(__GetPaintedWindows());
 }
 
 void Window::__done() {

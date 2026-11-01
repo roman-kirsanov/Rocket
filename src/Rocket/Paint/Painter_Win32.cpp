@@ -231,6 +231,9 @@ struct _Swapchain {
     std::uint32_t width = 0;
     std::uint32_t height = 0;
     int references = 0; // passes on it recorded but not yet submitted: it cannot be resized under them
+    HANDLE frameWait = nullptr; // signaled when a presented frame is shown and the swapchain can take the next one
+    bool waiting = false; // a frame was presented and its signal not taken yet
+    ULONGLONG presentTime = 0;
 };
 
 /** Something released once the GPU, and every list being recorded when it was released, is done with it. */
@@ -308,6 +311,8 @@ static auto constexpr _RTV_CAPACITY = UINT(65536);
 static auto constexpr _UPLOAD_PAGE_SIZE = std::uint64_t(1) << 20;
 static auto constexpr _TEXTURE_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 static auto constexpr _SWAPCHAIN_BUFFERS = UINT(2);
+static auto constexpr _SWAPCHAIN_FLAGS = UINT(DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT);
+static auto constexpr _FRAME_WAIT_MAX_MS = ULONGLONG(100);
 
 static void _Check(HRESULT result, char const* what) {
     PROFILE
@@ -1600,40 +1605,6 @@ void __ReleaseTexture(void* handle) {
     });
 }
 
-void __UploadTexture(void* handle, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, std::uint8_t const* pixels) {
-    PROFILE
-
-    if ((width == 0) || (height == 0)) {
-        return;
-    }
-
-    auto const texture = static_cast<_Texture*>(handle);
-    auto& transfer = _GetTransfer();
-
-    auto const rowBytes = static_cast<std::uint64_t>(width) * 4;
-    auto const rowPitch = _Align(rowBytes, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-    auto const allocation = _Allocate(transfer, (rowPitch * height), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
-
-    for (auto row = std::uint32_t(0); row < height; row++) {
-        std::memcpy((allocation.cpu + (row * rowPitch)), (pixels + (row * rowBytes)), rowBytes);
-    }
-
-    auto source = D3D12_TEXTURE_COPY_LOCATION{};
-    source.pResource = allocation.buffer;
-    source.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-    source.PlacedFootprint.Offset = allocation.offset;
-    source.PlacedFootprint.Footprint = D3D12_SUBRESOURCE_FOOTPRINT{ _TEXTURE_FORMAT, width, height, 1, static_cast<UINT>(rowPitch) };
-
-    auto destination = D3D12_TEXTURE_COPY_LOCATION{};
-    destination.pResource = texture->resource.Get();
-    destination.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    destination.SubresourceIndex = 0;
-
-    _Barrier(transfer.list.Get(), texture->resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST);
-    transfer.list->CopyTextureRegion(&destination, x, y, 0, &source, nullptr);
-    _Barrier(transfer.list.Get(), texture->resource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-}
-
 void __DownloadTexture(void* handle, std::vector<std::uint8_t>& pixels) {
     PROFILE
 
@@ -1678,6 +1649,40 @@ void __DownloadTexture(void* handle, std::vector<std::uint8_t>& pixels) {
     readback->Unmap(0, &written);
 
     _CollectDeferred();
+}
+
+void __UploadTexture(void* handle, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, std::uint8_t const* pixels) {
+    PROFILE
+
+    if ((width == 0) || (height == 0)) {
+        return;
+    }
+
+    auto const texture = static_cast<_Texture*>(handle);
+    auto& transfer = _GetTransfer();
+
+    auto const rowBytes = static_cast<std::uint64_t>(width) * 4;
+    auto const rowPitch = _Align(rowBytes, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+    auto const allocation = _Allocate(transfer, (rowPitch * height), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+
+    for (auto row = std::uint32_t(0); row < height; row++) {
+        std::memcpy((allocation.cpu + (row * rowPitch)), (pixels + (row * rowBytes)), rowBytes);
+    }
+
+    auto source = D3D12_TEXTURE_COPY_LOCATION{};
+    source.pResource = allocation.buffer;
+    source.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    source.PlacedFootprint.Offset = allocation.offset;
+    source.PlacedFootprint.Footprint = D3D12_SUBRESOURCE_FOOTPRINT{ _TEXTURE_FORMAT, width, height, 1, static_cast<UINT>(rowPitch) };
+
+    auto destination = D3D12_TEXTURE_COPY_LOCATION{};
+    destination.pResource = texture->resource.Get();
+    destination.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    destination.SubresourceIndex = 0;
+
+    _Barrier(transfer.list.Get(), texture->resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST);
+    transfer.list->CopyTextureRegion(&destination, x, y, 0, &source, nullptr);
+    _Barrier(transfer.list.Get(), texture->resource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 }
 
 void __CopyTexture(void* sourceHandle, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, void* destinationHandle, std::uint32_t toX, std::uint32_t toY) {
@@ -1759,12 +1764,17 @@ static _Swapchain* _GetSwapchain(HWND hwnd) {
         auto const description = DXGI_SWAP_CHAIN_DESC1{
             width, height, _TEXTURE_FORMAT, FALSE, DXGI_SAMPLE_DESC{ 1, 0 },
             DXGI_USAGE_RENDER_TARGET_OUTPUT, _SWAPCHAIN_BUFFERS, DXGI_SCALING_STRETCH,
-            DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_ALPHA_MODE_IGNORE, 0
+            DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_ALPHA_MODE_IGNORE, _SWAPCHAIN_FLAGS
         };
         auto swapchain1 = ComPtr<IDXGISwapChain1>();
 
         _Check(context.factory->CreateSwapChainForHwnd(context.queue.Get(), hwnd, &description, nullptr, nullptr, &swapchain1), "CreateSwapChainForHwnd");
         _Check(swapchain1.As(&swapchain->swapchain), "IDXGISwapChain3");
+        _Check(swapchain->swapchain->SetMaximumFrameLatency(1), "IDXGISwapChain2::SetMaximumFrameLatency");
+
+        /* the object starts signaled for the first frame, which has no frame before it to wait for */
+        swapchain->frameWait = swapchain->swapchain->GetFrameLatencyWaitableObject();
+        ::WaitForSingleObject(swapchain->frameWait, 0);
 
         /* the window decides about full screen itself */
         context.factory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER);
@@ -1787,7 +1797,7 @@ static _Swapchain* _GetSwapchain(HWND hwnd) {
        hold its buffers, and a window painted twice in one frame keeps its size */
     if (((swapchain.width != width) || (swapchain.height != height)) && (swapchain.references == 0)) {
         _ReleaseSwapchainBuffers(swapchain);
-        _Check(swapchain.swapchain->ResizeBuffers(_SWAPCHAIN_BUFFERS, width, height, _TEXTURE_FORMAT, 0), "IDXGISwapChain::ResizeBuffers");
+        _Check(swapchain.swapchain->ResizeBuffers(_SWAPCHAIN_BUFFERS, width, height, _TEXTURE_FORMAT, _SWAPCHAIN_FLAGS), "IDXGISwapChain::ResizeBuffers");
         _AcquireSwapchainBuffers(swapchain);
 
         swapchain.width = width;
@@ -1815,8 +1825,38 @@ void __ReleaseWindowTarget(void* handle) {
         context.freeRtvs.push_back(swapchain->rtvs[i]);
     }
 
+    ::CloseHandle(swapchain->frameWait);
     context.swapchains.erase(it);
     delete swapchain;
+}
+
+void* __GetWindowFrameWait(void* handle) {
+    PROFILE
+
+    auto& context = _GetContext();
+    auto const it = context.swapchains.find(static_cast<HWND>(handle));
+
+    if ((it == context.swapchains.end()) || (it->second->waiting == false)) {
+        return nullptr;
+    }
+
+    /* a signal that does not come (a frame DXGI dropped) does not stop the window for good */
+    if ((::GetTickCount64() - it->second->presentTime) > _FRAME_WAIT_MAX_MS) {
+        it->second->waiting = false;
+        return nullptr;
+    }
+
+    return it->second->frameWait;
+}
+
+void __SetWindowFrameReady(void* handle) {
+    PROFILE
+
+    auto& context = _GetContext();
+
+    if (auto const it = context.swapchains.find(static_cast<HWND>(handle)); it != context.swapchains.end()) {
+        it->second->waiting = false;
+    }
 }
 
 _FilterTextures& Painter::_Painter::getFilterTextures(std::uint32_t width, std::uint32_t height) {
@@ -2001,8 +2041,10 @@ void Painter::__endPaint() {
                     swapchain->fenceValues[swapchain->swapchain->GetCurrentBackBufferIndex()] = fence;
                     swapchain->references--;
 
-                    /* DXGI_STATUS_OCCLUDED (a hidden window) is not an error */
-                    swapchain->swapchain->Present((last ? 1 : 0), 0);
+                    /* DXGI_STATUS_OCCLUDED (a hidden window) is not an error, but
+                       nothing is shown then, so there is no signal to wait for */
+                    swapchain->waiting = (swapchain->swapchain->Present((last ? 1 : 0), 0) == S_OK);
+                    swapchain->presentTime = ::GetTickCount64();
                 }
 
                 _RetireWaiting();

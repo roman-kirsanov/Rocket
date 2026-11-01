@@ -17,6 +17,7 @@
 #include <objbase.h>
 #include <shlobj.h>
 #include <Rocket/Base/Profile.hpp>
+#include <Rocket/Paint/Painter_Win32.hpp>
 #include <Rocket/Window/App_Private.hpp>
 #include <Rocket/Window/Gamepad_Private.hpp>
 #include <Rocket/Window/Window_Win32.hpp>
@@ -302,10 +303,35 @@ void __Tick(bool update) {
     static auto const _timer = ::CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
     static thread_local auto _held = std::vector<MSG>();
 
+    /* A window that presented a frame is painted when its swapchain can take
+       the next one, which follows the vertical blank of the display it is on.
+       The timer paints the windows that presented nothing: they have no frame
+       to wait for, and are painted only to find out whether they changed. */
+    auto ready = std::vector<void*>();
+
     for (;;) {
+        auto handles = std::vector<HANDLE>{ _timer };
+        auto waiting = std::vector<void*>{ nullptr };
+
+        for (auto const window : __GetPaintedWindows()) {
+            auto const wait = static_cast<HANDLE>(__GetWindowFrameWait(window));
+
+            if (wait == nullptr) {
+                continue;
+            }
+
+            if (::WaitForSingleObject(wait, 0) == WAIT_OBJECT_0) {
+                __SetWindowFrameReady(window);
+                ready.push_back(window);
+            } else if (handles.size() < (MAXIMUM_WAIT_OBJECTS - 1)) {
+                handles.push_back(wait);
+                waiting.push_back(window);
+            }
+        }
+
         auto const now = _GetTicks();
 
-        if (now >= _frameEnd) {
+        if ((ready.empty() == false) || (now >= _frameEnd)) {
             _DrainMessages(_held);
             break;
         }
@@ -315,9 +341,14 @@ void __Tick(bool update) {
 
         ::SetWaitableTimer(_timer, &due, 0, nullptr, nullptr, FALSE);
 
-        auto const result = ::MsgWaitForMultipleObjectsEx(1, &_timer, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+        auto const result = ::MsgWaitForMultipleObjectsEx(static_cast<DWORD>(handles.size()), handles.data(), INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
 
-        if (result == WAIT_OBJECT_0) {
+        if ((result >= WAIT_OBJECT_0) && (result < (WAIT_OBJECT_0 + handles.size()))) {
+            if (auto const window = waiting[result - WAIT_OBJECT_0]; window != nullptr) {
+                __SetWindowFrameReady(window);
+                ready.push_back(window);
+            }
+
             _DrainMessages(_held);
             break;
         }
@@ -344,8 +375,14 @@ void __Tick(bool update) {
             _frameEnd = _GetTicks() + static_cast<std::uint64_t>(_GetFramePeriod() * static_cast<double>(_GetTicksPerSecond()));
         }
 
-        __PaintWindows();
+        for (auto const window : __GetPaintedWindows()) {
+            if ((__GetWindowFrameWait(window) == nullptr) && (std::ranges::find(ready, window) == ready.end())) {
+                ready.push_back(window);
+            }
+        }
     }
+
+    __PaintWindows(ready);
 }
 
 void __SetTimerPainting(bool painting) {

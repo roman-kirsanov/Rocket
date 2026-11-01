@@ -7,10 +7,13 @@
 
 #pragma once
 
+#include <vector>
 #include <Rocket/Window/Window.hpp>
 
 namespace Rocket {
 
+std::vector<void*> __GetPaintedWindows();
+void __PaintWindows(std::vector<void*> const& handles);
 void __PaintWindows();
 
 } /* namespace Rocket */
