@@ -1,0 +1,27 @@
+name: Linux GLES
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang g++-14 cmake ninja-build libssl-dev \
+            libdrm-dev libgbm-dev libegl1-mesa-dev libgles2-mesa-dev \
+            libasound2-dev libpulse-dev libudev-dev
+      - run: |
+          cmake -S . -B .build/Release -G Ninja \
+            -D CMAKE_C_COMPILER=clang -D CMAKE_CXX_COMPILER=clang++ \
+            -D CMAKE_BUILD_TYPE=Release \
+            -D BUILD_TESTING=OFF \
+            -D ROCKET_GLES=ON
+          cmake --build .build/Release

@@ -5,6 +5,7 @@
 [![macOS](https://github.com/roman-kirsanov/Rocket/actions/workflows/macos.yml/badge.svg)](https://github.com/roman-kirsanov/Rocket/actions/workflows/macos.yml)
 [![Windows](https://github.com/roman-kirsanov/Rocket/actions/workflows/windows.yml/badge.svg)](https://github.com/roman-kirsanov/Rocket/actions/workflows/windows.yml)
 [![Linux](https://github.com/roman-kirsanov/Rocket/actions/workflows/linux.yml/badge.svg)](https://github.com/roman-kirsanov/Rocket/actions/workflows/linux.yml)
+[![Linux GLES](https://github.com/roman-kirsanov/Rocket/actions/workflows/linux-gles.yml/badge.svg)](https://github.com/roman-kirsanov/Rocket/actions/workflows/linux-gles.yml)
 
 https://github.com/user-attachments/assets/9a6af07c-1026-42cd-a801-980949e486c1
 
