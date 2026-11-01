@@ -56,6 +56,14 @@ A local is justified only when it does more than rename:
   document->setScale(previousScale + 0.1f);
   ```
 
+- **The call does work**, more than returning a field, and the result is
+  used more than once: it is called once and kept.
+
+  ```cpp
+  auto const& glyphs = getGlyphs(); // lays the text out first
+  auto& context = _GetContext();
+  ```
+
 ### Functions
 
 This applies to helpers: static functions, private member functions and
@@ -91,14 +99,14 @@ does, or when written inline it would bury the code around it.
 
 ```cpp
 /* no: the name says no more than the code */
-static bool _IsWheelEvent(SDL_Event const& event) {
-    return (event.type == SDL_EVENT_MOUSE_WHEEL);
+static bool _IsWheelEvent(::SDL_Event const& event) {
+    return (event.type == ::SDL_EVENT_MOUSE_WHEEL);
 }
 
 if (_IsWheelEvent(event)) { ... }
 
 /* yes */
-if (event.type == SDL_EVENT_MOUSE_WHEEL) { ... }
+if (event.type == ::SDL_EVENT_MOUSE_WHEEL) { ... }
 
 /* yes: each one is a step of a body's move, named by what it does */
 body.position.x = _StopAtCeilings(_ceilings, body, x);
@@ -181,10 +189,12 @@ This covers every kind of comment:
 - comments that describe what the next lines do;
 - section banners and labels inside a function.
 
-In a source file, a comment is written only when it is really needed:
-something non-obvious that cannot be made obvious by the code, such as why a
-value is what it is or a constraint the reader could not guess. A private
-header has no comments at all.
+In a source file, a comment is written only inside a function body, and only
+when it is really needed: something non-obvious that cannot be made obvious
+by the code, such as why a value is what it is or a constraint the reader
+could not guess. What is private carries no comment at all: a private header,
+and in a source file a private enum, struct, field, static variable or
+function. What such a comment would say goes into a name or a type instead.
 
 A backend marks a feature its platform does not provide with
 `// NOTE: Not supported in <Platform>` where it falls back, so the gaps of
@@ -363,7 +373,7 @@ its own files (`_GamepadDown()`).
 | Kind | Form | Examples |
 |---|---|---|
 | Private struct / enum | `_PascalCase` | `_MaterialVariant`, `_PopupState` |
-| Static variable | `_camelCase` | `_blue500`, `_variants`, `_borderRadius` |
+| Static variable, a constant too | `_camelCase` | `_blue500`, `_variants`, `_blurTapMax` |
 | Static function | `_PascalCase` | `_GetMapped`, `_FindFrameAt` |
 | Local variable | `camelCase` (no prefix) | `state`, `nodeRef`, `isHover` |
 
@@ -406,3 +416,30 @@ auto const justify = (
                                         NodeJustify::Center
 );
 ```
+
+## 11. Global C names
+
+A name a C library or a system API declares in the global namespace is
+written with a leading `::`: functions, types, enumerators and global
+variables alike, from SDL, Win32, FreeType, OpenGL, libcurl and the like.
+The `::` marks a call or a type as leaving Rocket's own code, and keeps a
+Rocket name from being picked by mistake.
+
+```cpp
+/* no */
+SDL_Event event;
+while (SDL_PollEvent(&event)) { ... }
+auto const hwnd = static_cast<HWND>(handle);
+
+/* yes */
+auto event = ::SDL_Event{};
+while (::SDL_PollEvent(&event)) { ... }
+auto const hwnd = static_cast<::HWND>(handle);
+```
+
+A macro cannot take `::` and is written as it is: `SDL_INIT_VIDEO`,
+`WAIT_OBJECT_0`, `GL_TEXTURE_2D`. Names of the C standard library are
+reached through `std::` instead (`std::memcpy`, `std::uint32_t`).
+Objective-C is written as it is: its classes, its messages, and the types
+in its method declarations (`NSString`, `[NSApp run]`,
+`- (void)setMarkedText:(id)string selectedRange:(NSRange)range`).

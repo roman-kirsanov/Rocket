@@ -546,7 +546,7 @@ pointer, so the walk touches one record per level and nothing else.
 - The general rules in [Code style](Codestyle.md): no aliases, no `!`, no
   comments in sources and private headers, symbol order, headers with
   implementation, exceptions, lambda captures, private names, types and
-  literals, layout.
+  literals, layout, global C names.
 - One component per file; the function name equals the file name.
 
 ## 11. Adding a new component, end to end
