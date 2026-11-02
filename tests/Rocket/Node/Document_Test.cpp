@@ -851,6 +851,79 @@ TEST(Document, KeepsTheWidthOfAFillingNodeAtADriftedScale) {
     ASSERT_TRUE(rest.getComputedBorderRect().width == width);
 }
 
+/* At a fractional scale a text's rect is a whole number of pixels give or take float noise,
+   which differs from one layout to the next. The text is drawn at the same size however
+   often the document is laid out again. */
+TEST(Document, DrawsTextAtTheSameSizeOnEveryLayoutAtAFractionalScale) {
+    auto const strings = std::vector<std::string>{ "1, 0, 2 x 1", "RetroDiffusionInferences", "Whole image", "Pipelines" };
+
+    for (auto const scale : { 1.1f, 1.2f, 1.25f, 1.3f, 1.35f }) {
+        auto window = Window();
+        window.setSize({ 640.0f, 480.0f });
+
+        auto document = Document(window);
+        document.setScale(scale);
+
+        auto column = Node();
+        column.setWidth(300.0f);
+        column.setDirection(NodeDirection::Vertical);
+        document.appendChild(column);
+
+        auto spacer = Node();
+        spacer.setHeight(10.0f);
+        column.appendChild(spacer);
+
+        auto rows = std::vector<std::unique_ptr<Node>>();
+        auto texts = std::vector<std::unique_ptr<Node>>();
+
+        for (auto const& string : strings) {
+            rows.push_back(std::make_unique<Node>());
+            rows.back()->setDirection(NodeDirection::Horizontal);
+            rows.back()->setPadding(3.0f);
+            column.appendChild(*rows.back());
+
+            texts.push_back(std::make_unique<Node>());
+            texts.back()->setDisplay(NodeDisplay::Text);
+            texts.back()->setContent(string);
+            rows.back()->appendChild(*texts.back());
+        }
+
+        auto sink = NiceMock<PainterSink>();
+        auto scope = SinkScope(sink);
+        auto sizes = std::vector<Vec2>();
+
+        ON_CALL(sink, paint(_, _, _)).WillByDefault([&](Shape const& shape, Brush const& brush, PaintOptions const&) {
+            auto const quad = shape.as<QuadShape>();
+            auto const image = brush.as<ImageBrush>();
+
+            if (
+                (quad != nullptr) &&
+                (image != nullptr) &&
+                (image->filterMag == ImageFilter::Linear)
+            ) {
+                sizes.push_back(quad->rect.size);
+            }
+        });
+
+        document.update();
+        document.render();
+        auto const first = sizes;
+
+        for (auto pass = 0; pass < 6; pass++) {
+            spacer.setHeight(((pass % 2) == 0) ? 11.0f : 10.0f);
+            sizes.clear();
+            document.update();
+            document.render();
+
+            ASSERT_TRUE(sizes.size() == first.size());
+
+            for (auto index = 0ull; index < sizes.size(); index++) {
+                EXPECT_TRUE(sizes[index] == first[index]) << "scale " << scale << ", text " << index << ", pass " << pass;
+            }
+        }
+    }
+}
+
 /* At a fractional scale, values applied after Yoga's own pixel-grid rounding
    (offset, transform, scroll position, border widths) are snapped so they
    land on whole device pixels. */

@@ -146,6 +146,13 @@ static float _SnapToPixelGrid(float value, float scale) {
     return (std::roundf(value * scale) / scale);
 }
 
+/* A laid-out rect is on the pixel grid, so its size in pixels is whole but for float noise,
+   which differs from one layout to the next: floored, it loses a pixel on some layouts and
+   not on others, and a text drawn at that size flickers. */
+static float _ToWholePixels(float value, float scale) {
+    return std::roundf(value * scale);
+}
+
 static float _SnapBorderToPixelGrid(float value, float scale) {
     return (value > 0.0f) ? std::max((1.0f / scale), _SnapToPixelGrid(value, scale)) : 0.0f;
 }
@@ -1549,12 +1556,12 @@ void Document::_updateNode(Node& node) {
     ) {
         node._textObject->setMaxWidth(std::nullopt);
         node._textObject->setMaxHeight(std::nullopt);
-        node._textObject->setHeight(std::floorf(node._computedTextRect.height * _scale));
+        node._textObject->setHeight(_ToWholePixels(node._computedTextRect.height, _scale));
         node._textObject->setWidth(
             _isNodeSingleLineText(node)
                 ? std::nullopt
                 : std::optional<float>(
-                    std::floorf(node._computedTextRect.width * _scale)
+                    _ToWholePixels(node._computedTextRect.width, _scale)
                 )
         );
 
