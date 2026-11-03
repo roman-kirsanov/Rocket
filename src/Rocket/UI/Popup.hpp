@@ -87,7 +87,9 @@ struct PopupProps {
  * lands outside its parent. By `collision`, the popup is kept inside the
  * document: it is measured from the layout of the last update and then
  * shifted by however far it runs past an edge, or mirrored to the other side
- * of its anchor, so the correction follows the anchor one render behind. An
+ * of its anchor, so the correction follows the anchor one render behind;
+ * every render over the same layout makes the same correction, however many
+ * times an update renders. An
  * axis on which `nodeProps` sets both edges is never mirrored; one on which
  * it sets one edge is mirrored around that point.
  *

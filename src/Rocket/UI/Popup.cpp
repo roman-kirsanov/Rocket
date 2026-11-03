@@ -22,6 +22,9 @@ struct _PopupState {
     PopupFlip flip;
     /* False until a popup that flips or shifts has a layout to measure; it stays hidden until then. */
     bool measured = false;
+    Vec4 measuredRect;
+    Vec2 measuredShift;
+    PopupFlip measuredFlip;
 };
 
 /* One axis of a popup as measured: its span, the document's length on that
@@ -192,33 +195,46 @@ void Popup(PopupProps const& props, std::function<void()> const& children) {
     auto const placedX = (props.nodeProps.left.has_value() || props.nodeProps.right.has_value());
     auto const placedY = (props.nodeProps.top.has_value() || props.nodeProps.bottom.has_value());
 
-    /* The rect comes from the last update and includes the shift applied
-       then, so the unshifted position is the rect minus that shift. */
+    /* The rect comes from the last layout and includes the shift and flip
+       applied then, so the unshifted position is the rect minus that shift.
+       An update can render several times over one layout; until the rect
+       changes, every render works from the shift and flip it was laid out
+       with, not from what an earlier render of the same update chose. */
     if (measures && nodeRef != nullptr && nodeRef->getComputedBorderRect().width > 0.0f) {
         auto const& rect = nodeRef->getComputedBorderRect();
+
+        if (
+            state.measured == false ||
+            rect != state.measuredRect
+        ) {
+            state.measuredRect = rect;
+            state.measuredShift = state.shift;
+            state.measuredFlip = state.flip;
+        }
+
         auto const size = document.getSize();
         auto const parent = nodeRef->getParent();
         auto const anchor = (parent != nullptr ? parent->getComputedBorderRect() : Vec4{});
         auto const x = _PlacePopupAxis({
-            .start = rect.x - state.shift.x,
+            .start = rect.x - state.measuredShift.x,
             .size = rect.width,
             .limit = size.width,
             .anchor = ((parent != nullptr && placedX == false) ? std::optional<Vec2>(Vec2{ anchor.x, anchor.width }) : std::nullopt),
             .anchorFraction = _GetFraction(preferredAnchor.horizontal),
             .fraction = _GetFraction(preferredTransform.horizontal),
             .offset = preferredOffset.x,
-            .flipped = state.flip.horizontal,
+            .flipped = state.measuredFlip.horizontal,
             .flippable = ((props.nodeProps.left.has_value() && props.nodeProps.right.has_value()) == false)
         }, collision);
         auto const y = _PlacePopupAxis({
-            .start = rect.y - state.shift.y,
+            .start = rect.y - state.measuredShift.y,
             .size = rect.height,
             .limit = size.height,
             .anchor = ((parent != nullptr && placedY == false) ? std::optional<Vec2>(Vec2{ anchor.y, anchor.height }) : std::nullopt),
             .anchorFraction = _GetFraction(preferredAnchor.vertical),
             .fraction = _GetFraction(preferredTransform.vertical),
             .offset = preferredOffset.y,
-            .flipped = state.flip.vertical,
+            .flipped = state.measuredFlip.vertical,
             .flippable = ((props.nodeProps.top.has_value() && props.nodeProps.bottom.has_value()) == false)
         }, collision);
 

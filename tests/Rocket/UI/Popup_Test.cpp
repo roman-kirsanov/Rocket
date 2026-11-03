@@ -35,6 +35,7 @@ struct _PopupHarness {
     float anchorTop = 50.0f;
     float anchorLeft = 50.0f;
     float anchorHeight = 40.0f;
+    bool asksForAnotherRender = false;
     PopupFlip flip;
     PopupFlip flipSeenByChildren;
 
@@ -61,6 +62,10 @@ struct _PopupHarness {
                 });
 
                 Node({ .ref = &elsewhere, .position = NodePosition::Absolute, .width = NodeValue(60.0f), .height = NodeValue(60.0f), .top = NodeValue(300.0f), .left = NodeValue(300.0f) });
+
+                if (asksForAnotherRender) {
+                    reconciler.needsUpdate();
+                }
             });
         });
     }
@@ -295,6 +300,22 @@ TEST(Popup, ShiftKeepsTheTransformOrigin) {
     ASSERT_TRUE(size.width > 350.0f);
 }
 
+TEST(Popup, ShiftHoldsStillWhenAnUpdateRendersSeveralTimes) {
+    auto h = _PopupHarness();
+    auto const size = h.document.getSize();
+    h.asksForAnotherRender = true;
+    h.props.nodeProps.left = NodeValue(600.0f);
+    h.props.nodeProps.top = NodeValue(440.0f);
+
+    /* Every pass of an update sees the same layout, so it must work out the same shift. */
+    for (auto i = 0; i < 4; i++) {
+        h.render();
+        h.render();
+        ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxX(), size.width);
+        ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxY(), size.height);
+    }
+}
+
 TEST(Popup, FlipsAboveItsAnchorWhenItRunsPastTheBottom) {
     auto h = _PopupHarness();
     h.props.collision = PopupCollision::Flip;
@@ -359,6 +380,21 @@ TEST(Popup, FlipsAroundThePointItIsPlacedAt) {
     /* Placed with its top at 20 above the bottom, it hangs up from that point instead. */
     ASSERT_TRUE(h.flip.vertical);
     ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxY(), size.height - 20.0f);
+}
+
+TEST(Popup, FlipHoldsStillWhenAnUpdateRendersSeveralTimes) {
+    auto h = _PopupHarness();
+    h.props.collision = PopupCollision::Flip;
+    auto const size = h.document.getSize();
+    h.asksForAnotherRender = true;
+    h.props.nodeProps.top = NodeValue(size.height - 70.0f);
+
+    for (auto i = 0; i < 4; i++) {
+        h.render();
+        h.render();
+        ASSERT_TRUE(h.flip.vertical);
+        ASSERT_FLOAT_EQ(h.popup->getComputedBorderRect().getMaxY(), size.height - 20.0f);
+    }
 }
 
 TEST(Popup, NeverFlipsAnAxisWhoseBothEdgesAreSet) {
