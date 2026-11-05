@@ -4,8 +4,9 @@
 #   .\make.ps1 --test       debug build, then run the test suite
 #   .\make.ps1 --asan       debug build with AddressSanitizer
 #   .\make.ps1 --release    optimised build, tests off
+#   .\make.ps1 --example    also build the example/ applications
 #
-# Flags combine: .\make.ps1 --asan --test
+# Flags combine: .\make.ps1 --asan --example --test
 #
 # It needs Visual Studio 2022 (or its Build Tools) with the C++ workload,
 # whose Windows SDK also brings dxc, the shader compiler. It sets up the MSVC
@@ -19,6 +20,7 @@ $Out = Join-Path $Dir '.build\Debug'
 $Testing = 'ON'
 $Tests = $false
 $Asan = ''
+$Example = 'OFF'
 
 if ($args -contains '--release') {
     $Build = 'Release'
@@ -28,6 +30,10 @@ if ($args -contains '--release') {
 
 if ($args -contains '--asan') {
     $Asan = '/fsanitize=address'
+}
+
+if ($args -contains '--example') {
+    $Example = 'ON'
 }
 
 if ($args -contains '--test') {
@@ -64,7 +70,8 @@ $Configure = @(
     '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
     "-DCMAKE_C_FLAGS=/DWIN32 /D_WINDOWS $Asan",
     "-DCMAKE_CXX_FLAGS=/DWIN32 /D_WINDOWS /EHsc /GR $Asan",
-    "-DBUILD_TESTING=$Testing"
+    "-DBUILD_TESTING=$Testing",
+    "-DROCKET_EXAMPLE=$Example"
 )
 
 cmake @Configure

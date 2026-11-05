@@ -4,6 +4,7 @@
 #include <memory>
 #include <format>
 #include <cstdint>
+#include <type_traits>
 #include <typeindex>
 #include <functional>
 #include <Rocket/Base/Effect.hpp>
@@ -243,7 +244,9 @@ std::int64_t const& UseComponentIndex();
  * Mounts a provider component that exposes `value` as a context and renders
  * `children` inside it; descendants access it via UseContext<Type>().
  *
- * Only a pointer is stored — the value must outlive the render.
+ * Only a pointer is stored — the value must outlive the render. A context is
+ * found by its type whether it was provided const or not, so a const value
+ * is read with UseContext<Type const>().
  *
  * @param value    The context value to expose to descendants.
  * @param children The function that renders the descendants that can see the context.
@@ -324,14 +327,14 @@ template<typename Type>
 inline void SetContext(Type& value) {
     PROFILE
 
-    SetContextAny(std::type_index(typeid(Type*)), const_cast<void*>(static_cast<void const*>(&value)));
+    SetContextAny(std::type_index(typeid(std::remove_const_t<Type>*)), const_cast<void*>(static_cast<void const*>(&value)));
 }
 
 template<typename Type>
 inline void Context(Type& value, std::function<void()> const& children) {
     PROFILE
 
-    ContextAny(std::type_index(typeid(Type*)), const_cast<void*>(static_cast<void const*>(&value)), children);
+    ContextAny(std::type_index(typeid(std::remove_const_t<Type>*)), const_cast<void*>(static_cast<void const*>(&value)), children);
 }
 
 template<typename Type, typename... Arguments>
@@ -355,13 +358,13 @@ template<typename Type>
 inline Type& UseContext() {
     PROFILE
 
-    auto value = UseContextAny(std::type_index(typeid(Type*)));
+    auto value = UseContextAny(std::type_index(typeid(std::remove_const_t<Type>*)));
 
     if (value != nullptr) {
         return *static_cast<Type*>(value);
     } else {
         throw std::runtime_error(
-            std::format("Context `{}` is not mounted", std::type_index(typeid(Type*)).name())
+            std::format("Context `{}` is not mounted", std::type_index(typeid(std::remove_const_t<Type>*)).name())
         );
     }
 }
@@ -371,7 +374,7 @@ inline Type* UseContextIf() {
     PROFILE
 
     return static_cast<Type*>(
-        UseContextAny(std::type_index(typeid(Type*)))
+        UseContextAny(std::type_index(typeid(std::remove_const_t<Type>*)))
     );
 }
 

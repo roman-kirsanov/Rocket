@@ -6,6 +6,7 @@
 #   ./make.sh --test       debug build, then run the test suite
 #   ./make.sh --asan       debug build with AddressSanitizer
 #   ./make.sh --release    optimised build, tests off
+#   ./make.sh --example    also build the example/ applications
 #
 # Flags combine: ./make.sh --asan --example --test
 
@@ -18,6 +19,7 @@ TESTING=ON
 TESTS=0
 ASAN=""
 ASAN_LINK=""
+EXAMPLE=OFF
 
 if [[ $@ == *--release* ]]; then
     BUILD=Release
@@ -28,6 +30,10 @@ fi
 if [[ $@ == *--asan* ]]; then
     ASAN="-fsanitize=address -fno-omit-frame-pointer"
     ASAN_LINK="-fsanitize=address"
+fi
+
+if [[ $@ == *--example* ]]; then
+    EXAMPLE=ON
 fi
 
 if [[ $@ == *--test* ]]; then
@@ -50,7 +56,8 @@ cmake -S $DIR -B $OUT $COMPILERS \
     -D CMAKE_CXX_FLAGS="$ASAN" \
     -D CMAKE_OBJCXX_FLAGS="$ASAN" \
     -D CMAKE_EXE_LINKER_FLAGS="$ASAN_LINK" \
-    -D BUILD_TESTING=$TESTING
+    -D BUILD_TESTING=$TESTING \
+    -D ROCKET_EXAMPLE=$EXAMPLE
 
 cmake --build $OUT --parallel 8
 

@@ -238,10 +238,10 @@ this fixed order, each group complete before the next starts:
 namespace Rocket {
 
 /* 1. private enums */
-/* 2. private structs      _MaterialOptionsLess, _MaterialVariant */
-/* 3. static variables     _image1x, _image2x, _image3x, _variants */
+/* 2. private structs      _MaterialArrowSlices, _MaterialVariantSlices, Material::_Material */
+/* 3. static variables     _cellSize, _arrows, _variants */
 /* 4. static functions */
-/* 5. public functions     GetMaterial() */
+/* 5. public functions     Material::getVariant(), Material::getArrowVariant() */
 
 } /* namespace Rocket */
 ```
@@ -372,7 +372,7 @@ its own files (`_GamepadDown()`).
 
 | Kind | Form | Examples |
 |---|---|---|
-| Private struct / enum | `_PascalCase` | `_MaterialVariant`, `_PopupState` |
+| Private struct / enum | `_PascalCase` | `_MaterialVariantSlices`, `_PopupState` |
 | Static variable, a constant too | `_camelCase` | `_blue500`, `_variants`, `_blurTapMax` |
 | Static function | `_PascalCase` | `_GetMapped`, `_FindFrameAt` |
 | Local variable | `camelCase` (no prefix) | `state`, `nodeRef`, `isHover` |

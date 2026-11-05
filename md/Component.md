@@ -31,14 +31,57 @@ header used everywhere in the tree.
 #pragma once
 
 #include <functional>
+#include <map>
 #include <optional>
 #include <string>
+#include <tuple>
+#include <vector>
+#include <Rocket/UI/Material.hpp>
 #include <Rocket/UI/Node.hpp>
 
 namespace Rocket {
 
 /** Visual style of a button. */
 enum class ButtonKind { Solid, Outline, Flat, Transparent };
+
+/** Everything Button takes from the theme: a list of rules, as in a CSS stylesheet. */
+struct ButtonTheme {
+    /** State of the button a rule can match. */
+    enum class State { Normal, Hover, Active, Disabled };
+
+    /** What a rule matches; an unset field matches any value. */
+    struct Selector {
+        /** Kind of the button. */
+        std::optional<ButtonKind> kind;
+        /** State of the button. */
+        std::optional<State> state;
+        ...
+    };
+
+    /** What a rule sets; an unset field is left to other rules. */
+    struct Style {
+        /** Kind of the material drawn; unset draws the plain colors. */
+        std::optional<MaterialKind> materialKind;
+        /** Fill color, without a material. */
+        std::optional<Vec4> background;
+        /** Color of the label and icon. */
+        std::optional<Vec4> color;
+        ...
+    };
+
+    /** A selector and the style it applies. */
+    struct Rule {
+        /** What the rule matches. */
+        Selector selector;
+        /** What the rule sets. */
+        Style style;
+        /** Beats every rule that is not important, whatever its selector. */
+        bool important = false;
+    };
+
+    /** The rules, in order. */
+    std::vector<Rule> rules;
+};
 
 /** Props for the Button component. */
 struct ButtonProps {
@@ -68,24 +111,25 @@ void Button(ButtonProps const& props, std::function<void()> const& children = []
 } /* namespace Rocket */
 ```
 
-The header contains only what a caller needs: enums, the props struct and the
-function. No theme values, no helpers, no state types.
+The header contains only what a caller needs: enums, the theme struct
+`<Component>Theme` with the public structs it is made of, the props struct
+and the component function. The theme struct is public because every theme
+fills it in (section 5). No look values, no helpers, no state types.
 
 ### Source
 
 ```cpp
-#include <map>
-#include <tuple>
 #include <Rocket/Node/NodeEvent.hpp>
 #include <Rocket/Paint/Color.hpp>
 #include <Rocket/UI/Reconciler.hpp>
+#include <Rocket/UI/Theme.hpp>
 #include <Rocket/UI/Button.hpp>
 
 namespace Rocket {
 
 /* 1. private enums                    (none in Button) */
-/* 2. private structs                  _ButtonStyle, _ButtonMetrics, _ButtonState */
-/* 3. static variables                 palette, tables, metrics */
+/* 2. private structs                  _ButtonLook, _ButtonState */
+/* 3. static variables                 (none in Button) */
 /* 4. static functions                 (none in Button) */
 /* 5. public functions                 Button() */
 
@@ -106,16 +150,17 @@ body follows the steps of section 4.
 
 Declarations follow the symbol order in
 [Code style §4](Codestyle.md#4-symbol-order-in-a-source-file). In a
-component, the private structs are the style and metrics records, then the
-component state struct, and the public functions are the component
-function(s) declared in the header.
+component, the private structs are the component state struct and any
+records the render works with, and the public functions are the component
+function(s) declared in the header. A component keeps no colors or metrics
+of its own: those are in the themes (section 5).
 
 ### Naming of file-private symbols
 
 File-private symbols are named as in
 [Code style §8](Codestyle.md#8-private-names). In a
 component, private structs and enums also carry the component name,
-`_<Component><Role>` (`_ButtonState`, `_ButtonStyle`, `_ButtonMetrics`), so
+`_<Component><Role>` (`_ButtonState`, `_PopupAxis`, `_PopupPlacement`), so
 they cannot collide when several components are compiled into one library.
 The state struct is
 `_<Component>State` and is declared at file level in the structs group, not
@@ -216,9 +261,9 @@ member needs constructor arguments (see `Document`'s state).
 
 `UseState`, `UseRef`, `UseEffect` and `UseSubscription` are matched by
 call position, so never call them inside a branch or loop, and never return
-early before the last of them. `UseContext`
-and `UseContextIf` are plain lookups with no slot of their own and may be
-called anywhere during the render.
+early before the last of them. `UseContext`,
+`UseContextIf` and `UseTheme` are plain lookups with no slot of their own
+and may be called anywhere during the render.
 
 ### 4.3 Get the ref
 
@@ -255,6 +300,8 @@ installed on the node always sees the latest closures.
 ### 4.5 Derive values
 
 Resolve defaults once with `value_or`, then compute whatever the node needs.
+A default that is part of the look (a color, a size, a radius) comes from
+the component's theme (section 5), never from a literal in the source.
 Small mappings are nested conditional expressions, laid out as in
 [Code style §10](Codestyle.md#10-layout).
 
@@ -323,9 +370,12 @@ if (background.alpha > 0.0f) {
     node.background = node.background.value_or(ColorBrush{ background });
 }
 
+if (style.opacity.has_value()) {
+    node.opacity = node.opacity.value_or(style.opacity.value());
+}
+
 if (disabled) {
     node.mouseEvents = node.mouseEvents.value_or(false);
-    node.opacity = node.opacity.value_or(_disabledOpacity);
 } else {
     node.cursor = node.cursor.value_or(Cursor::Pointer);
 }
@@ -358,16 +408,139 @@ size and text color are inherited, so set them on the wrapper when they
 apply to everything inside, and on the text node only when they are
 specific to it.
 
-## 5. Theme data
+## 5. Theme
 
-All look-and-feel data is a set of file-level statics at the top of the
-`.cpp`, above the component function. Nothing is imported from a theme
-module; the component is self-contained.
+Everything a component looks like comes from the theme: colors, sizes,
+radii, font sizes, shadows, and how each changes with kind, intent, size
+and state.
+A component keeps no look of its own, not even a default.
 
-Conventions:
+### 5.1 Shape
 
-- `static auto const _name = ...;` for values (`_borderRadius`,
-  `_disabledOpacity`).
+- `<Component>Theme`, in the component's header, holds everything the
+  component takes from the theme: a list of rules, as in a CSS stylesheet.
+  Its types are nested in it, so a component adds no theme types of its
+  own to the `Rocket` namespace, and components share none:
+
+  - `State`: the states a rule can match (`Normal`, `Hover`, `Active`,
+    `Disabled` for Button);
+  - `Selector`: what a rule matches, one optional field per prop or state
+    that changes the look; an unset field matches any value;
+  - `Style`: what a rule sets, one optional field per value the component
+    reads; an unset field is left to other rules;
+  - `Rule`: a `selector`, a `style` and `important`;
+  - `std::vector<Rule> rules`.
+
+- Every rule whose selector matches applies its style, field by field.
+  Where two rules set the same field, an important rule beats one that is
+  not, then the rule whose selector sets more fields wins, then the later
+  one. To change one value of a theme, append a rule; to make sure it
+  wins, make it important.
+- A component that can be drawn with a material has the material's
+  fields in its `Style` (`materialKind`, `materialIntent`,
+  `materialBrightness`, `materialRoundness`), each cascading on its own:
+  a hover rule can change only the brightness. A style
+  resolved with a `materialKind` is drawn with the theme's material,
+  otherwise with the plain colors (`background`, `borderColor`,
+  `borderWidth`, `borderRadius`). A left-out edge (`noLeftBorder`...)
+  squares the corners on its side either way.
+- The component resolves its rules once per state in its Effect gate
+  (section 6), with `_GetCascade` and `_Cascade` from
+  `src/Rocket/UI/Theme_Private.hpp`, and picks the resolved style of the
+  current state on every render.
+- `Theme` (`src/Rocket/UI/Theme.hpp`) holds the material the material
+  styles are drawn with and one member per component, named after it
+  in camelCase:
+
+  ```cpp
+  struct Theme {
+      Material const* material;
+      ButtonTheme button;
+      IconTheme icon;
+  };
+
+  Theme const& UseTheme();
+  ```
+
+- The themes compiled into the library are in `src/Rocket/UI/Theme/<Name>/`.
+  A folder holds one theme, or several variants of one look:
+
+  ```cpp
+  Theme const& Get<Name>Theme();           // Theme.hpp|cpp: one theme
+  Theme const& Get<Name><Variant>Theme();  // Theme.hpp|cpp: several (GetDefaultDarkTheme, GetDefaultLightTheme)
+  Material const& Get<Name>Material();     // Material.hpp|cpp, in a folder whose themes have a material
+  ```
+
+  Each builds its value in a function-local static on first use, so it
+  never depends on the order in which statics of other files are
+  initialized. A theme fills in every member of every component theme;
+  adding a component means adding its values to every theme. Themes in
+  different folders share no data, with one exception: any theme may build
+  on the default palette (`GetDefaultPalette()` in `Theme/Default`), since
+  the Default themes are always part of the library. The themes of one
+  folder may also share the functions that build them.
+- `Theme/Default` holds `GetDefaultDarkTheme()` and `GetDefaultLightTheme()`:
+  every component drawn with plain colors, and no material
+  (`material` is null). Both are built on the folder's palette,
+  `ColorPalette const& GetDefaultPalette()` in `Palette.hpp|cpp`. A
+  `ColorPalette` (`src/Rocket/UI/ColorPalette.hpp`) holds the colors of
+  Tailwind CSS 4 in shades 50 to 950 every 50 (`red50`, `red100`, `red150`
+  ... `red950`), where the shades Tailwind does not define are the
+  midpoints of their neighbors in OKLCH. `Palette.py` generates both files
+  from Tailwind's `theme.css`.
+- The `Pixel` themes draw with a material: `Theme/PixelDark` is the first of
+  them (`PixelLight` and others follow the same pattern). PixelDark takes
+  its colors from the default palette, apart from a few of its own. A theme's images
+  are in its `Image/` folder: the PixelDark material is drawn in
+  `Image/Image.aseprite` and exported by `Image/Export.py` into
+  `Image/Image*.cpp` (see [Material](#55-material)).
+- `UseTheme` returns the theme provided by the nearest `Theme` context
+  (section 8), or `GetDefaultDarkTheme()` when there is none, so a
+  component always has a theme, inside a `Document` or not.
+
+### 5.2 Providing a theme
+
+A theme is provided like any context, const or not:
+`Context(GetDefaultLightTheme(), children)`, or `SetContext(theme)` in the
+component that owns it. The provider keeps a `Theme` it built alive,
+usually in its state.
+
+**A provided theme is never changed.** To switch themes (light and dark),
+keep both and provide the other one; to change a value, build a new theme.
+Components cache what they derive from their theme and recompute it when
+the theme's address changes (section 6); a theme changed in place would
+leave those caches stale.
+
+```cpp
+struct _AppState {
+    Theme square = _CreateSquareTheme();
+    bool isSquare = false;
+};
+
+static Theme _CreateSquareTheme() {
+    auto theme = GetPixelDarkTheme();
+    theme.button.rules.push_back({ .style = { .materialRoundness = MaterialRoundness::None }, .important = true });
+    return theme;
+}
+
+Context((state.isSquare ? state.square : GetPixelDarkTheme()), [&]{
+    ...
+});
+```
+
+### 5.3 Reading it
+
+```cpp
+auto const& theme = UseTheme();
+```
+
+once, at the top of the render, next to the hooks; the component reads its
+own member (`theme.button`) and, to draw a material, `theme.material`. The order of precedence is: a field set in `nodeProps`,
+then a prop of the component that sets the same thing (`Splitter`'s
+`color`), then the theme.
+
+### 5.4 Writing a theme
+
 - Colors are compile-time literals, one per line, named after the palette
   entry they come from:
   `auto constexpr _blue500 = Vec4{ 59.0f / 255.0f, 130.0f / 255.0f,
@@ -378,18 +551,29 @@ Conventions:
   variants are their own statics built from the base one, never a second
   hard-coded color and never a helper call inside a table initializer
   (see [Code style §4](Codestyle.md#4-symbol-order-in-a-source-file)).
-- Lookups keyed by enums are `std::map<std::tuple<Kind, Intent>, Value>`
-  (or `std::map<Size, Value>`), one row per entry, aligned into columns so a
-  table reads like the original stylesheet.
-- A per-state style is a small struct of `std::optional<Vec4>`
-  (`_ButtonStyle` with `background`, `border`, `text`). The normal state
-  sets every field; hover and active set only what they change and are
-  layered on in that order. This mirrors how `hover:` and `active:` classes cascade, and it
-  keeps the table honest: a blank cell means "unchanged", not "transparent".
-- Metrics (padding, min height, gap, radius, font size) are in points and
-  are separate statics or a `_ButtonMetrics` struct table.
-- Every struct, variable and function in this section is file-private,
-  `static` where applicable, and `_Prefixed` (section 2).
+- A theme lists the rules of each component from the general to the
+  specific: the base rule with no selector, then states and sizes, then
+  kinds and intents, then their combinations. A theme that repeats a
+  pattern for each intent builds those rules in a function, as
+  `Theme/Default` does.
+- Metrics (padding, min height, gap, radius, font size) are in points.
+
+### 5.5 Material
+
+A `Material` (`src/Rocket/UI/Material.hpp`) is a sprite sheet drawn at 1x,
+2x and 3x, made of the three images; every sheet follows the layout of the
+PixelDark one, which draws each variant in three brightnesses
+(`MaterialBrightness::Normal`, `Lighter`, `Darker`). `getVariant` cuts the
+brush of a panel in one brightness from the sheet drawn closest to the
+scale, `getArrowVariant` that of an arrow. `getCircleVariant` draws a
+circle of any width in the colors of the panel of the same kind, and
+`getCapsuleVariant` a capsule of any size, each built once per size in
+pixels of the sheet. Which brightness a component
+draws is up to its theme, not tied to its state: a panel may rest on the
+darker one. A material is not
+part of the theme system: a theme only points at one, and a material can be
+used without a theme. `GetPixelDarkMaterial()` is the material of the
+PixelDark theme.
 
 ## 6. Effect gating
 
@@ -401,11 +585,10 @@ Use it to split a component's work into a cold path and a hot path:
 
 ```cpp
 struct _ButtonState {
-    std::tuple<_ButtonStyle, _ButtonStyle, _ButtonStyle> const* style;
-    float borderWidth;
-    Vec2 padding;
+    std::array<_ButtonLook, 4> looks;
     ...
     Effect<
+        Theme const*,
         std::optional<ButtonKind>,
         std::optional<ButtonIntent>,
         std::optional<ButtonSize>,
@@ -413,9 +596,11 @@ struct _ButtonState {
     > shouldUpdate;
 };
 
-if (state.shouldUpdate(props.kind, props.intent, props.size, props.narrow)) {
-    state.style = &_style.at({ kind, intent });
-    ...
+if (state.shouldUpdate(&theme, props.kind, props.intent, props.size, props.narrow)) {
+    for (auto index = 0llu; index < _states.size(); index++) {
+        state.looks[index] = ...;  // the rules resolved for that state
+    }
+}
 }
 
 ...
@@ -428,16 +613,18 @@ render.
 Guidelines:
 
 - Gate: map lookups, anything multiplied by `document.getScale()`, image or
-  slice selection, string formatting. Key the Effect on the raw
-  `std::optional` props, not on the resolved values, so the dependency list
-  is a straight copy of the props.
+  slice selection, string formatting. Key the Effect on the address of the
+  theme and on the raw `std::optional` props, not on the resolved values,
+  so the dependency list is the theme plus a straight copy of the props.
 - Do not gate: hover, pressed, focus, `disabled`, `active`, and the merge
   into `NodeProps`. These are a handful of branches and they
   change on every mouse move anyway.
-- Cache pointers into static tables (`_ButtonStyle const*`) rather than
-  copying tuples; the tables are `static const`, so the pointers are stable.
+- Resolve the theme's rules in the gate and keep the result in state. It
+  stays right as long as the theme is provided, because a provided theme
+  never changes (section 5.2), and the Effect resolves the rules again
+  when another theme is provided.
 - Include `document.getScale()` in the dependency list of anything that
-  depends on it, and `&theme` if a theme object is ever introduced.
+  depends on it.
 
 The copy of `props.nodeProps` into the local `node` is the dominant
 per-render cost of a component and cannot be gated: `Node()` needs the merged
@@ -505,6 +692,12 @@ Things always available below a `Document`:
 - `UseContext<class Window>()`
 - `UseContext<class Document>()`
 
+`UseTheme()` is available everywhere: with no `Theme` provided, it returns
+the default theme (section 5.1).
+
+A context is found by its type whether it was provided const or not, so a
+const value is read with `UseContext<Type const>()`.
+
 Only a pointer is stored, so the value must outlive the render. Component
 state is a fine place to keep it (`Document` keeps its `class Document` in
 its state struct and calls `SetContext` on it).
@@ -548,26 +741,32 @@ pointer, so the walk touches one record per level and nothing else.
   implementation, exceptions, lambda captures, private names, types and
   literals, layout, global C names.
 - One component per file; the function name equals the file name.
+- No look in the component's source: every color, size and table the
+  render uses is read from `<Component>Theme`, and the values are written
+  in the themes.
 
 ## 11. Adding a new component, end to end
 
 1. Create `src/Rocket/UI/X.hpp` and `X.cpp` with the license header.
-2. Define `XKind` / `XIntent` / `XSize` enums as needed, then `XProps` in
-   the field order of section 3. No `ref` field.
+2. Define `XKind` / `XIntent` / `XSize` enums as needed, then `XTheme`
+   with its nested `State`, `Selector`, `Style` and `Rule` (section 5),
+   then `XProps` in the field order of section 3. No `ref` field.
 3. Declare `void X(XProps const& props, std::function<void()> const& children = []{});`
    (drop `children` if the component cannot contain arbitrary content).
 4. In the `.cpp`, lay the file out in order: private enums, private structs
-   (`_XStyle`, `_XMetrics`, `_XState`), static variables (palette, tables,
-   metrics), static functions, then the component function.
+   (`_XState`), static variables, static functions, then the component
+   function.
 5. Write the body in the fixed order: `PROFILE`, `COMPONENT`, hooks
-   (`UseState<_XState>()`, `UseRef`), store callbacks, Effect-gated
-   resolution, per-render cascade, `node` merge with `value_or`, handler,
-   `Node(node, children)`.
+   (`UseState<_XState>()`, `UseRef`) and `UseTheme()`, store callbacks,
+   Effect-gated resolution, per-render cascade, `node` merge with
+   `value_or`, handler, `Node(node, children)`.
 6. Add `src/Rocket/UI/X.cpp` to `ROCKET_SOURCE` in the root
    `CMakeLists.txt` and `#include <Rocket/UI/X.hpp>` to
-   `src/Rocket/Rocket.hpp`.
+   `src/Rocket/Rocket.hpp`. Add the member `XTheme x;` to `Theme` and fill
+   it in every theme in `src/Rocket/UI/Theme`.
 7. Add `tests/Rocket/UI/X_Test.cpp`, modeled on `Popup_Test.cpp`: render
    the component under a manually provided Document, assert the computed
-   node fields for each prop, and drive hover, press and click through
+   node fields for each prop, assert that a value changed in a provided
+   theme reaches the node, and drive hover, press and click through
    `window.onEvent`.
 8. Build with `./make.sh --test` (`.\make.ps1 --test` on Windows).

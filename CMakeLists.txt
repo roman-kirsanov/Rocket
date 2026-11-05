@@ -22,6 +22,8 @@ if(ROCKET_GLES AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
     message(FATAL_ERROR "ROCKET_GLES is for Linux only")
 endif()
 
+option(ROCKET_EXAMPLE "Build the example applications in example/" OFF)
+
 set(ROCKET_EMBED ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Embed.cmake)
 set(ROCKET_SOURCE
     src/Rocket/Audio/Audio.cpp
@@ -52,11 +54,25 @@ set(ROCKET_SOURCE
     src/Rocket/Paint/Shape.cpp
     src/Rocket/Paint/Svg.cpp
     src/Rocket/Paint/Text.cpp
+    src/Rocket/UI/Button.cpp
+    src/Rocket/UI/Checkbox.cpp
     src/Rocket/UI/Document.cpp
+    src/Rocket/UI/Icon.cpp
+    src/Rocket/UI/Material.cpp
     src/Rocket/UI/Node.cpp
     src/Rocket/UI/Popup.cpp
+    src/Rocket/UI/Radiobox.cpp
     src/Rocket/UI/Reconciler.cpp
     src/Rocket/UI/Splitter.cpp
+    src/Rocket/UI/Switch.cpp
+    src/Rocket/UI/Theme.cpp
+    src/Rocket/UI/Theme/Default/Palette.cpp
+    src/Rocket/UI/Theme/Default/Theme.cpp
+    src/Rocket/UI/Theme/PixelDark/Material.cpp
+    src/Rocket/UI/Theme/PixelDark/Image/Image.cpp
+    src/Rocket/UI/Theme/PixelDark/Image/Image@2x.cpp
+    src/Rocket/UI/Theme/PixelDark/Image/Image@3x.cpp
+    src/Rocket/UI/Theme/PixelDark/Theme.cpp
     src/Rocket/UI/Window.cpp
     src/Rocket/Window/App.cpp
     src/Rocket/Window/AppEvent.cpp
@@ -131,5 +147,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddSDLMixer.cmake)
 endif()
 
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Materials.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Install.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Testing.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Example.cmake)
