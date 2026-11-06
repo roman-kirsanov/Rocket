@@ -7,12 +7,21 @@
 
 #pragma once
 
+#include <Rocket/UI/Alert.hpp>
 #include <Rocket/UI/Button.hpp>
+#include <Rocket/UI/Callout.hpp>
 #include <Rocket/UI/Checkbox.hpp>
+#include <Rocket/UI/Drawer.hpp>
 #include <Rocket/UI/Icon.hpp>
+#include <Rocket/UI/Input.hpp>
+#include <Rocket/UI/Label.hpp>
 #include <Rocket/UI/Material.hpp>
+#include <Rocket/UI/Modal.hpp>
 #include <Rocket/UI/Radiobox.hpp>
+#include <Rocket/UI/Select.hpp>
+#include <Rocket/UI/Spinner.hpp>
 #include <Rocket/UI/Switch.hpp>
+#include <Rocket/UI/Tooltip.hpp>
 
 namespace Rocket {
 
@@ -34,6 +43,24 @@ struct Theme {
     RadioboxTheme radiobox;
     /** Theme of Switch; `switch` is a keyword of C++. */
     SwitchTheme switch_;
+    /** Theme of Callout. */
+    CalloutTheme callout;
+    /** Theme of Spinner. */
+    SpinnerTheme spinner;
+    /** Theme of Modal. */
+    ModalTheme modal;
+    /** Theme of Alert. */
+    AlertTheme alert;
+    /** Theme of Drawer. */
+    DrawerTheme drawer;
+    /** Theme of Tooltip. */
+    TooltipTheme tooltip;
+    /** Theme of Label. */
+    LabelTheme label;
+    /** Theme of Input. */
+    InputTheme input;
+    /** Theme of Select. */
+    SelectTheme select;
 };
 
 /**

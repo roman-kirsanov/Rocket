@@ -18,8 +18,8 @@ struct RadioboxPageProps {
 };
 
 /**
- * Renders the documentation page of Radiobox: a playground for its props, the
- * code it makes, a section on each group of props, and its theme.
+ * Renders the documentation page of Radiobox: a playground for its props and the
+ * code it makes.
  *
  * @param props Desired page configuration for this render.
  */

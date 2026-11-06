@@ -54,15 +54,23 @@ set(ROCKET_SOURCE
     src/Rocket/Paint/Shape.cpp
     src/Rocket/Paint/Svg.cpp
     src/Rocket/Paint/Text.cpp
+    src/Rocket/UI/Alert.cpp
     src/Rocket/UI/Button.cpp
+    src/Rocket/UI/Callout.cpp
     src/Rocket/UI/Checkbox.cpp
     src/Rocket/UI/Document.cpp
+    src/Rocket/UI/Drawer.cpp
     src/Rocket/UI/Icon.cpp
+    src/Rocket/UI/Input.cpp
+    src/Rocket/UI/Label.cpp
     src/Rocket/UI/Material.cpp
+    src/Rocket/UI/Modal.cpp
     src/Rocket/UI/Node.cpp
     src/Rocket/UI/Popup.cpp
     src/Rocket/UI/Radiobox.cpp
     src/Rocket/UI/Reconciler.cpp
+    src/Rocket/UI/Select.cpp
+    src/Rocket/UI/Spinner.cpp
     src/Rocket/UI/Splitter.cpp
     src/Rocket/UI/Switch.cpp
     src/Rocket/UI/Theme.cpp
@@ -73,6 +81,7 @@ set(ROCKET_SOURCE
     src/Rocket/UI/Theme/PixelDark/Image/Image@2x.cpp
     src/Rocket/UI/Theme/PixelDark/Image/Image@3x.cpp
     src/Rocket/UI/Theme/PixelDark/Theme.cpp
+    src/Rocket/UI/Tooltip.cpp
     src/Rocket/UI/Window.cpp
     src/Rocket/Window/App.cpp
     src/Rocket/Window/AppEvent.cpp

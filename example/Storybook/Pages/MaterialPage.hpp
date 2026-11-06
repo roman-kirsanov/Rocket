@@ -19,7 +19,7 @@ struct MaterialPageProps {
 
 /**
  * Renders the documentation page of Material: a playground for every field
- * of MaterialVariantOptions, the code it makes, and a section on each field.
+ * of MaterialVariantOptions and the code it makes.
  *
  * @param props Desired page configuration for this render.
  */

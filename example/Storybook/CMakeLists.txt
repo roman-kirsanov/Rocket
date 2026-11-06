@@ -12,15 +12,23 @@ add_executable(Storybook
     ${CMAKE_CURRENT_SOURCE_DIR}/Components/PlaygroundControl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Components/PropsTable.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Components/SegmentedControl.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Components/Select.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Components/Stage.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Components/Text.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Components/Title.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Pages/AlertPage.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Pages/ButtonPage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Pages/CalloutPage.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Pages/CheckboxPage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Pages/DrawerPage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Pages/InputPage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Pages/LabelPage.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Pages/MaterialPage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Pages/ModalPage.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Pages/RadioboxPage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Pages/SelectPage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Pages/SpinnerPage.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Pages/SwitchPage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Pages/TooltipPage.cpp
 )
 
 target_include_directories(Storybook

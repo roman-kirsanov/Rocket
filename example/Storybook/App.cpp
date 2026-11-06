@@ -15,6 +15,7 @@
 #include <Rocket/UI/Document.hpp>
 #include <Rocket/UI/Node.hpp>
 #include <Rocket/UI/Reconciler.hpp>
+#include <Rocket/UI/Select.hpp>
 #include <Rocket/UI/Theme.hpp>
 #include <Rocket/UI/Theme/Default/Theme.hpp>
 #include <Rocket/UI/Theme/PixelDark/Theme.hpp>
@@ -22,15 +23,23 @@
 #include <Components/ColorScheme.hpp>
 #include <Components/ColorSchemeToggle.hpp>
 #include <Components/NavLink.hpp>
-#include <Components/Select.hpp>
 #include <Components/Stage.hpp>
 #include <Components/Text.hpp>
 #include <Components/Title.hpp>
+#include <Pages/AlertPage.hpp>
 #include <Pages/ButtonPage.hpp>
+#include <Pages/CalloutPage.hpp>
 #include <Pages/CheckboxPage.hpp>
+#include <Pages/DrawerPage.hpp>
+#include <Pages/InputPage.hpp>
+#include <Pages/LabelPage.hpp>
 #include <Pages/MaterialPage.hpp>
+#include <Pages/ModalPage.hpp>
 #include <Pages/RadioboxPage.hpp>
+#include <Pages/SelectPage.hpp>
+#include <Pages/SpinnerPage.hpp>
 #include <Pages/SwitchPage.hpp>
+#include <Pages/TooltipPage.hpp>
 #include <App.hpp>
 
 using namespace Rocket;
@@ -78,6 +87,15 @@ static auto const _pages = std::vector<_AppPage>{
     { "Checkbox", []{ CheckboxPage({}); } },
     { "Radiobox", []{ RadioboxPage({}); } },
     { "Switch", []{ SwitchPage({}); } },
+    { "Input", []{ InputPage({}); } },
+    { "Select", []{ SelectPage({}); } },
+    { "Label", []{ LabelPage({}); } },
+    { "Tooltip", []{ TooltipPage({}); } },
+    { "Callout", []{ CalloutPage({}); } },
+    { "Spinner", []{ SpinnerPage({}); } },
+    { "Modal", []{ ModalPage({}); } },
+    { "Alert", []{ AlertPage({}); } },
+    { "Drawer", []{ DrawerPage({}); } },
     { "Material", []{ MaterialPage({}); } }
 };
 static auto const _themes = std::vector<_AppTheme>{
@@ -182,12 +200,14 @@ void App(AppProps const& props) {
                         themeNames.push_back(theme.name);
                     }
 
-                    Select({
-                        .options = themeNames,
-                        .selected = state.theme,
-                        .onChange = [&](std::size_t index) {
-                            state.theme = index;
-                        }
+                    Context((state.colorScheme == ColorScheme::Light ? GetDefaultLightTheme() : GetDefaultDarkTheme()), [&]{
+                        Select({
+                            .options = themeNames,
+                            .selected = state.theme,
+                            .onChange = [&](std::size_t index) {
+                                state.theme = index;
+                            }
+                        });
                     });
                 });
 

@@ -18,8 +18,8 @@ struct SwitchPageProps {
 };
 
 /**
- * Renders the documentation page of Switch: a playground for its props, the
- * code it makes, a section on each group of props, and its theme.
+ * Renders the documentation page of Switch: a playground for its props and the
+ * code it makes.
  *
  * @param props Desired page configuration for this render.
  */
