@@ -9,6 +9,7 @@
 #include <vector>
 #include <cstdint>
 #include <cstdlib>
+#include <algorithm>
 #include <format>
 #include <stdexcept>
 #include <filesystem>
@@ -23,6 +24,7 @@ namespace Rocket {
 namespace App {
 
 static auto constexpr _defaultRefreshRate = 60.0f;
+static auto constexpr _presentMargin = std::uint64_t(2000000);
 
 static auto _isExited = false;
 static auto _nextFrame = std::uint64_t(0);
@@ -251,18 +253,22 @@ void __Tick(bool update) {
 
         auto const period = static_cast<std::uint64_t>(1000000000.0 / static_cast<double>(refreshRate));
 
-        /* From the frame's deadline, not from when the loop woke: the wait above
-           rounds up to whole milliseconds, and counting from the wake would add
-           that lateness to every frame (84 frames a second on a 90 Hz screen). A
-           loop more than a frame behind starts a new beat instead of catching up. */
-        _nextFrame += period;
-
-        if (_nextFrame <= now) {
-            _nextFrame = (now + period);
-        }
-
         __PaintWindows();
+
+        /* The present waits for the display's refresh and returns just after it,
+           so the next frame is due from then, and not from a beat of its own: a
+           beat drifts against the display, and once it falls just after a refresh,
+           every present waits for the next one and the frame rate halves. */
+        _nextFrame = __GetNextFrame(::SDL_GetTicksNS(), period);
     }
+}
+
+std::uint64_t __GetNextFrame(std::uint64_t paintedAt, std::uint64_t period) {
+    PROFILE
+
+    /* Early by a margin, as the wait for the frame rounds up to whole
+       milliseconds: a loop that wakes after the refresh misses it. */
+    return ((paintedAt + period) - std::min(_presentMargin, (period / 2)));
 }
 
 } /* namespace App */

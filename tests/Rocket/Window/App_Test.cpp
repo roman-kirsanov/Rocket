@@ -14,6 +14,10 @@
 #include <Rocket/Window/App.hpp>
 #include <gtest/gtest.h>
 
+#ifdef __linux__
+#include <Rocket/Window/App_SDL3.hpp>
+#endif
+
 using namespace Rocket;
 
 TEST(App, RunLoopEventsTimersAndExecPaths) {
@@ -125,3 +129,21 @@ TEST(App, ListsConnectedGamepadsWithTheirNames) {
     EXPECT_FALSE(listedAfterRemoval);
     EXPECT_EQ(GetGamepadName(id), "");
 }
+
+#ifdef __linux__
+
+/* The next frame is due a period after the paint returned, a little early, so the loop wakes before the refresh the present waits for. */
+TEST(App, NextFrameIsDueAPeriodAfterThePaintLessAMargin) {
+    auto const nextFrame = App::__GetNextFrame(1000000000, 16666666);
+
+    ASSERT_TRUE(nextFrame == 1014666666);
+}
+
+/* On a display with a short period, the margin is at most half of it, so the next frame stays after the paint. */
+TEST(App, NextFrameMarginIsAtMostHalfAPeriod) {
+    auto const nextFrame = App::__GetNextFrame(1000000000, 2000000);
+
+    ASSERT_TRUE(nextFrame == 1001000000);
+}
+
+#endif
