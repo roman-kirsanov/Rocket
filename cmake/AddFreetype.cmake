@@ -8,5 +8,9 @@ block()
     set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
     set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
 
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/lib/freetype)
+    if(NOT PROJECT_IS_TOP_LEVEL)
+        set(ROCKET_EXCLUDE EXCLUDE_FROM_ALL)
+    endif()
+
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/lib/freetype ${ROCKET_EXCLUDE})
 endblock()

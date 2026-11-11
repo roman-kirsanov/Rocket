@@ -1,7 +1,12 @@
 # Installs the library, its headers and a CMake package, so another project
-# can use find_package(Rocket) and link Rocket::Rocket.
+# can use find_package(Rocket) and link Rocket::Rocket. Off when Rocket is
+# added to another project.
 
 block()
+    if(NOT PROJECT_IS_TOP_LEVEL)
+        return()
+    endif()
+
     install(TARGETS Rocket yogacore
         EXPORT RocketTargets
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

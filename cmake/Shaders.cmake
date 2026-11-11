@@ -10,6 +10,8 @@
 # painter puts Painter.glsl in front of each when it compiles them.
 
 block()
+    set(SHADER_EMBED ${CMAKE_CURRENT_LIST_DIR}/Embed.cmake)
+
     if(APPLE)
         set(SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/Rocket/Paint/Metal/Painter.metal)
         set(SHADER_TYPES  ${CMAKE_CURRENT_SOURCE_DIR}/src/Rocket/Paint/Metal/Painter.metal.hpp)
@@ -34,14 +36,14 @@ block()
 
         add_custom_command(
             OUTPUT ${SHADER_HEADER}
-            COMMAND ${CMAKE_COMMAND} -D IN=${SHADER_LIB} -D OUT=${SHADER_HEADER} -D NAME=Rocket_MetalLib -P ${ROCKET_EMBED}
-            DEPENDS ${SHADER_LIB} ${ROCKET_EMBED}
+            COMMAND ${CMAKE_COMMAND} -D IN=${SHADER_LIB} -D OUT=${SHADER_HEADER} -D NAME=Rocket_MetalLib -P ${SHADER_EMBED}
+            DEPENDS ${SHADER_LIB} ${SHADER_EMBED}
             COMMENT "Embedding Painter.metallib into Painter.metal-lib.hpp"
             VERBATIM
         )
 
         target_sources(Rocket PRIVATE ${SHADER_HEADER})
-    elseif(ROCKET_GLES)
+    elseif(ROCKET_LINUX_GLES)
         set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/Rocket/Paint/GLES)
         set(SHADER_FILES
             Painter.glsl
@@ -63,8 +65,8 @@ block()
 
             add_custom_command(
                 OUTPUT ${SHADER_HEADER}
-                COMMAND ${CMAKE_COMMAND} -D IN=${SHADER_DIR}/${SHADER_FILE} -D OUT=${SHADER_HEADER} -D NAME=Rocket_GLES_${SHADER_NAME} -P ${ROCKET_EMBED}
-                DEPENDS ${SHADER_DIR}/${SHADER_FILE} ${ROCKET_EMBED}
+                COMMAND ${CMAKE_COMMAND} -D IN=${SHADER_DIR}/${SHADER_FILE} -D OUT=${SHADER_HEADER} -D NAME=Rocket_GLES_${SHADER_NAME} -P ${SHADER_EMBED}
+                DEPENDS ${SHADER_DIR}/${SHADER_FILE} ${SHADER_EMBED}
                 COMMENT "Embedding ${SHADER_FILE} into ${SHADER_NAME}.glsl.hpp"
                 VERBATIM
             )
@@ -136,8 +138,8 @@ block()
 
             add_custom_command(
                 OUTPUT ${SHADER_HEADER}
-                COMMAND ${CMAKE_COMMAND} -D IN=${SHADER_OUTPUT} -D OUT=${SHADER_HEADER} -D NAME=${SHADER_SYMBOL}_${SHADER_NAME} -P ${ROCKET_EMBED}
-                DEPENDS ${SHADER_OUTPUT} ${ROCKET_EMBED}
+                COMMAND ${CMAKE_COMMAND} -D IN=${SHADER_OUTPUT} -D OUT=${SHADER_HEADER} -D NAME=${SHADER_SYMBOL}_${SHADER_NAME} -P ${SHADER_EMBED}
+                DEPENDS ${SHADER_OUTPUT} ${SHADER_EMBED}
                 COMMENT "Embedding ${SHADER_NAME}.${SHADER_FORMAT} into ${SHADER_NAME}.${SHADER_FORMAT}.hpp"
                 VERBATIM
             )

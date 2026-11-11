@@ -18,5 +18,9 @@ block()
     set(SDLIMAGE_WEBP OFF CACHE BOOL "" FORCE)
     set(SDLIMAGE_SVG OFF CACHE BOOL "" FORCE)
 
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/lib/sdl_image)
+    if(NOT PROJECT_IS_TOP_LEVEL)
+        set(ROCKET_EXCLUDE EXCLUDE_FROM_ALL)
+    endif()
+
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/lib/sdl_image ${ROCKET_EXCLUDE})
 endblock()

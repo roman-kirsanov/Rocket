@@ -3,6 +3,10 @@
 # system library are left out.
 
 block()
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        return()
+    endif()
+
     set(BUILD_SHARED_LIBS OFF)
     set(SDLMIXER_VENDORED OFF CACHE BOOL "" FORCE)
     set(SDLMIXER_SAMPLES OFF CACHE BOOL "" FORCE)
@@ -16,5 +20,9 @@ block()
     set(SDLMIXER_GME OFF CACHE BOOL "" FORCE)
     set(SDLMIXER_MIDI OFF CACHE BOOL "" FORCE)
 
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/lib/sdl_mixer)
+    if(NOT PROJECT_IS_TOP_LEVEL)
+        set(ROCKET_EXCLUDE EXCLUDE_FROM_ALL)
+    endif()
+
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/lib/sdl_mixer ${ROCKET_EXCLUDE})
 endblock()

@@ -1,6 +1,8 @@
 # Rocket's compile options and definitions.
 
 block()
+    target_compile_features(Rocket PUBLIC cxx_std_23)
+
     target_include_directories(Rocket
         PUBLIC
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
@@ -10,9 +12,13 @@ block()
             ${CMAKE_CURRENT_BINARY_DIR}
     )
 
-    # The GLES painter declares the GL entry points from SDL's copy of the
-    # Khronos headers and loads them through SDL.
-    if(ROCKET_GLES)
+    set_target_properties(Rocket
+        PROPERTIES
+            CXX_STANDARD_REQUIRED ON
+            CXX_EXTENSIONS OFF
+    )
+
+    if(ROCKET_LINUX_GLES)
         target_include_directories(Rocket
             PRIVATE
                 ${CMAKE_CURRENT_SOURCE_DIR}/lib/sdl/src/video/khronos

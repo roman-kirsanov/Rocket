@@ -3,7 +3,11 @@
 block()
     set(BUILD_SHARED_LIBS OFF)
 
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/lib/yoga/yoga)
+    if(NOT PROJECT_IS_TOP_LEVEL)
+        set(ROCKET_EXCLUDE EXCLUDE_FROM_ALL)
+    endif()
+
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/lib/yoga/yoga ${ROCKET_EXCLUDE})
 
     if(MSVC)
         target_compile_options(yogacore PRIVATE /utf-8)

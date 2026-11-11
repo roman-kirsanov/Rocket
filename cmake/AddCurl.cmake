@@ -44,5 +44,9 @@ block()
         endif()
     endif()
 
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/lib/curl)
+    if(NOT PROJECT_IS_TOP_LEVEL)
+        set(ROCKET_EXCLUDE EXCLUDE_FROM_ALL)
+    endif()
+
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/lib/curl ${ROCKET_EXCLUDE})
 endblock()

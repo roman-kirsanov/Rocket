@@ -6,23 +6,12 @@ endif()
 
 project(Rocket VERSION 0.1.0 LANGUAGES C CXX)
 
-if(APPLE)
-    enable_language(OBJCXX)
-endif()
+include(CTest)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+option(ROCKET_LINUX_GLES "Draw with OpenGL ES 3.0 instead of SDL_GPU (Linux)" OFF)
 
-# Linux only: draw with OpenGL ES 3.0 instead of SDL_GPU, for devices with no
-# Vulkan driver (the Mali GPUs of the AmberELEC handhelds).
-option(ROCKET_GLES "Draw with OpenGL ES 3.0 instead of SDL_GPU (Linux)" OFF)
-
-if(ROCKET_GLES AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    message(FATAL_ERROR "ROCKET_GLES is for Linux only")
-endif()
-
-set(ROCKET_EMBED ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Embed.cmake)
 set(ROCKET_SOURCE
     src/Rocket/Audio/Audio.cpp
     src/Rocket/Base/Base64.cpp
@@ -69,6 +58,8 @@ set(ROCKET_SOURCE
 )
 
 if(APPLE)
+    enable_language(OBJCXX)
+
     list(APPEND ROCKET_SOURCE
         src/Rocket/Audio/Audio_MacOS.mm
         src/Rocket/Paint/Image_MacOS.mm
@@ -89,7 +80,7 @@ elseif(WIN32)
         src/Rocket/Window/Window_Win32.cpp
     )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    if(ROCKET_GLES)
+    if(ROCKET_LINUX_GLES)
         list(APPEND ROCKET_SOURCE
             src/Rocket/Paint/Image_GLES.cpp
             src/Rocket/Paint/Painter_GLES.cpp
@@ -113,23 +104,15 @@ endif()
 add_library(Rocket STATIC ${ROCKET_SOURCE})
 add_library(Rocket::Rocket ALIAS Rocket)
 
-include(CTest)
-include(GNUInstallDirs)
-include(CMakePackageConfigHelpers)
-
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Shaders.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/CFlags.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/LFlags.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Shaders.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddCurl.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddFreetype.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddLunaSVG.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddYoga.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddSDL.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddSDLImage.cmake)
-
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddSDLMixer.cmake)
-endif()
-
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddSDLMixer.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Install.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Testing.cmake)
