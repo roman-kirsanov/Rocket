@@ -10,6 +10,7 @@
 #include <cfloat>
 #include <cmath>
 #include <limits>
+#include <tuple>
 #include <Rocket/Base/Profile.hpp>
 #include <Rocket/Base/String.hpp>
 #include <Rocket/Paint/Color.hpp>
@@ -226,34 +227,13 @@ std::vector<std::uint32_t> const& Text::getCodepoints() const {
 std::optional<TextGlyph> Text::getGlyphAtPosition(Vec2 const& position) const {
     PROFILE
 
-    _updateIndex();
-    _updateLayout();
+    auto const row = _getRowAtPosition(position);
 
-    auto lineDistance = FLT_MAX;
-    auto lineFound = (TextLine const*)nullptr;
-
-    for (auto& line : _lines) {
-        auto const fullRect = Vec4{ 0.0f, line.rect.y, _size.width, line.rect.height };
-
-        if (position.inRect(fullRect)) {
-            lineFound = &line;
-            break;
-        } else {
-            auto const edgePoint = fullRect.getEdgePoint(position);
-            auto const distance = edgePoint.getDistance(position);
-
-            if (distance < lineDistance) {
-                lineDistance = distance;
-                lineFound = &line;
-            }
-        }
-    }
-
-    if (lineFound != nullptr) {
+    if (row >= 0) {
         auto glyphDistance = FLT_MAX;
         auto glyphFound = (TextGlyph const*)nullptr;
 
-        for (auto i = lineFound->startIndex; i < lineFound->endIndex; i++) {
+        for (auto i = _lines[row].startIndex; i < _lines[row].endIndex; i++) {
             auto& glyph = _glyphs[i];
 
             if (position.inRect(glyph.rect)) {
@@ -1344,9 +1324,8 @@ bool Text::undo() {
 
     _editState->redoStack.push_back(getSnapshot());
 
-    auto const snapshot = _editState->undoStack.back();
+    _applySnapshot(std::move(_editState->undoStack.back()));
     _editState->undoStack.pop_back();
-    _applySnapshot(snapshot);
     _editState->lastEditKind = static_cast<int>(_EditKind::None);
 
     return true;
@@ -1364,9 +1343,8 @@ bool Text::redo() {
 
     _editState->undoStack.push_back(getSnapshot());
 
-    auto const snapshot = _editState->redoStack.back();
+    _applySnapshot(std::move(_editState->redoStack.back()));
     _editState->redoStack.pop_back();
-    _applySnapshot(snapshot);
     _editState->lastEditKind = static_cast<int>(_EditKind::None);
 
     return true;
@@ -1529,15 +1507,14 @@ void Text::copy(std::string& string) {
     }
 
     if (isSelectedRange()) {
-        auto const fromIndex = std::min(_editState->caret, _editState->anchor);
-        auto const toIndex = std::max(_editState->caret, _editState->anchor);
+        static thread_local auto _selectionCodepoints = std::vector<std::uint32_t>();
 
-        auto const selectionCodepoints = std::vector<std::uint32_t>(
-            _codepoints.begin() + fromIndex,
-            _codepoints.begin() + toIndex
+        _selectionCodepoints.assign(
+            _codepoints.begin() + std::min(_editState->caret, _editState->anchor),
+            _codepoints.begin() + std::max(_editState->caret, _editState->anchor)
         );
 
-        StringFromCodepoints(selectionCodepoints, string);
+        StringFromCodepoints(_selectionCodepoints, string);
     } else {
         string.clear();
     }
@@ -1669,18 +1646,23 @@ std::int64_t Text::_getRowAtPosition(Vec2 const& position) const {
     auto rowDistance = FLT_MAX;
     auto rowFound = (std::int64_t)-1;
 
-    for (auto& line : lines) {
-        auto const fullRect = Vec4{ 0.0f, line.rect.y, size.width, line.rect.height };
+    /* Lines run top to bottom, so only the first line ending below the position and the one above it can be the nearest. */
+    auto const below = std::upper_bound(lines.begin(), lines.end(), position.y, [](float y, TextLine const& line) {
+        return (y < line.rect.getMaxY());
+    });
+
+    for (auto it = ((below == lines.begin()) ? below : (below - 1)); (it != lines.end()) && (it <= below); it++) {
+        auto const fullRect = Vec4{ 0.0f, it->rect.y, size.width, it->rect.height };
 
         if (position.inRect(fullRect)) {
-            return line.rowIndex;
+            return it->rowIndex;
         } else {
             auto const edgePoint = fullRect.getEdgePoint(position);
             auto const distance = edgePoint.getDistance(position);
 
             if (distance < rowDistance) {
                 rowDistance = distance;
-                rowFound = line.rowIndex;
+                rowFound = it->rowIndex;
             }
         }
     }
@@ -1744,20 +1726,20 @@ std::int64_t Text::_getIndexAtPosition(Vec2 const& position) const {
 FontLine const& Text::_getEmptyLine() const {
     PROFILE
 
-    auto fontFamily = std::optional<std::string>();
+    auto fontFamily = &TEXT_DEFAULT_FONT_FAMILY;
     auto fontWeight = std::optional<FontWeight>();
     auto fontStyle = std::optional<FontStyle>();
     auto fontSize = std::ceilf(TEXT_DEFAULT_FONT_SIZE * _scale.value_or(1.0f));
 
     for (auto const& range : _ranges) {
-        fontFamily = range.style.fontFamily.has_value() ? range.style.fontFamily : fontFamily;
+        fontFamily = range.style.fontFamily.has_value() ? &range.style.fontFamily.value() : fontFamily;
         fontWeight = range.style.fontWeight.has_value() ? range.style.fontWeight : fontWeight;
         fontStyle = range.style.fontStyle.has_value() ? range.style.fontStyle : fontStyle;
         fontSize = std::ceilf(range.style.fontSize.has_value() ? (range.style.fontSize.value() * _scale.value_or(1.0f)) : fontSize);
     }
 
     auto font = Font::Find(
-        fontFamily.value_or(TEXT_DEFAULT_FONT_FAMILY),
+        *fontFamily,
         fontWeight.value_or(TEXT_DEFAULT_FONT_WEIGHT),
         fontStyle.value_or(TEXT_DEFAULT_FONT_STYLE)
     );
@@ -1827,11 +1809,14 @@ void Text::_updateIndex() const {
     _index.clear();
     _index.reserve(codepointCount);
 
+    auto font = (Font const*)nullptr;
+    auto fontKey = std::tuple<std::string const*, std::optional<FontWeight>, std::optional<FontStyle>>();
+
     for (auto segment = 0ull; (segment + 1) < _boundaries.size(); segment++) {
         auto const segmentStart = _boundaries[segment];
         auto const segmentEnd = _boundaries[segment + 1];
 
-        auto fontFamily = std::optional<std::string>();
+        auto fontFamily = &TEXT_DEFAULT_FONT_FAMILY;
         auto fontWeight = std::optional<FontWeight>();
         auto fontStyle = std::optional<FontStyle>();
         auto fontSize = std::ceilf(TEXT_DEFAULT_FONT_SIZE * _scale.value_or(1.0f));
@@ -1845,7 +1830,7 @@ void Text::_updateIndex() const {
                 (segmentStart >= range.startIndex) &&
                 (segmentStart < range.endIndex)
             ) {
-                fontFamily = range.style.fontFamily.has_value() ? range.style.fontFamily : fontFamily;
+                fontFamily = range.style.fontFamily.has_value() ? &range.style.fontFamily.value() : fontFamily;
                 fontWeight = range.style.fontWeight.has_value() ? range.style.fontWeight : fontWeight;
                 fontStyle = range.style.fontStyle.has_value() ? range.style.fontStyle : fontStyle;
                 fontSize = std::ceilf(range.style.fontSize.has_value() ? (range.style.fontSize.value() * _scale.value_or(1.0f)) : fontSize);
@@ -1856,17 +1841,27 @@ void Text::_updateIndex() const {
             }
         }
 
-        auto font = Font::Find(
-            fontFamily.value_or(TEXT_DEFAULT_FONT_FAMILY),
-            fontWeight.value_or(TEXT_DEFAULT_FONT_WEIGHT),
-            fontStyle.value_or(TEXT_DEFAULT_FONT_STYLE)
+        auto const sameFont = (
+            (font != nullptr) &&
+            (*std::get<0>(fontKey) == *fontFamily) &&
+            (std::get<1>(fontKey) == fontWeight) &&
+            (std::get<2>(fontKey) == fontStyle)
         );
 
-        if (font == nullptr) {
-            font = &Font::GetDefault(
+        if (sameFont == false) {
+            fontKey = { fontFamily, fontWeight, fontStyle };
+            font = Font::Find(
+                *fontFamily,
                 fontWeight.value_or(TEXT_DEFAULT_FONT_WEIGHT),
                 fontStyle.value_or(TEXT_DEFAULT_FONT_STYLE)
             );
+
+            if (font == nullptr) {
+                font = &Font::GetDefault(
+                    fontWeight.value_or(TEXT_DEFAULT_FONT_WEIGHT),
+                    fontStyle.value_or(TEXT_DEFAULT_FONT_STYLE)
+                );
+            }
         }
 
         auto const& lineInfo = font->getLine(fontSize);
@@ -2267,12 +2262,12 @@ void Text::_updateEdit() const {
         }
     }
 
+    _editState->selectionRects.clear();
+
     if (
         isSelectedRange() &&
         _getMaxIndex() > 0
     ) {
-        _editState->selectionRects = {};
-
         if (lines.empty() == false) {
             auto lastGlyph = false;
             auto const fromIndex = std::clamp(std::min(_editState->caret, _editState->anchor), (std::int64_t)0, _getMaxIndex());
@@ -2334,8 +2329,6 @@ void Text::_updateEdit() const {
                 _editState->selectionRects.pop_back();
             }
         }
-    } else {
-        _editState->selectionRects = {};
     }
 }
 
@@ -2382,7 +2375,7 @@ void Text::_pushUndo(int kind, bool coalesce) {
         _editState->undoStack.push_back(getSnapshot());
 
         if (_editState->undoStack.size() > _undoLimit) {
-            _editState->undoStack.erase(_editState->undoStack.begin());
+            _editState->undoStack.pop_front();
         }
     }
 
@@ -2396,10 +2389,10 @@ void Text::_endEdit() {
     _editState->lastEditCaret = _editState->caret;
 }
 
-void Text::_applySnapshot(TextEditSnapshot const& snapshot) {
+void Text::_applySnapshot(TextEditSnapshot snapshot) {
     PROFILE
 
-    _codepoints = snapshot.codepoints;
+    _codepoints = std::move(snapshot.codepoints);
     _editState->caret = snapshot.caret;
     _editState->anchor = snapshot.anchor;
     _editState->caretXGoal = snapshot.caretXGoal;

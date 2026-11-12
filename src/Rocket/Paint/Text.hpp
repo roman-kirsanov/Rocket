@@ -8,6 +8,7 @@
 #pragma once
 
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <optional>
 #include <string>
@@ -705,7 +706,7 @@ private:
         bool mouseIsDown;
         bool caretAffinity;
         std::optional<float> caretXGoal;
-        std::vector<TextEditSnapshot> undoStack;
+        std::deque<TextEditSnapshot> undoStack;
         std::vector<TextEditSnapshot> redoStack;
         int lastEditKind;
         std::int64_t lastEditCaret;
@@ -760,7 +761,7 @@ private:
 
     void _pushUndo(int, bool);
     void _endEdit();
-    void _applySnapshot(TextEditSnapshot const&);
+    void _applySnapshot(TextEditSnapshot);
     void _setCaret(std::int64_t);
     void _setAnchor(std::int64_t);
     void _setCaretAffinity(bool);

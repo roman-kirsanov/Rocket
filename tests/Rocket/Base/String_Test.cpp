@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <algorithm>
+#include <random>
 #include <string>
 #include <vector>
 #include <Rocket/Base/String.hpp>
@@ -302,4 +304,38 @@ TEST(String, AsciiStepsOneCodepointAndClamps) {
     ASSERT_TRUE(GraphemePrev(codepoints, 3) == 2);
     ASSERT_TRUE(GraphemePrev(codepoints, 1) == 0);
     ASSERT_TRUE(GraphemePrev(codepoints, 0) == 0);
+}
+
+/* Stepping back from any index lands on the last cluster boundary before it,
+   the same one found by stepping forward from the start, also inside runs of
+   flags, Hangul jamo, marks, ZWJ sequences and line breaks. */
+TEST(String, GraphemePrevMatchesSegmentingFromTheStart) {
+    auto const alphabet = std::vector<std::uint32_t>{
+        'a', ' ', '\r', '\n', 0x200D, 0x301, 0xFE0F, 0x1F3FB,
+        0x1100, 0x1161, 0x11A8, 0xAC00, 0xAC01,
+        0x1F1FA, 0x1F1F8, 0x1F468
+    };
+    auto random = std::mt19937(7);
+    auto codepoints = std::vector<std::uint32_t>();
+
+    for (auto round = 0; round < 2000; round++) {
+        codepoints.resize(random() % 40);
+        for (auto& codepoint : codepoints) {
+            codepoint = alphabet[random() % alphabet.size()];
+        }
+
+        auto const size = (std::int64_t)codepoints.size();
+
+        for (auto index = (std::int64_t)-1; index <= (size + 1); index++) {
+            auto expected = std::int64_t{0};
+            auto position = std::int64_t{0};
+
+            while (position < std::min(index, size)) {
+                expected = position;
+                position = GraphemeNext(codepoints, position);
+            }
+
+            ASSERT_EQ(GraphemePrev(codepoints, index), expected) << "round " << round << " index " << index;
+        }
+    }
 }

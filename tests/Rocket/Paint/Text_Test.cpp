@@ -6,6 +6,7 @@
  */
 
 #include <array>
+#include <cfloat>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -198,6 +199,31 @@ TEST(Text, SameStringStyleYieldsIdenticalSizes) {
     b.setString(pangram);
     b.setStyle(TextStyle{ .fontSize = 20.0f });
     ASSERT_TRUE(a.getSize() == b.getSize());
+}
+
+/* Each style segment gets the font of its own family, weight and style,
+   also when it differs from its neighbor only in color or only in family. */
+TEST(Text, StyleSegmentsUseTheirOwnFont) {
+    Text text;
+    text.setString("aaaa bbbb cccc dddd eeee");
+    text.setStyle({ .fontSize = 14.0f });
+    text.addStyle(5, 9, { .fontWeight = FontWeight::Bold });
+    text.addStyle(9, 14, { .fontWeight = FontWeight::Bold, .color = red });
+    text.addStyle(15, 19, { .fontFamily = "Not A Registered Family", .fontWeight = FontWeight::Bold });
+    text.addStyle(19, 24, { .fontStyle = FontStyle::Italic });
+
+    auto const& glyphs = text.getGlyphs();
+    auto const normal = &Font::GetDefault(FontWeight::Normal, FontStyle::Normal);
+    auto const bold = &Font::GetDefault(FontWeight::Bold, FontStyle::Normal);
+    auto const italic = &Font::GetDefault(FontWeight::Normal, FontStyle::Italic);
+
+    EXPECT_EQ(glyphs[0].font, normal);
+    EXPECT_EQ(glyphs[5].font, bold);
+    EXPECT_EQ(glyphs[10].font, bold);
+    EXPECT_EQ(glyphs[10].color, red);
+    EXPECT_EQ(glyphs[14].font, normal);
+    EXPECT_EQ(glyphs[15].font, bold);
+    EXPECT_EQ(glyphs[20].font, italic);
 }
 
 /* A larger fontSize yields a strictly larger size (width and/or height) for the same string. */
@@ -2559,6 +2585,50 @@ TEST(Text, EditingMouseHitTestingClampsOutsidePoints) {
     text.mouseUp({ -1000.0f, 1.0e6f });
 }
 
+/* Hit testing picks the line containing the point, or else the nearest one
+   (the upper one on a tie), at every height inside, between, above and below
+   the lines, the same as checking every line in turn. */
+TEST(Text, GlyphAtPositionPicksTheNearestLine) {
+    Text text;
+    auto string = std::string();
+    for (auto i = 0; i < 30; i++) string += "line " + std::to_string(i) + ((i < 29) ? "\n" : "");
+    text.setString(string);
+    text.setStyle({ .fontSize = 14.0f });
+    text.setPaddingTop(7.0f);
+
+    auto const& lines = text.getLines();
+    auto const width = text.getSize().width;
+
+    for (auto y = -20.0f; y < (text.getSize().height + 20.0f); y += 0.25f) {
+        for (auto const x : { -50.0f, 5.0f, (width + 50.0f) }) {
+            auto const position = Vec2{ x, y };
+            auto expected = (std::int64_t)-1;
+            auto expectedDistance = FLT_MAX;
+
+            for (auto const& line : lines) {
+                auto const fullRect = Vec4{ 0.0f, line.rect.y, width, line.rect.height };
+
+                if (position.inRect(fullRect)) {
+                    expected = line.rowIndex;
+                    break;
+                }
+
+                auto const distance = fullRect.getEdgePoint(position).getDistance(position);
+
+                if (distance < expectedDistance) {
+                    expectedDistance = distance;
+                    expected = line.rowIndex;
+                }
+            }
+
+            auto const glyph = text.getGlyphAtPosition(position);
+
+            ASSERT_TRUE(glyph.has_value());
+            EXPECT_EQ(glyph->rowIndex, expected) << "x " << x << " y " << y;
+        }
+    }
+}
+
 /* A drag that leaves the layout keeps extending the selection to the
    nearest edge instead of freezing or jumping back. */
 TEST(Text, EditingMouseDragBeyondLayoutExtendsToEdges) {
@@ -2865,6 +2935,32 @@ TEST(Text, EditingUndoRedoReturnWhetherApplied) {
     EXPECT_TRUE(text.redo());
     EXPECT_EQ(text.getString(), "xabc");
     EXPECT_FALSE(text.redo());
+}
+
+/* History keeps the newest 200 groups: older ones are dropped from the
+   front, and the remaining ones still undo and redo in order. */
+TEST(Text, EditingUndoKeepsTheNewest200Groups) {
+    Text text;
+    _Setup(text, "");
+
+    auto typed = std::string();
+    for (auto i = 0; i < 250; i++) {
+        text.input("a");
+        text.input(" ");
+        typed += "a ";
+    }
+
+    auto undone = 0;
+    while (text.undo()) undone += 1;
+
+    EXPECT_EQ(undone, 200);
+    EXPECT_EQ(text.getString(), typed.substr(0, (50 * 2) + 1));
+
+    auto redone = 0;
+    while (text.redo()) redone += 1;
+
+    EXPECT_EQ(redone, 200);
+    EXPECT_EQ(text.getString(), typed);
 }
 
 /* ------------------------------ multi-click ------------------------------- */

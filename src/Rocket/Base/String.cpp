@@ -50,6 +50,24 @@ static bool _GraphemeIsExtender(std::uint32_t codepoint) {
     );
 }
 
+static bool _GraphemeStartsAt(std::vector<std::uint32_t> const& codepoints, std::int64_t index) {
+    PROFILE
+
+    auto const codepoint = codepoints[index];
+    auto const previous = codepoints[index - 1];
+
+    return (previous != 0x200D)
+        && (codepoint != 0x200D)
+        && (_GraphemeIsExtender(codepoint) == false)
+        && (_GraphemeIsHangulL(codepoint) == false)
+        && (_GraphemeIsHangulV(codepoint) == false)
+        && (_GraphemeIsHangulT(codepoint) == false)
+        && (_GraphemeIsHangulLV(codepoint) == false)
+        && (_GraphemeIsHangulLVT(codepoint) == false)
+        && ((codepoint < 0x1F1E6) || (codepoint > 0x1F1FF))
+        && (((previous == '\r') && (codepoint == '\n')) == false);
+}
+
 void StringInsert(std::string& string, std::int64_t position, std::string const& substring) {
     PROFILE
 
@@ -354,15 +372,22 @@ std::int64_t GraphemePrev(std::vector<std::uint32_t> const& codepoints, std::int
 
     auto size = (std::int64_t)codepoints.size();
 
-    if (index <= 0) {
-        return 0;
-    }
     if (index > size) {
         index = size;
     }
+    if (index <= 0) {
+        return 0;
+    }
 
-    auto boundary = std::int64_t{0};
-    auto position = std::int64_t{0};
+    /* Segmenting forward from any point where GraphemeNext must end a cluster gives the same boundaries as segmenting from 0. */
+    auto start = (index - 1);
+
+    while ((start > 0) && (_GraphemeStartsAt(codepoints, start) == false)) {
+        start -= 1;
+    }
+
+    auto boundary = start;
+    auto position = start;
 
     while (position < index) {
         boundary = position;
