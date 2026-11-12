@@ -1079,6 +1079,37 @@ static int maxChannelDiff(std::vector<std::uint8_t> const& a, std::vector<std::u
     return maxDiff;
 }
 
+TEST(Painter, BlendAddScreenOnTransparentTarget) {
+    /* on a transparent target Add and Screen write the source's alpha along with its
+       color, so the pixel stays valid premultiplied; over half-transparent blue the
+       alpha combines as in Over */
+    for (auto const blend : { Blend::Add, Blend::Screen }) {
+        auto target  = Image(Vec2(8.0f, 8.0f));
+        auto painter = Painter();
+
+        painter.beginPaint(ImagePaintTarget{
+            .image      = target,
+            .clearColor = Vec4{ 0.0f, 0.0f, 0.0f, 0.0f }
+        });
+        painter.paint(QuadShape{ .rect = { 4.0f, 0.0f, 4.0f, 8.0f } }, ColorBrush{ .color = { 0.0f, 0.0f, 1.0f, 0.5f } });
+        painter.paint(QuadShape{ .rect = { 0.0f, 0.0f, 8.0f, 8.0f } }, ColorBrush{ .color = { 1.0f, 0.0f, 0.0f, 0.5f } }, { .blend = blend });
+        painter.endPaint();
+
+        auto pixels = std::vector<std::uint8_t>();
+        target.getData(pixels);
+
+        auto const clear = &pixels[((4 * 8) + 1) * 4];
+        EXPECT_NEAR((int)clear[0], 128, 1);
+        EXPECT_EQ((int)clear[2], 0);
+        EXPECT_NEAR((int)clear[3], 128, 1);
+
+        auto const blue = &pixels[((4 * 8) + 6) * 4];
+        EXPECT_NEAR((int)blue[0], 128, 1);
+        EXPECT_NEAR((int)blue[2], 128, 1);
+        EXPECT_NEAR((int)blue[3], 191, 1);
+    }
+}
+
 TEST(Painter, RadiusZeroEquivalence) {
     /* no radius fields, uniform zero, and all-zero overrides must hit the same
        sharp-corner path and produce bit-identical output */

@@ -351,15 +351,16 @@ static void _SetBlend(Blend blend) {
             _gl.BlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
             break;
         case Blend::Add:
-            // dst = src + dst; the target's alpha is kept
-            _gl.BlendFuncSeparate(GL_ONE, GL_ONE, GL_ZERO, GL_ONE);
+            // dst = src + dst; alpha combines as in Over
+            _gl.BlendFuncSeparate(GL_ONE, GL_ONE, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
             break;
         case Blend::Multiply:
             // dst = src * dst + dst * (1 - srcA): where the source is transparent the target stays
             _gl.BlendFuncSeparate(GL_DST_COLOR, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
             break;
         case Blend::Screen:
-            _gl.BlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_COLOR, GL_ZERO, GL_ONE);
+            // dst = src + dst * (1 - src); alpha combines as in Over
+            _gl.BlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_COLOR, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
             break;
     }
 }

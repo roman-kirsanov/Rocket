@@ -139,8 +139,8 @@ static void _SetBlend(MTLRenderPipelineColorAttachmentDescriptor* attachment, Bl
         case Blend::Add:
             attachment.sourceRGBBlendFactor = ::MTLBlendFactorOne;
             attachment.destinationRGBBlendFactor = ::MTLBlendFactorOne;
-            attachment.sourceAlphaBlendFactor = ::MTLBlendFactorZero;
-            attachment.destinationAlphaBlendFactor = ::MTLBlendFactorOne;
+            attachment.sourceAlphaBlendFactor = ::MTLBlendFactorOne;
+            attachment.destinationAlphaBlendFactor = ::MTLBlendFactorOneMinusSourceAlpha;
             break;
         case Blend::Multiply:
             attachment.sourceRGBBlendFactor = ::MTLBlendFactorDestinationColor;
@@ -151,8 +151,8 @@ static void _SetBlend(MTLRenderPipelineColorAttachmentDescriptor* attachment, Bl
         case Blend::Screen:
             attachment.sourceRGBBlendFactor = ::MTLBlendFactorOne;
             attachment.destinationRGBBlendFactor = ::MTLBlendFactorOneMinusSourceColor;
-            attachment.sourceAlphaBlendFactor = ::MTLBlendFactorZero;
-            attachment.destinationAlphaBlendFactor = ::MTLBlendFactorOne;
+            attachment.sourceAlphaBlendFactor = ::MTLBlendFactorOne;
+            attachment.destinationAlphaBlendFactor = ::MTLBlendFactorOneMinusSourceAlpha;
             break;
     }
 }

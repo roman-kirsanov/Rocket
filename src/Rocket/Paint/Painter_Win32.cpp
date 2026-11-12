@@ -399,11 +399,11 @@ static ::D3D12_RENDER_TARGET_BLEND_DESC _GetBlend(Blend blend) {
             state.DestBlendAlpha = ::D3D12_BLEND_INV_SRC_ALPHA;
             break;
         case Blend::Add:
-            /* dst = src + dst; the target's alpha is kept */
+            /* dst = src + dst; alpha combines as in Over */
             state.SrcBlend = ::D3D12_BLEND_ONE;
             state.DestBlend = ::D3D12_BLEND_ONE;
-            state.SrcBlendAlpha = ::D3D12_BLEND_ZERO;
-            state.DestBlendAlpha = ::D3D12_BLEND_ONE;
+            state.SrcBlendAlpha = ::D3D12_BLEND_ONE;
+            state.DestBlendAlpha = ::D3D12_BLEND_INV_SRC_ALPHA;
             break;
         case Blend::Multiply:
             /* dst = src * dst + dst * (1 - srcA): where the source is transparent the target stays */
@@ -413,11 +413,11 @@ static ::D3D12_RENDER_TARGET_BLEND_DESC _GetBlend(Blend blend) {
             state.DestBlendAlpha = ::D3D12_BLEND_ONE;
             break;
         case Blend::Screen:
-            /* dst = src + dst * (1 - src) */
+            /* dst = src + dst * (1 - src); alpha combines as in Over */
             state.SrcBlend = ::D3D12_BLEND_ONE;
             state.DestBlend = ::D3D12_BLEND_INV_SRC_COLOR;
-            state.SrcBlendAlpha = ::D3D12_BLEND_ZERO;
-            state.DestBlendAlpha = ::D3D12_BLEND_ONE;
+            state.SrcBlendAlpha = ::D3D12_BLEND_ONE;
+            state.DestBlendAlpha = ::D3D12_BLEND_INV_SRC_ALPHA;
             break;
     }
 

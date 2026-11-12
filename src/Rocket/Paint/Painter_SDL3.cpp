@@ -257,8 +257,8 @@ static ::SDL_GPUColorTargetBlendState _GetBlend(Blend blend) {
         case Blend::Add:
             state.src_color_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE;
             state.dst_color_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE;
-            state.src_alpha_blendfactor = ::SDL_GPU_BLENDFACTOR_ZERO;
-            state.dst_alpha_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE;
+            state.src_alpha_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE;
+            state.dst_alpha_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
             break;
         case Blend::Multiply:
             state.src_color_blendfactor = ::SDL_GPU_BLENDFACTOR_DST_COLOR;
@@ -269,8 +269,8 @@ static ::SDL_GPUColorTargetBlendState _GetBlend(Blend blend) {
         case Blend::Screen:
             state.src_color_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE;
             state.dst_color_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_COLOR;
-            state.src_alpha_blendfactor = ::SDL_GPU_BLENDFACTOR_ZERO;
-            state.dst_alpha_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE;
+            state.src_alpha_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE;
+            state.dst_alpha_blendfactor = ::SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
             break;
     }
 

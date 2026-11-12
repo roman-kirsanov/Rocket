@@ -55,7 +55,9 @@ using PaintTarget = Enum<ImagePaintTarget, WindowPaintTarget>;
 
 /**
  * How a draw combines with what is already on the target. Fragments are
- * premultiplied, so every mode is a plain pair of blend factors.
+ * premultiplied, so every mode is a plain pair of blend factors. Over, Add
+ * and Screen combine alpha alike, so the target's alpha grows by what the
+ * source covers; Multiply keeps the target's alpha.
  */
 enum class Blend {
     /** Premultiplied source-over (the default): the source covers the target. */
