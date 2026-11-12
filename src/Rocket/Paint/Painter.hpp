@@ -72,9 +72,18 @@ enum class Blend {
 
 /** Per-draw overrides for transform, scissor rectangle, opacity, filtering, and blending. */
 struct PaintOptions {
-    /** Transform applied to the shape; identity when unset. */
+    /** Transform applied to the shape; identity when unset. Does not affect `scissor`. */
     std::optional<Mat3> transform;
-    /** Clip rectangle the draw is restricted to, clamped to the target bounds. */
+    /**
+     * Clip rectangle the draw is restricted to, in target pixels (the space an
+     * untransformed shape is drawn in) and unaffected by `transform`. Each
+     * edge is rounded to the nearest pixel (left = round(x), right =
+     * round(x + width), likewise top and bottom) and clamped to the target
+     * bounds. When a filter is in effect the shape and the intermediate
+     * filter passes are rendered offscreen without it and only the composite
+     * onto the target is scissored, so a blurred or shadowed shape outside
+     * the rectangle still bleeds into it. This is intentional.
+     */
     std::optional<Vec4> scissor;
     /** Opacity multiplier, 0 to 1; fully opaque when unset. */
     std::optional<float> opacity;
