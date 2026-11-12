@@ -29,6 +29,7 @@ set(ROCKET_SOURCE
     src/Rocket/Node/Node.cpp
     src/Rocket/Node/NodeEvent.cpp
     src/Rocket/Node/NodeValue.cpp
+    src/Rocket/Paint/Bitmap.cpp
     src/Rocket/Paint/Brush.cpp
     src/Rocket/Paint/Color.cpp
     src/Rocket/Paint/Filter.cpp
