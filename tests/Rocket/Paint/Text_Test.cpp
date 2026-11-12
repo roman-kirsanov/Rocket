@@ -5,10 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <vector>
 #include <functional>
@@ -90,6 +92,21 @@ TEST(Image, SetDataChannelMappingRoundTrips) {
     check(ImageDataFormat::RGB,       { 10, 20, 30 },      { 10, 20, 30, 255 });
     check(ImageDataFormat::BGR,       { 30, 20, 10 },      { 10, 20, 30, 255 });
     check(ImageDataFormat::Grayscale, { 200 },             { 0, 0, 0, 200 });
+}
+
+/* The premultiplied formats are only reordered on upload, never premultiplied again. */
+TEST(Image, SetDataKeepsPremultipliedFormats) {
+    auto const check = [](ImageDataFormat format, std::vector<std::uint8_t> const& input, std::vector<std::uint8_t> const& expected) {
+        auto image = Image{ Vec2{ 1.0f, 1.0f } };
+        image.setData(Vec2{ 1.0f, 1.0f }, input.data(), format);
+
+        auto output = std::vector<std::uint8_t>();
+        image.getData(output);
+        ASSERT_TRUE(output == expected);
+    };
+
+    check(ImageDataFormat::RGBAPremultiplied, { 64, 32, 16, 128 }, { 64, 32, 16, 128 });
+    check(ImageDataFormat::BGRAPremultiplied, { 16, 32, 64, 128 }, { 64, 32, 16, 128 });
 }
 
 /* Uploaded pixels are premultiplied by alpha: c' = (c * a + 127) / 255. */
@@ -3066,4 +3083,170 @@ TEST(Text, EditingCaretMovesOnLongLineStayCheap) {
     std::printf("[  METRIC  ] 200 Left presses at the end of 20k chars: %.2f ms\n", elapsed);
     EXPECT_LT(elapsed, 500.0);
     EXPECT_EQ(text.getCaretPosition(), 19800);
+}
+
+/* --- color glyphs --- */
+
+/* tests/_Fonts/ColorTest.ttf has two color glyphs showing the same picture, a
+   red disc with anti-aliased edges (starting 140 units right of the origin) and
+   a solid blue block, both above the baseline: U+E000 as OT-SVG in the spec's
+   plain form, no viewBox (rendered by Font's lunasvg hook), and U+E001 as COLR
+   layers (blended by FreeType). Both reach Font as premultiplied BGRA. U+E002 is
+   a green block defined in the same SVG document as U+E000. */
+static auto const _colorTestFontPath = std::string(ROCKET_SOURCE_DIR "/tests/_Fonts/ColorTest.ttf");
+
+static void _AddColorTestFont() {
+    if (Font::Find("RocketColorTest", FontWeight::Normal, FontStyle::Normal) == nullptr) {
+        Font::Add("RocketColorTest", FontWeight::Normal, FontStyle::Normal, _colorTestFontPath, 0);
+    }
+}
+
+static std::vector<std::uint8_t> _RenderColorTestGlyph(std::string const& glyph, Vec4 const& color) {
+    _AddColorTestFont();
+
+    Text text;
+    text.setString(glyph);
+    text.setStyle(TextStyle{
+        .fontFamily = "RocketColorTest",
+        .fontWeight = FontWeight::Normal,
+        .fontStyle = FontStyle::Normal,
+        .fontSize = 32.0f,
+        .color = color
+    });
+
+    auto pixels = std::vector<std::uint8_t>();
+
+    if (auto const image = text.getImage(); image != nullptr) {
+        image->getData(pixels);
+    }
+
+    return pixels;
+}
+
+/* A color glyph is flagged and reaches the atlas premultiplied exactly once:
+   on the edge of the pure red disc the stored red equals the alpha. Before the
+   fix it was premultiplied a second time (red 10 at alpha 51). */
+TEST(Font, ColorGlyphIsStoredPremultipliedOnce) {
+    auto font = Font{ _colorTestFontPath };
+
+    for (auto const codepoint : { 0xE000u, 0xE001u }) {
+        auto const& glyph = font.getGlyph(codepoint, 32.0f);
+
+        ASSERT_TRUE(glyph.colored);
+        ASSERT_TRUE(glyph.image != nullptr);
+
+        auto atlas = std::vector<std::uint8_t>();
+        glyph.image->getData(atlas);
+
+        auto const atlasWidth = static_cast<int>(glyph.image->getSize().width);
+        auto edges = 0;
+
+        for (auto y = static_cast<int>(glyph.imageSlice.y); y < static_cast<int>(glyph.imageSlice.getMaxY()); y++) {
+            for (auto x = static_cast<int>(glyph.imageSlice.x); x < static_cast<int>(glyph.imageSlice.getMaxX()); x++) {
+                auto const pixel = &atlas[(((std::size_t)y * atlasWidth) + x) * 4];
+
+                if ((pixel[3] > 0) && (pixel[3] < 255) && (pixel[1] == 0) && (pixel[2] == 0)) {
+                    EXPECT_NEAR(pixel[0], pixel[3], 1);
+                    edges++;
+                }
+            }
+        }
+
+        EXPECT_GT(edges, 0);
+    }
+}
+
+/* An OT-SVG glyph is placed by the font's em like the same picture drawn as an
+   outline: the SVG and COLR versions get the same bearing and bitmap size, so
+   neither is shifted sideways, clipped or dropped below the baseline. */
+TEST(Font, SvgGlyphIsPlacedLikeTheSameOutline) {
+    auto font = Font{ _colorTestFontPath };
+    auto const& svg = font.getGlyph(0xE000, 32.0f);
+    auto const& colr = font.getGlyph(0xE001, 32.0f);
+
+    EXPECT_EQ(svg.bearing, colr.bearing);
+    EXPECT_NEAR(svg.imageSlice.width, colr.imageSlice.width, 1.0f);
+    EXPECT_NEAR(svg.imageSlice.height, colr.imageSlice.height, 1.0f);
+    EXPECT_GT(svg.bearing.x, 0.0f);
+    EXPECT_GT(svg.bearing.y, 0.0f);
+}
+
+/* Each glyph of a shared SVG document draws only its own element "glyph<ID>". */
+TEST(Font, SvgGlyphDrawsOnlyItsOwnElement) {
+    auto font = Font{ _colorTestFontPath };
+
+    auto const count = [&](std::uint32_t codepoint) {
+        auto const& glyph = font.getGlyph(codepoint, 32.0f);
+        auto atlas = std::vector<std::uint8_t>();
+        glyph.image->getData(atlas);
+
+        auto const atlasWidth = static_cast<int>(glyph.image->getSize().width);
+        auto colors = std::array<int, 3>{};
+
+        for (auto y = static_cast<int>(glyph.imageSlice.y); y < static_cast<int>(glyph.imageSlice.getMaxY()); y++) {
+            for (auto x = static_cast<int>(glyph.imageSlice.x); x < static_cast<int>(glyph.imageSlice.getMaxX()); x++) {
+                auto const pixel = &atlas[(((std::size_t)y * atlasWidth) + x) * 4];
+
+                for (auto channel = 0; channel < 3; channel++) {
+                    colors[channel] += ((pixel[channel] > 200) ? 1 : 0);
+                }
+            }
+        }
+
+        return colors;
+    };
+
+    auto const picture = count(0xE000);
+    auto const second = count(0xE002);
+
+    EXPECT_GT(picture[0], 0);
+    EXPECT_EQ(picture[1], 0);
+    EXPECT_GT(picture[2], 0);
+    EXPECT_EQ(second[0], 0);
+    EXPECT_GT(second[1], 0);
+    EXPECT_EQ(second[2], 0);
+}
+
+/* A FreeType failure is reported as an exception, even though this FreeType
+   build has no error strings (FT_Error_String returns null). */
+TEST(Font, FreeTypeErrorsThrow) {
+    auto const garbage = std::vector<std::uint8_t>(64, 0xAB);
+
+    EXPECT_THROW((Font{ garbage.data(), garbage.size() }), std::runtime_error);
+}
+
+/* An ordinary glyph stays a coverage mask drawn in the text color. */
+TEST(Font, OutlineGlyphIsNotColored) {
+    Text text;
+    text.setString("A");
+    text.setStyle(TextStyle{ .fontSize = 32.0f });
+
+    ASSERT_FALSE(text.getGlyphs().empty());
+    EXPECT_FALSE(text.getGlyphs().front().colored);
+}
+
+/* A color glyph is drawn in its own colors: the text color is ignored, even
+   when it is transparent. */
+TEST(Text, ColorGlyphIgnoresTheTextColor) {
+    for (auto const& [ glyph, color ] : {
+        std::pair{ std::string("\xEE\x80\x80"), Vec4{ 0.0f, 1.0f, 0.0f, 1.0f } },
+        std::pair{ std::string("\xEE\x80\x80"), Vec4{ 0.0f, 1.0f, 0.0f, 0.0f } },
+        std::pair{ std::string("\xEE\x80\x81"), Vec4{ 0.0f, 1.0f, 0.0f, 1.0f } },
+        std::pair{ std::string("\xEE\x80\x81"), Vec4{ 0.0f, 1.0f, 0.0f, 0.0f } }
+    }) {
+        auto const pixels = _RenderColorTestGlyph(glyph, color);
+        auto red = 0;
+        auto blue = 0;
+        auto green = 0;
+
+        for (auto i = 0uz; i < pixels.size(); i += 4) {
+            red += ((pixels[i] > 200) && (pixels[i + 3] == 255)) ? 1 : 0;
+            blue += ((pixels[i + 2] > 200) && (pixels[i + 3] == 255)) ? 1 : 0;
+            green += (pixels[i + 1] > 0) ? 1 : 0;
+        }
+
+        EXPECT_GT(red, 0);
+        EXPECT_GT(blue, 0);
+        EXPECT_EQ(green, 0);
+    }
 }

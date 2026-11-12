@@ -1960,7 +1960,8 @@ void Text::_updateLayout() const {
                 .leading = indexEntry.lineInfo->leading,
                 .whitespace = indexEntry.glyphInfo->whitespace,
                 .image = indexEntry.glyphInfo->image,
-                .imageSlice = indexEntry.glyphInfo->imageSlice
+                .imageSlice = indexEntry.glyphInfo->imageSlice,
+                .colored = indexEntry.glyphInfo->colored
             });
         } else {
             auto const maxX = (_glyphs.back().rect.getMaxX() + indexEntry.glyphInfo->advance);
@@ -2034,7 +2035,8 @@ void Text::_updateLayout() const {
                 .leading = indexEntry.lineInfo->leading,
                 .whitespace = indexEntry.glyphInfo->whitespace,
                 .image = indexEntry.glyphInfo->image,
-                .imageSlice = indexEntry.glyphInfo->imageSlice
+                .imageSlice = indexEntry.glyphInfo->imageSlice,
+                .colored = indexEntry.glyphInfo->colored
             });
         }
 
@@ -2188,10 +2190,16 @@ void Text::_updateImage() const {
             painter.paint(QuadShape{ _SnapToPixelGrid(glyph.rect) }, ColorBrush{ glyph.marker });
         }
 
-        if (
-            (glyph.whitespace == false) &&
-            (glyph.color.alpha > 0.0f)
-        ) {
+        if (glyph.whitespace) {
+            continue;
+        }
+
+        if (glyph.colored) {
+            painter.paint(QuadShape{ _SnapToPixelGrid(glyph.bitmapRect) }, ImageBrush{
+                .image = glyph.image,
+                .slice = glyph.imageSlice
+            });
+        } else if (glyph.color.alpha > 0.0f) {
             painter.paint(QuadShape{ _SnapToPixelGrid(glyph.bitmapRect) }, ImageBrush{
                 .image = glyph.image,
                 .slice = glyph.imageSlice,

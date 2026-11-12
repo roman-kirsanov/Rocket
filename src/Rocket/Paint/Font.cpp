@@ -10,6 +10,7 @@
 #include <format>
 #include <fstream>
 #include <cassert>
+#include <sstream>
 #include <cstring>
 #include <algorithm>
 #include <filesystem>
@@ -27,55 +28,55 @@
 
 #define FT_Init_FreeType_E(...) { \
     if (auto const error = ::FT_Init_FreeType(__VA_ARGS__); error != 0) { \
-        throw std::runtime_error(std::format("Failed to initialize the FreeType library: {}", ::FT_Error_String(error))); \
+        throw std::runtime_error(std::format("Failed to initialize the FreeType library: {}", _GetFreeTypeError(error))); \
     } \
 }
 
 #define FT_New_Memory_Face_E(...) { \
     if (auto const error = ::FT_New_Memory_Face(__VA_ARGS__); error != 0) { \
-        throw std::runtime_error(std::format("Failed to create a freetype font face from memory: {}", ::FT_Error_String(error))); \
+        throw std::runtime_error(std::format("Failed to create a freetype font face from memory: {}", _GetFreeTypeError(error))); \
     } \
 }
 
 #define FT_Done_Face_E(...) { \
     if (auto const error = ::FT_Done_Face(__VA_ARGS__); error != 0) { \
-        throw std::runtime_error(std::format("Failed to finalize a freetype font face: {}", ::FT_Error_String(error))); \
+        throw std::runtime_error(std::format("Failed to finalize a freetype font face: {}", _GetFreeTypeError(error))); \
     } \
 }
 
 #define FT_Load_Glyph_E(...) { \
     if (auto const error = ::FT_Load_Glyph(__VA_ARGS__); error != 0) { \
-        throw std::runtime_error(std::format("Failed to load a freetype glyph: {}", ::FT_Error_String(error))); \
+        throw std::runtime_error(std::format("Failed to load a freetype glyph: {}", _GetFreeTypeError(error))); \
     } \
 }
 
 #define FT_Render_Glyph_E(...) { \
     if (auto const error = ::FT_Render_Glyph(__VA_ARGS__); error != 0) { \
-        throw std::runtime_error(std::format("Failed to render a freetype glyph: {}", ::FT_Error_String(error))); \
+        throw std::runtime_error(std::format("Failed to render a freetype glyph: {}", _GetFreeTypeError(error))); \
     } \
 }
 
 #define FT_Set_Pixel_Sizes_E(...) { \
     if (auto const error = ::FT_Set_Pixel_Sizes(__VA_ARGS__); error != 0) { \
-        throw std::runtime_error(std::format("Failed to set a freetype glyph pixel size: {}", ::FT_Error_String(error))); \
+        throw std::runtime_error(std::format("Failed to set a freetype glyph pixel size: {}", _GetFreeTypeError(error))); \
     } \
 }
 
 #define FT_Get_Kerning_E(...) { \
     if (auto const error = ::FT_Get_Kerning(__VA_ARGS__); error != 0) { \
-        throw std::runtime_error(std::format("Failed to get a freetype glyph kerning: {}", ::FT_Error_String(error))); \
+        throw std::runtime_error(std::format("Failed to get a freetype glyph kerning: {}", _GetFreeTypeError(error))); \
     } \
 }
 
 #define FT_Select_Charmap_E(...) { \
     if (auto const error = ::FT_Select_Charmap(__VA_ARGS__); error != 0) { \
-        throw std::runtime_error(std::format("Failed to select a freetype charmap: {}", ::FT_Error_String(error))); \
+        throw std::runtime_error(std::format("Failed to select a freetype charmap: {}", _GetFreeTypeError(error))); \
     } \
 }
 
 #define FT_Property_Set_E(...) { \
     if (auto const error = ::FT_Property_Set(__VA_ARGS__); error != 0) { \
-        throw std::runtime_error(std::format("Failed to set a freetype property: {}", ::FT_Error_String(error))); \
+        throw std::runtime_error(std::format("Failed to set a freetype property: {}", _GetFreeTypeError(error))); \
     } \
 }
 
@@ -103,6 +104,7 @@ struct _FontSvgState {
     ::FT_Error err;
     lunasvg::Matrix matrix;
     std::unique_ptr<lunasvg::Document> svg;
+    lunasvg::Element glyph;
 };
 
 struct _Font {
@@ -116,6 +118,14 @@ static auto constexpr _fontImagePadding = 1;
 static auto _freeTypeLibrary = ::FT_Library{};
 static auto _freeTypeLibraryInited = false;
 static auto _fontRegistry = std::unordered_map<_FontKey, Font, _FontKeyHash>();
+
+static std::string _GetFreeTypeError(::FT_Error error) {
+    if (auto const message = ::FT_Error_String(error); message != nullptr) {
+        return message;
+    }
+
+    return std::format("FreeType error {:#04x}", error);
+}
 
 static std::uint32_t _SizeToPixels(float size) {
     return static_cast<std::uint32_t>(std::max(size, 1.0f));
@@ -151,10 +161,29 @@ static ::FT_Error _FontSvgRender(::FT_GlyphSlot slot, ::FT_Pointer* state) {
         slot->bitmap.pitch
     );
 
-    svgState->svg->render(bitmap, svgState->matrix);
+    if (svgState->glyph.isNull()) {
+        svgState->svg->render(bitmap, svgState->matrix);
+    } else {
+        svgState->glyph.render(bitmap, svgState->matrix);
+    }
+
     svgState->err = ::FT_Err_Ok;
 
     return svgState->err;
+}
+
+static std::vector<float> _ParseSvgNumbers(std::string text) {
+    std::replace(text.begin(), text.end(), ',', ' ');
+
+    auto stream = std::istringstream(text);
+    auto numbers = std::vector<float>();
+    auto number = 0.0f;
+
+    while (stream >> number) {
+        numbers.push_back(number);
+    }
+
+    return numbers;
 }
 
 static ::FT_Error _FontSvgPresetSlot(::FT_GlyphSlot slot, ::FT_Bool cache, ::FT_Pointer* state) {
@@ -167,6 +196,7 @@ static ::FT_Error _FontSvgPresetSlot(::FT_GlyphSlot slot, ::FT_Bool cache, ::FT_
         return svgState->err;
     }
 
+    svgState->glyph = lunasvg::Element();
     svgState->svg = lunasvg::Document::loadFromData(
         reinterpret_cast<const char*>(document->svg_document),
         document->svg_document_length
@@ -177,39 +207,75 @@ static ::FT_Error _FontSvgPresetSlot(::FT_GlyphSlot slot, ::FT_Bool cache, ::FT_
         return svgState->err;
     }
 
-    auto box = svgState->svg->boundingBox();
+    auto root = svgState->svg->documentElement();
+    auto const viewBox = _ParseSvgNumbers(root.getAttribute("viewBox"));
+    auto const width = _ParseSvgNumbers(root.getAttribute("width"));
+    auto const height = _ParseSvgNumbers(root.getAttribute("height"));
+    auto originX = 0.0f;
+    auto originY = 0.0f;
+    auto emWidth = static_cast<float>(document->units_per_EM);
+    auto emHeight = static_cast<float>(document->units_per_EM);
 
-    auto const scale =  std::min(document->metrics.x_ppem / box.w, document->metrics.y_ppem / box.h);
-    auto const xx    =  (double)document->transform.xx / (1 << 16);
-    auto const xy    = -(double)document->transform.xy / (1 << 16);
-    auto const yx    = -(double)document->transform.yx / (1 << 16);
-    auto const yy    =  (double)document->transform.yy / (1 << 16);
-    auto const x0    =  (double)document->delta.x / 64.0 * box.w / document->metrics.x_ppem;
-    auto const y0    = -(double)document->delta.y / 64.0 * box.h / document->metrics.y_ppem;
+    if ((viewBox.size() == 4) && (viewBox[2] > 0.0f) && (viewBox[3] > 0.0f)) {
+        originX = viewBox[0];
+        originY = viewBox[1];
+        emWidth = viewBox[2];
+        emHeight = viewBox[3];
+    } else if ((width.size() == 1) && (height.size() == 1) && (width[0] > 0.0f) && (height[0] > 0.0f)) {
+        emWidth = width[0];
+        emHeight = height[0];
+    }
 
-    svgState->matrix = lunasvg::Matrix::translated(-box.x, -box.y);
-    svgState->matrix.multiply(lunasvg::Matrix(xx, xy, yx, yy, x0, y0));
-    svgState->matrix.scale(scale, scale);
-    box.transform(svgState->matrix);
+    // An OpenType SVG glyph is placed by the font's em, with the viewBox origin on the
+    // glyph origin, and is never clipped (OpenType spec, SVG table). lunasvg would map
+    // the viewBox onto the viewport and clip to it, so the root is neutralized (an empty
+    // viewBox is the identity) and the mapping is done in the matrix instead.
+    root.setAttribute("viewBox", "0 0 0 0");
+    root.setAttribute("width", "1");
+    root.setAttribute("height", "1");
+    root.setAttribute("overflow", "visible");
+    svgState->svg->forceLayout();
 
-    slot->bitmap_left        = ::FT_Int(box.x);
-    slot->bitmap_top         = ::FT_Int(-box.y);
-    slot->bitmap.rows        = (unsigned int)std::ceil(box.h);
-    slot->bitmap.width       = (unsigned int)std::ceil(box.w);
+    // Rendered like a <use> of the element "glyph<ID>": its own transform applies, its ancestors' do not.
+    svgState->glyph = svgState->svg->getElementById(std::format("glyph{}", slot->glyph_index));
+
+    auto const box = (svgState->glyph.isNull() ? svgState->svg->boundingBox() : svgState->glyph.getLocalBoundingBox());
+    auto const scaleX = (document->metrics.x_ppem / emWidth);
+    auto const scaleY = (document->metrics.y_ppem / emHeight);
+    auto const xx = static_cast<float>(document->transform.xx / 65536.0);
+    auto const xy = static_cast<float>(-document->transform.xy / 65536.0);
+    auto const yx = static_cast<float>(-document->transform.yx / 65536.0);
+    auto const yy = static_cast<float>(document->transform.yy / 65536.0);
+    auto const a = (scaleX * xx);
+    auto const b = (scaleY * yx);
+    auto const c = (scaleX * xy);
+    auto const d = (scaleY * yy);
+    auto const e = (static_cast<float>(document->delta.x / 64.0) - ((a * originX) + (c * originY)));
+    auto const f = (static_cast<float>(-document->delta.y / 64.0) - ((b * originX) + (d * originY)));
+    auto const ink = box.transformed(lunasvg::Matrix(a, b, c, d, e, f));
+    auto const left = std::floor(ink.x);
+    auto const top = std::floor(ink.y);
+    auto const right = std::ceil(ink.x + ink.w);
+    auto const bottom = std::ceil(ink.y + ink.h);
+
+    svgState->matrix = lunasvg::Matrix(a, b, c, d, (e - left), (f - top));
+
+    slot->bitmap_left        = ::FT_Int(left);
+    slot->bitmap_top         = ::FT_Int(-top);
+    slot->bitmap.rows        = (unsigned int)(bottom - top);
+    slot->bitmap.width       = (unsigned int)(right - left);
     slot->bitmap.pitch       = (int)(slot->bitmap.width * 4);
     slot->bitmap.pixel_mode  = ::FT_PIXEL_MODE_BGRA;
 
-    auto const vertBearingX = slot->metrics.horiBearingX / 64.0 - slot->metrics.horiAdvance / 64.0 / 2.0;
-    auto const vertBearingY = (slot->metrics.vertAdvance / 64.0 - slot->metrics.height / 64.0) / 2.0;
-    slot->metrics.width        = ::FT_Pos(std::round(box.w * 64.0));
-    slot->metrics.height       = ::FT_Pos(std::round(box.h * 64.0));
-    slot->metrics.horiBearingX = ::FT_Pos(box.x * 64.0);
-    slot->metrics.horiBearingY = ::FT_Pos(-box.y * 64.0);
-    slot->metrics.vertBearingX = ::FT_Pos(vertBearingX * 64.0);
-    slot->metrics.vertBearingY = ::FT_Pos(vertBearingY * 64.0);
+    slot->metrics.width        = ::FT_Pos((right - left) * 64.0f);
+    slot->metrics.height       = ::FT_Pos((bottom - top) * 64.0f);
+    slot->metrics.horiBearingX = ::FT_Pos(left * 64.0f);
+    slot->metrics.horiBearingY = ::FT_Pos(-top * 64.0f);
+    slot->metrics.vertBearingX = (slot->metrics.horiBearingX - (slot->metrics.horiAdvance / 2));
+    slot->metrics.vertBearingY = ((slot->metrics.vertAdvance - slot->metrics.height) / 2);
 
     if (slot->metrics.vertAdvance == 0) {
-        slot->metrics.vertAdvance = ::FT_Pos(box.h * 1.2 * 64.0);
+        slot->metrics.vertAdvance = ::FT_Pos((bottom - top) * 1.2f * 64.0f);
     }
 
     svgState->err = ::FT_Err_Ok;
@@ -373,6 +439,12 @@ FontGlyph const& Font::getGlyph(std::uint32_t codepoint, float size) const {
         _setPixelSize(sizeKey);
 
         FT_Load_Glyph_E(_impl->face, index, loadFlags);
+
+        if (_impl->face->glyph->format == ::FT_GLYPH_FORMAT_SVG) {
+            // FreeType's SVG renderer rejects every mode but NORMAL.
+            renderFlags = ::FT_RENDER_MODE_NORMAL;
+        }
+
         FT_Render_Glyph_E(_impl->face->glyph, renderFlags);
 
         auto width = static_cast<int>(_impl->face->glyph->bitmap.width);
@@ -383,24 +455,19 @@ FontGlyph const& Font::getGlyph(std::uint32_t codepoint, float size) const {
             static_cast<float>(_impl->face->glyph->bitmap_top)
         };
 
-        auto bitmapFormat = ImageDataFormat::Grayscale;
+        auto const colored = (_impl->face->glyph->bitmap.pixel_mode == ::FT_PIXEL_MODE_BGRA);
+        auto bitmapFormat = (colored ? ImageDataFormat::BGRAPremultiplied : ImageDataFormat::Grayscale);
         auto bitmap = _impl->face->glyph->bitmap.buffer;
 
         if (_impl->face->glyph->bitmap.buffer != nullptr) {
-            if (_impl->face->glyph->bitmap.pixel_mode == ::FT_PIXEL_MODE_BGRA) {
-                bitmapFormat = ImageDataFormat::RGBA;
-                _tempBitmap.resize(width * height * 4);
-                for (auto y = 0; y < height; y++) {
-                    for (auto x = 0; x < width; x++) {
-                        auto src = _impl->face->glyph->bitmap.buffer + y * _impl->face->glyph->bitmap.pitch + x * 4;
-                        auto dst = _tempBitmap.data() + (y * width + x) * 4;
-                        dst[0] = src[2];
-                        dst[1] = src[1];
-                        dst[2] = src[0];
-                        dst[3] = src[3];
+            if (colored) {
+                if (_impl->face->glyph->bitmap.pitch != (width * 4)) {
+                    _tempBitmap.resize(width * height * 4);
+                    for (auto y = 0; y < height; y++) {
+                        std::memcpy(_tempBitmap.data() + y * width * 4, _impl->face->glyph->bitmap.buffer + y * _impl->face->glyph->bitmap.pitch, width * 4);
                     }
+                    bitmap = _tempBitmap.data();
                 }
-                bitmap = _tempBitmap.data();
             } else if (_impl->face->glyph->bitmap.pixel_mode == ::FT_PIXEL_MODE_MONO) {
                 static auto const _monoLut = []{
                     auto lut = std::array<std::array<std::uint8_t, 8>, 256>{};
@@ -475,7 +542,8 @@ FontGlyph const& Font::getGlyph(std::uint32_t codepoint, float size) const {
                 .imageSlice = slice,
                 .bearing = bearing,
                 .advance = advance,
-                .whitespace = CodepointIsWhitespace(codepoint)
+                .whitespace = CodepointIsWhitespace(codepoint),
+                .colored = colored
             }}).first;
 
             _imageXOffset += (width + _fontImagePadding);
@@ -487,7 +555,8 @@ FontGlyph const& Font::getGlyph(std::uint32_t codepoint, float size) const {
                 .imageSlice = {},
                 .bearing = bearing,
                 .advance = advance,
-                .whitespace = CodepointIsWhitespace(codepoint)
+                .whitespace = CodepointIsWhitespace(codepoint),
+                .colored = colored
             }}).first;
         }
     }

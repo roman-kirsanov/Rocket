@@ -135,9 +135,10 @@ void Image::setSize(Vec2 const& newSize, ImageFilter filter) {
     auto const newHeight = std::max(1u, (std::uint32_t)newSize.height);
 
     auto oldPixels = std::vector<std::uint8_t>();
+    auto newPixels = std::vector<std::uint8_t>();
+
     __getData(oldPixels);
 
-    auto newPixels = std::vector<std::uint8_t>();
     _ScalePixels(oldPixels, oldWidth, oldHeight, newPixels, newWidth, newHeight, (filter == ImageFilter::Linear));
 
     __resize(newSize);
@@ -163,26 +164,40 @@ void Image::setData(Vec2 const& size, std::uint8_t const* data, ImageDataFormat 
         throw std::runtime_error("Failed to set the image data: `data` is required");
     }
 
-    auto pSize = (int)(size.width * size.height);
-    auto bSize = pSize * 4;
+    auto const pSize = (int)(size.width * size.height);
+    auto const bSize = pSize * 4;
 
     _buffer.resize(bSize);
 
-    if (format == ImageDataFormat::RGBA) {
-        std::memcpy(_buffer.data(), data, bSize);
+    if (format == ImageDataFormat::Grayscale) {
+        for (auto i = 0; i < pSize; i++) {
+            _buffer[(i * 4) + 0] = 0;
+            _buffer[(i * 4) + 1] = 0;
+            _buffer[(i * 4) + 2] = 0;
+            _buffer[(i * 4) + 3] = data[i];
+        }
+    } else if (format == ImageDataFormat::RGBA) {
+        for (auto i = 0; i < pSize; i++) {
+            auto const a = (int)data[(i * 4) + 3];
+            _buffer[(i * 4) + 0] = (std::uint8_t)(((int)data[(i * 4) + 0] * a + 127) / 255);
+            _buffer[(i * 4) + 1] = (std::uint8_t)(((int)data[(i * 4) + 1] * a + 127) / 255);
+            _buffer[(i * 4) + 2] = (std::uint8_t)(((int)data[(i * 4) + 2] * a + 127) / 255);
+            _buffer[(i * 4) + 3] = data[(i * 4) + 3];
+        }
+    } else if (format == ImageDataFormat::BGRA) {
+        for (auto i = 0; i < pSize; i++) {
+            auto const a = (int)data[(i * 4) + 3];
+            _buffer[(i * 4) + 0] = (std::uint8_t)(((int)data[(i * 4) + 2] * a + 127) / 255);
+            _buffer[(i * 4) + 1] = (std::uint8_t)(((int)data[(i * 4) + 1] * a + 127) / 255);
+            _buffer[(i * 4) + 2] = (std::uint8_t)(((int)data[(i * 4) + 0] * a + 127) / 255);
+            _buffer[(i * 4) + 3] = data[(i * 4) + 3];
+        }
     } else if (format == ImageDataFormat::RGB) {
         for (auto i = 0; i < pSize; i++) {
             _buffer[(i * 4) + 0] = data[(i * 3) + 0];
             _buffer[(i * 4) + 1] = data[(i * 3) + 1];
             _buffer[(i * 4) + 2] = data[(i * 3) + 2];
             _buffer[(i * 4) + 3] = 255;
-        }
-    } else if (format == ImageDataFormat::BGRA) {
-        for (auto i = 0; i < pSize; i++) {
-            _buffer[(i * 4) + 0] = data[(i * 4) + 2];
-            _buffer[(i * 4) + 1] = data[(i * 4) + 1];
-            _buffer[(i * 4) + 2] = data[(i * 4) + 0];
-            _buffer[(i * 4) + 3] = data[(i * 4) + 3];
         }
     } else if (format == ImageDataFormat::BGR) {
         for (auto i = 0; i < pSize; i++) {
@@ -191,20 +206,15 @@ void Image::setData(Vec2 const& size, std::uint8_t const* data, ImageDataFormat 
             _buffer[(i * 4) + 2] = data[(i * 3) + 0];
             _buffer[(i * 4) + 3] = 255;
         }
-    } else if (format == ImageDataFormat::Grayscale) {
+    } else if (format == ImageDataFormat::BGRAPremultiplied) {
         for (auto i = 0; i < pSize; i++) {
-            _buffer[(i * 4) + 0] = 0;
-            _buffer[(i * 4) + 1] = 0;
-            _buffer[(i * 4) + 2] = 0;
-            _buffer[(i * 4) + 3] = data[i];
+            _buffer[(i * 4) + 0] = data[(i * 4) + 2];
+            _buffer[(i * 4) + 1] = data[(i * 4) + 1];
+            _buffer[(i * 4) + 2] = data[(i * 4) + 0];
+            _buffer[(i * 4) + 3] = data[(i * 4) + 3];
         }
-    }
-
-    for (auto i = 0; i < pSize; i++) {
-        auto const a = (int)_buffer[(i * 4) + 3];
-        _buffer[(i * 4) + 0] = (std::uint8_t)(((int)_buffer[(i * 4) + 0] * a + 127) / 255);
-        _buffer[(i * 4) + 1] = (std::uint8_t)(((int)_buffer[(i * 4) + 1] * a + 127) / 255);
-        _buffer[(i * 4) + 2] = (std::uint8_t)(((int)_buffer[(i * 4) + 2] * a + 127) / 255);
+    } else if (format == ImageDataFormat::RGBAPremultiplied) {
+        std::memcpy(_buffer.data(), data, bSize);
     }
 
     __setData(size, _buffer.data(), offset);

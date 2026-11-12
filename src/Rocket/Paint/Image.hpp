@@ -21,7 +21,11 @@ enum class ImageDataFormat {
     RGBA,
     BGRA,
     RGB,
-    BGR
+    BGR,
+    /** RGBA whose color channels are already multiplied by alpha; uploaded as it is. */
+    RGBAPremultiplied,
+    /** BGRA whose color channels are already multiplied by alpha, as FreeType's color glyphs are; only reordered on upload. */
+    BGRAPremultiplied
 };
 
 /** Alignment of an image within its paint region. */
@@ -72,8 +76,9 @@ public:
 
     /**
      * Constructs an image from raw pixel data in the specified format.
-     * The RGB channels are premultiplied by alpha on upload. Throws
-     * std::runtime_error if data is null.
+     * The RGB channels are premultiplied by alpha on upload, unless the
+     * format is already premultiplied. Throws std::runtime_error if data is
+     * null.
      *
      * @param size   Dimensions in pixels.
      * @param data   Raw pixel bytes in the given format.
@@ -114,7 +119,8 @@ public:
 
     /**
      * Uploads new pixel data into the image starting at offset (0, 0). Data
-     * is converted to premultiplied RGBA before upload; Grayscale input is
+     * is converted to premultiplied RGBA before upload (the premultiplied
+     * formats are only reordered); Grayscale input is
      * treated as a coverage mask (RGB set to 0, the source byte becomes
      * alpha). Throws std::runtime_error if data is null.
      *
@@ -126,7 +132,8 @@ public:
 
     /**
      * Updates a sub-region of the image with new pixel data. Data is
-     * converted to premultiplied RGBA before upload; Grayscale input is
+     * converted to premultiplied RGBA before upload (the premultiplied
+     * formats are only reordered); Grayscale input is
      * treated as a coverage mask (RGB set to 0, the source byte becomes
      * alpha). Throws std::runtime_error if data is null.
      *

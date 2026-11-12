@@ -78,6 +78,8 @@ struct FontGlyph {
     float advance;
     /** True when the codepoint is a whitespace character with no visible pixels. */
     bool whitespace;
+    /** True when the bitmap carries its own colors (a color glyph such as an emoji), drawn as they are; false for a coverage mask drawn in the text color. */
+    bool colored;
 };
 
 /**

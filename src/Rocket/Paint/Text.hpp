@@ -116,6 +116,8 @@ struct TextGlyph {
     Image const* image;
     /** Sub-region within the atlas image (x, y, width, height). */
     Vec4 imageSlice;
+    /** True for a color glyph (such as an emoji), drawn in its own colors regardless of color. */
+    bool colored;
 };
 
 /** Per-run typographic style applied to a range of codepoints. */
