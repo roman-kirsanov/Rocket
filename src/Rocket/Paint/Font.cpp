@@ -300,12 +300,16 @@ Font::Font(std::string const& path, std::size_t index)
     , _hasKerning(false)
     , _fontIndex(index)
 {
-    if (std::filesystem::is_regular_file(path)) {
-        auto file = std::ifstream(path, std::ios::binary);
-        auto data = std::vector<std::uint8_t>(std::istreambuf_iterator<char>(file), {});
-        _data = std::move(data);
-    } else {
+    if (std::filesystem::is_regular_file(path) == false) {
         throw std::runtime_error("Failed to create a font object, file not found");
+    }
+
+    auto file = std::ifstream(path, std::ios::binary);
+
+    _data.resize(std::filesystem::file_size(path));
+
+    if (file.read(reinterpret_cast<char*>(_data.data()), static_cast<std::streamsize>(_data.size())).fail()) {
+        throw std::runtime_error("Failed to create a font object, file could not be read");
     }
 
     _initLib();
@@ -456,8 +460,8 @@ FontGlyph const& Font::getGlyph(std::uint32_t codepoint, float size) const {
         };
 
         auto const colored = (_impl->face->glyph->bitmap.pixel_mode == ::FT_PIXEL_MODE_BGRA);
-        auto bitmapFormat = (colored ? ImageDataFormat::BGRAPremultiplied : ImageDataFormat::Grayscale);
-        auto bitmap = _impl->face->glyph->bitmap.buffer;
+        auto bitmapFormat = (colored ? ImageFormat::BGRAPremultiplied : ImageFormat::Grayscale);
+        auto bitmapData = _impl->face->glyph->bitmap.buffer;
 
         if (_impl->face->glyph->bitmap.buffer != nullptr) {
             if (colored) {
@@ -466,7 +470,7 @@ FontGlyph const& Font::getGlyph(std::uint32_t codepoint, float size) const {
                     for (auto y = 0; y < height; y++) {
                         std::memcpy(_tempBitmap.data() + y * width * 4, _impl->face->glyph->bitmap.buffer + y * _impl->face->glyph->bitmap.pitch, width * 4);
                     }
-                    bitmap = _tempBitmap.data();
+                    bitmapData = _tempBitmap.data();
                 }
             } else if (_impl->face->glyph->bitmap.pixel_mode == ::FT_PIXEL_MODE_MONO) {
                 static auto const _monoLut = []{
@@ -488,17 +492,17 @@ FontGlyph const& Font::getGlyph(std::uint32_t codepoint, float size) const {
                         std::memcpy(dst + x, _monoLut[src[x / 8]].data(), std::min(8, width - x));
                     }
                 }
-                bitmap = _tempBitmap.data();
+                bitmapData = _tempBitmap.data();
             } else if (_impl->face->glyph->bitmap.pitch != width) {
                 _tempBitmap.resize(width * height);
                 for (auto y = 0; y < height; y++) {
                     std::memcpy(_tempBitmap.data() + y * width, _impl->face->glyph->bitmap.buffer + y * _impl->face->glyph->bitmap.pitch, width);
                 }
-                bitmap = _tempBitmap.data();
+                bitmapData = _tempBitmap.data();
             }
         }
 
-        if (bitmap != nullptr) {
+        if (bitmapData != nullptr) {
             auto availableWidth = (_fontImageWidth - _imageXOffset);
             auto availableHeight = (_fontImageHeight - _imageYOffset);
 
@@ -534,7 +538,7 @@ FontGlyph const& Font::getGlyph(std::uint32_t codepoint, float size) const {
                 static_cast<float>(height)
             };
 
-            _images.back()->setData(slice.size, bitmap, bitmapFormat, slice.origin);
+            _images.back()->setData(slice.size, bitmapData, bitmapFormat, slice.origin, ImageUpload::Queued);
 
             it = _glyphCache.insert({ key, FontGlyph{
                 .codepoint = codepoint,

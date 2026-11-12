@@ -16,7 +16,7 @@
 namespace Rocket {
 
 /** Pixel format of raw data passed to Image. */
-enum class ImageDataFormat {
+enum class ImageFormat {
     Grayscale,
     RGBA,
     BGRA,
@@ -40,6 +40,14 @@ enum class ImagePosition {
 enum class ImageFilter {
     Nearest,
     Linear
+};
+
+/** When Image::setData sends its pixels to the GPU. */
+enum class ImageUpload {
+    /** Right away, in its own upload. */
+    Immediate,
+    /** The next time the texture is used, in one upload together with every other queued region; for many small updates, such as glyphs added to an atlas. */
+    Queued
 };
 
 /**
@@ -84,7 +92,7 @@ public:
      * @param data   Raw pixel bytes in the given format.
      * @param format Pixel format of the supplied data.
      */
-    Image(Vec2 const& size, std::uint8_t const* data, ImageDataFormat format);
+    Image(Vec2 const& size, std::uint8_t const* data, ImageFormat format);
 
     /**
      * Constructs an image by loading from an image file path.
@@ -118,31 +126,22 @@ public:
     void setSize(Vec2 const& newSize, ImageFilter filter = ImageFilter::Nearest);
 
     /**
-     * Uploads new pixel data into the image starting at offset (0, 0). Data
-     * is converted to premultiplied RGBA before upload (the premultiplied
-     * formats are only reordered); Grayscale input is
-     * treated as a coverage mask (RGB set to 0, the source byte becomes
-     * alpha). Throws std::runtime_error if data is null.
-     *
-     * @param size   Dimensions of the pixel region to upload.
-     * @param data   Raw pixel bytes in the given format.
-     * @param format Pixel format of the supplied data.
-     */
-    void setData(Vec2 const& size, std::uint8_t const* data, ImageDataFormat format);
-
-    /**
-     * Updates a sub-region of the image with new pixel data. Data is
+     * Writes new pixel data into a region of the image. Data is
      * converted to premultiplied RGBA before upload (the premultiplied
      * formats are only reordered); Grayscale input is
      * treated as a coverage mask (RGB set to 0, the source byte becomes
-     * alpha). Throws std::runtime_error if data is null.
+     * alpha). With ImageUpload::Queued, uploads to overlapping regions
+     * queued before the texture is next used land in no defined order; a
+     * backend whose uploads have no per-upload cost may send them right
+     * away. Throws std::runtime_error if data is null.
      *
      * @param size   Dimensions of the region to update.
      * @param data   Raw pixel bytes in the given format.
      * @param format Pixel format of the supplied data.
-     * @param offset Top-left corner of the destination region.
+     * @param offset Top-left corner of the destination region (default (0, 0)).
+     * @param upload When the pixels are sent to the GPU (default Immediate).
      */
-    void setData(Vec2 const& size, std::uint8_t const* data, ImageDataFormat format, Vec2 const& offset);
+    void setData(Vec2 const& size, std::uint8_t const* data, ImageFormat format, Vec2 const& offset = Vec2{ 0.0f, 0.0f }, ImageUpload upload = ImageUpload::Immediate);
 
     /**
      * Downloads the image's pixels from the GPU as tightly-packed RGBA8
@@ -173,7 +172,7 @@ private:
     void __done();
     void* __getTexture() const;
     void __resize(Vec2 const&);
-    void __setData(Vec2 const&, std::uint8_t const*, Vec2 const&);
+    void __setData(Vec2 const&, std::uint8_t const*, Vec2 const&, ImageUpload);
     void __getData(std::vector<std::uint8_t>&) const;
     void __copyFrom(Image const&, Vec4 const&, Vec2 const&);
 

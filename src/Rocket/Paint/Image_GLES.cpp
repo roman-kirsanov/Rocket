@@ -69,7 +69,7 @@ void Image::__init(std::string const& path) {
     __init(Vec2{ (float)width, (float)height });
     _size = { (float)width, (float)height };
 
-    setData(_size, pixels.data(), ImageDataFormat::RGBA);
+    setData(_size, pixels.data(), ImageFormat::RGBA);
 }
 
 void Image::__done() {
@@ -98,7 +98,7 @@ void Image::__resize(Vec2 const& size) {
     _impl->texture = __CreateTexture(_impl->width, _impl->height);
 }
 
-void Image::__setData(Vec2 const& size, std::uint8_t const* pixels, Vec2 const& offset) {
+void Image::__setData(Vec2 const& size, std::uint8_t const* pixels, Vec2 const& offset, ImageUpload) {
     PROFILE
 
     __UploadTexture(

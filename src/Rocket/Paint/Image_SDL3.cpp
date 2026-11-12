@@ -10,7 +10,6 @@
 #include <cstring>
 #include <cassert>
 #include <stdexcept>
-#include <algorithm>
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
 #include <Rocket/Base/Profile.hpp>
@@ -24,6 +23,8 @@ struct Image::_Image {
     ::SDL_GPUTexture* texture = nullptr;
     std::uint32_t width = 0;
     std::uint32_t height = 0;
+    std::vector<Vec4> pendingRegions;
+    std::vector<std::uint8_t> pendingPixels;
 };
 
 static ::SDL_GPUDevice* _Device() {
@@ -66,42 +67,6 @@ static ::SDL_GPUCommandBuffer* _AcquireCommandBuffer() {
     return commandBuffer;
 }
 
-static void _UploadPixels(::SDL_GPUTexture* texture, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, std::uint8_t const* pixels) {
-    PROFILE
-
-    if ((width == 0) || (height == 0)) {
-        return;
-    }
-
-    auto const dataSize = (std::uint32_t)(width * height * 4);
-    auto const bufferInfo = ::SDL_GPUTransferBufferCreateInfo{ ::SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD, dataSize, 0 };
-    auto staging = ::SDL_CreateGPUTransferBuffer(_Device(), &bufferInfo);
-
-    if (staging == nullptr) {
-        throw std::runtime_error(std::format("Failed to create a GPU transfer buffer: {}", ::SDL_GetError()));
-    }
-
-    std::memcpy(::SDL_MapGPUTransferBuffer(_Device(), staging, false), pixels, dataSize);
-    ::SDL_UnmapGPUTransferBuffer(_Device(), staging);
-
-    auto const source = ::SDL_GPUTextureTransferInfo{ staging, 0, width, height };
-    auto destination = ::SDL_GPUTextureRegion{};
-    destination.texture = texture;
-    destination.x = x;
-    destination.y = y;
-    destination.w = width;
-    destination.h = height;
-    destination.d = 1;
-
-    auto commandBuffer = _AcquireCommandBuffer();
-    auto copy = ::SDL_BeginGPUCopyPass(commandBuffer);
-
-    ::SDL_UploadToGPUTexture(copy, &source, &destination, false);
-    ::SDL_EndGPUCopyPass(copy);
-    ::SDL_SubmitGPUCommandBuffer(commandBuffer);
-    ::SDL_ReleaseGPUTransferBuffer(_Device(), staging); /* released once the upload is done */
-}
-
 static void _DownloadPixels(::SDL_GPUTexture* texture, std::uint32_t width, std::uint32_t height, std::vector<std::uint8_t>& pixels) {
     PROFILE
 
@@ -137,6 +102,60 @@ static void _DownloadPixels(::SDL_GPUTexture* texture, std::uint32_t width, std:
     std::memcpy(pixels.data(), ::SDL_MapGPUTransferBuffer(_Device(), staging, false), dataSize);
     ::SDL_UnmapGPUTransferBuffer(_Device(), staging);
     ::SDL_ReleaseGPUTransferBuffer(_Device(), staging);
+}
+
+static void _UploadPixels(::SDL_GPUTexture* texture, std::vector<Vec4> const& regions, std::uint8_t const* pixels) {
+    PROFILE
+
+    auto dataSize = (std::uint32_t)0;
+
+    for (auto const& region : regions) {
+        dataSize += ((std::uint32_t)region.width * (std::uint32_t)region.height * 4);
+    }
+
+    auto const bufferInfo = ::SDL_GPUTransferBufferCreateInfo{ ::SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD, dataSize, 0 };
+    auto staging = ::SDL_CreateGPUTransferBuffer(_Device(), &bufferInfo);
+
+    if (staging == nullptr) {
+        throw std::runtime_error(std::format("Failed to create a GPU transfer buffer: {}", ::SDL_GetError()));
+    }
+
+    std::memcpy(::SDL_MapGPUTransferBuffer(_Device(), staging, false), pixels, dataSize);
+    ::SDL_UnmapGPUTransferBuffer(_Device(), staging);
+
+    auto commandBuffer = _AcquireCommandBuffer();
+    auto copy = ::SDL_BeginGPUCopyPass(commandBuffer);
+    auto sourceOffset = (std::uint32_t)0;
+
+    for (auto const& region : regions) {
+        auto const width = (std::uint32_t)region.width;
+        auto const height = (std::uint32_t)region.height;
+        auto const source = ::SDL_GPUTextureTransferInfo{ staging, sourceOffset, width, height };
+        auto destination = ::SDL_GPUTextureRegion{};
+        destination.texture = texture;
+        destination.x = (std::uint32_t)region.x;
+        destination.y = (std::uint32_t)region.y;
+        destination.w = width;
+        destination.h = height;
+        destination.d = 1;
+
+        ::SDL_UploadToGPUTexture(copy, &source, &destination, false);
+
+        sourceOffset += (width * height * 4);
+    }
+
+    ::SDL_EndGPUCopyPass(copy);
+    ::SDL_SubmitGPUCommandBuffer(commandBuffer);
+    ::SDL_ReleaseGPUTransferBuffer(_Device(), staging); /* released once the upload is done */
+}
+
+static void _UploadPending(::SDL_GPUTexture* texture, std::vector<Vec4>& regions, std::vector<std::uint8_t>& pixels) {
+    PROFILE
+
+    _UploadPixels(texture, regions, pixels.data());
+
+    regions.clear();
+    pixels = std::vector<std::uint8_t>();
 }
 
 void Image::__init(Vec2 const& size) {
@@ -184,7 +203,7 @@ void Image::__init(std::string const& path) {
     __init(Vec2{ (float)width, (float)height });
     _size = { (float)width, (float)height };
 
-    setData(_size, pixels.data(), ImageDataFormat::RGBA);
+    setData(_size, pixels.data(), ImageFormat::RGBA);
 }
 
 void Image::__done() {
@@ -200,11 +219,18 @@ void Image::__done() {
 void* Image::__getTexture() const {
     PROFILE
 
+    if (_impl->pendingRegions.empty() == false) {
+        _UploadPending(_impl->texture, _impl->pendingRegions, _impl->pendingPixels);
+    }
+
     return _impl->texture;
 }
 
 void Image::__resize(Vec2 const& size) {
     PROFILE
+
+    _impl->pendingRegions.clear();
+    _impl->pendingPixels.clear();
 
     ::SDL_ReleaseGPUTexture(_Device(), _impl->texture);
 
@@ -213,27 +239,48 @@ void Image::__resize(Vec2 const& size) {
     _impl->height = std::max(1u, (std::uint32_t)size.height);
 }
 
-void Image::__setData(Vec2 const& size, std::uint8_t const* pixels, Vec2 const& offset) {
+void Image::__setData(Vec2 const& size, std::uint8_t const* pixels, Vec2 const& offset, ImageUpload upload) {
     PROFILE
 
-    _UploadPixels(
-        _impl->texture,
-        (std::uint32_t)offset.x,
-        (std::uint32_t)offset.y,
-        (std::uint32_t)size.width,
-        (std::uint32_t)size.height,
-        pixels
-    );
+    auto const region = Vec4{ offset.x, offset.y, (float)(std::uint32_t)size.width, (float)(std::uint32_t)size.height };
+    auto const byteCount = ((std::size_t)region.width * (std::size_t)region.height * 4);
+
+    if (byteCount == 0) {
+        return;
+    }
+
+    if (upload == ImageUpload::Queued) {
+        _impl->pendingRegions.push_back(region);
+        _impl->pendingPixels.insert(_impl->pendingPixels.end(), pixels, (pixels + byteCount));
+        return;
+    }
+
+    if (_impl->pendingRegions.empty() == false) {
+        _UploadPending(_impl->texture, _impl->pendingRegions, _impl->pendingPixels);
+    }
+
+    _UploadPixels(_impl->texture, { region }, pixels);
 }
 
 void Image::__getData(std::vector<std::uint8_t>& data) const {
     PROFILE
+
+    if (_impl->pendingRegions.empty() == false) {
+        _UploadPending(_impl->texture, _impl->pendingRegions, _impl->pendingPixels);
+    }
 
     _DownloadPixels(_impl->texture, _impl->width, _impl->height, data);
 }
 
 void Image::__copyFrom(Image const& image, Vec4 const& slice, Vec2 const& position) {
     PROFILE
+
+    if (image._impl->pendingRegions.empty() == false) {
+        _UploadPending(image._impl->texture, image._impl->pendingRegions, image._impl->pendingPixels);
+    }
+    if (_impl->pendingRegions.empty() == false) {
+        _UploadPending(_impl->texture, _impl->pendingRegions, _impl->pendingPixels);
+    }
 
     auto const width = (std::uint32_t)slice.width;
     auto const height = (std::uint32_t)slice.height;

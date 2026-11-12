@@ -87,10 +87,10 @@ Image::Image(Vec2 const& size, std::uint8_t const* data)
 
     __init(size);
 
-    setData(size, data, ImageDataFormat::RGBA, { 0.0f, 0.0f });
+    setData(size, data, ImageFormat::RGBA, { 0.0f, 0.0f });
 }
 
-Image::Image(Vec2 const& size, std::uint8_t const* data, ImageDataFormat format)
+Image::Image(Vec2 const& size, std::uint8_t const* data, ImageFormat format)
     : _impl(nullptr)
     , _size(size)
 {
@@ -142,18 +142,12 @@ void Image::setSize(Vec2 const& newSize, ImageFilter filter) {
     _ScalePixels(oldPixels, oldWidth, oldHeight, newPixels, newWidth, newHeight, (filter == ImageFilter::Linear));
 
     __resize(newSize);
-    __setData({ (float)newWidth, (float)newHeight }, newPixels.data(), { 0.0f, 0.0f });
+    __setData({ (float)newWidth, (float)newHeight }, newPixels.data(), { 0.0f, 0.0f }, ImageUpload::Immediate);
 
     _size = newSize;
 }
 
-void Image::setData(Vec2 const& size, std::uint8_t const* data, ImageDataFormat format) {
-    PROFILE
-
-    setData(size, data, format, { 0.0f, 0.0f });
-}
-
-void Image::setData(Vec2 const& size, std::uint8_t const* data, ImageDataFormat format, Vec2 const& offset) {
+void Image::setData(Vec2 const& size, std::uint8_t const* data, ImageFormat format, Vec2 const& offset, ImageUpload upload) {
     PROFILE
 
     static thread_local auto _buffer = std::vector<std::uint8_t>();
@@ -169,14 +163,14 @@ void Image::setData(Vec2 const& size, std::uint8_t const* data, ImageDataFormat 
 
     _buffer.resize(bSize);
 
-    if (format == ImageDataFormat::Grayscale) {
+    if (format == ImageFormat::Grayscale) {
         for (auto i = 0; i < pSize; i++) {
             _buffer[(i * 4) + 0] = 0;
             _buffer[(i * 4) + 1] = 0;
             _buffer[(i * 4) + 2] = 0;
             _buffer[(i * 4) + 3] = data[i];
         }
-    } else if (format == ImageDataFormat::RGBA) {
+    } else if (format == ImageFormat::RGBA) {
         for (auto i = 0; i < pSize; i++) {
             auto const a = (int)data[(i * 4) + 3];
             _buffer[(i * 4) + 0] = (std::uint8_t)(((int)data[(i * 4) + 0] * a + 127) / 255);
@@ -184,7 +178,7 @@ void Image::setData(Vec2 const& size, std::uint8_t const* data, ImageDataFormat 
             _buffer[(i * 4) + 2] = (std::uint8_t)(((int)data[(i * 4) + 2] * a + 127) / 255);
             _buffer[(i * 4) + 3] = data[(i * 4) + 3];
         }
-    } else if (format == ImageDataFormat::BGRA) {
+    } else if (format == ImageFormat::BGRA) {
         for (auto i = 0; i < pSize; i++) {
             auto const a = (int)data[(i * 4) + 3];
             _buffer[(i * 4) + 0] = (std::uint8_t)(((int)data[(i * 4) + 2] * a + 127) / 255);
@@ -192,32 +186,32 @@ void Image::setData(Vec2 const& size, std::uint8_t const* data, ImageDataFormat 
             _buffer[(i * 4) + 2] = (std::uint8_t)(((int)data[(i * 4) + 0] * a + 127) / 255);
             _buffer[(i * 4) + 3] = data[(i * 4) + 3];
         }
-    } else if (format == ImageDataFormat::RGB) {
+    } else if (format == ImageFormat::RGB) {
         for (auto i = 0; i < pSize; i++) {
             _buffer[(i * 4) + 0] = data[(i * 3) + 0];
             _buffer[(i * 4) + 1] = data[(i * 3) + 1];
             _buffer[(i * 4) + 2] = data[(i * 3) + 2];
             _buffer[(i * 4) + 3] = 255;
         }
-    } else if (format == ImageDataFormat::BGR) {
+    } else if (format == ImageFormat::BGR) {
         for (auto i = 0; i < pSize; i++) {
             _buffer[(i * 4) + 0] = data[(i * 3) + 2];
             _buffer[(i * 4) + 1] = data[(i * 3) + 1];
             _buffer[(i * 4) + 2] = data[(i * 3) + 0];
             _buffer[(i * 4) + 3] = 255;
         }
-    } else if (format == ImageDataFormat::BGRAPremultiplied) {
+    } else if (format == ImageFormat::BGRAPremultiplied) {
         for (auto i = 0; i < pSize; i++) {
             _buffer[(i * 4) + 0] = data[(i * 4) + 2];
             _buffer[(i * 4) + 1] = data[(i * 4) + 1];
             _buffer[(i * 4) + 2] = data[(i * 4) + 0];
             _buffer[(i * 4) + 3] = data[(i * 4) + 3];
         }
-    } else if (format == ImageDataFormat::RGBAPremultiplied) {
+    } else if (format == ImageFormat::RGBAPremultiplied) {
         std::memcpy(_buffer.data(), data, bSize);
     }
 
-    __setData(size, _buffer.data(), offset);
+    __setData(size, _buffer.data(), offset, upload);
 }
 
 void Image::getData(std::vector<std::uint8_t>& data) const {

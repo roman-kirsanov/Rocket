@@ -74,11 +74,11 @@ static auto const red     = Vec4{ 1.0f, 0.0f, 0.0f, 1.0f };
 
 /* --- sanity asserts (metrics, not snapshots) --- */
 
-/* Each ImageDataFormat maps its channels into RGBA correctly on upload
+/* Each ImageFormat maps its channels into RGBA correctly on upload
    (alpha 255 sidesteps premultiplication). This pins the contract the font
    atlas relies on: a buffer tagged BGRA is swizzled exactly once. */
 TEST(Image, SetDataChannelMappingRoundTrips) {
-    auto const check = [](ImageDataFormat format, std::vector<std::uint8_t> const& input, std::vector<std::uint8_t> const& expected) {
+    auto const check = [](ImageFormat format, std::vector<std::uint8_t> const& input, std::vector<std::uint8_t> const& expected) {
         auto image = Image{ Vec2{ 1.0f, 1.0f } };
         image.setData(Vec2{ 1.0f, 1.0f }, input.data(), format);
 
@@ -87,16 +87,16 @@ TEST(Image, SetDataChannelMappingRoundTrips) {
         ASSERT_TRUE(output == expected);
     };
 
-    check(ImageDataFormat::RGBA,      { 10, 20, 30, 255 }, { 10, 20, 30, 255 });
-    check(ImageDataFormat::BGRA,      { 30, 20, 10, 255 }, { 10, 20, 30, 255 });
-    check(ImageDataFormat::RGB,       { 10, 20, 30 },      { 10, 20, 30, 255 });
-    check(ImageDataFormat::BGR,       { 30, 20, 10 },      { 10, 20, 30, 255 });
-    check(ImageDataFormat::Grayscale, { 200 },             { 0, 0, 0, 200 });
+    check(ImageFormat::RGBA,      { 10, 20, 30, 255 }, { 10, 20, 30, 255 });
+    check(ImageFormat::BGRA,      { 30, 20, 10, 255 }, { 10, 20, 30, 255 });
+    check(ImageFormat::RGB,       { 10, 20, 30 },      { 10, 20, 30, 255 });
+    check(ImageFormat::BGR,       { 30, 20, 10 },      { 10, 20, 30, 255 });
+    check(ImageFormat::Grayscale, { 200 },             { 0, 0, 0, 200 });
 }
 
 /* The premultiplied formats are only reordered on upload, never premultiplied again. */
 TEST(Image, SetDataKeepsPremultipliedFormats) {
-    auto const check = [](ImageDataFormat format, std::vector<std::uint8_t> const& input, std::vector<std::uint8_t> const& expected) {
+    auto const check = [](ImageFormat format, std::vector<std::uint8_t> const& input, std::vector<std::uint8_t> const& expected) {
         auto image = Image{ Vec2{ 1.0f, 1.0f } };
         image.setData(Vec2{ 1.0f, 1.0f }, input.data(), format);
 
@@ -105,8 +105,49 @@ TEST(Image, SetDataKeepsPremultipliedFormats) {
         ASSERT_TRUE(output == expected);
     };
 
-    check(ImageDataFormat::RGBAPremultiplied, { 64, 32, 16, 128 }, { 64, 32, 16, 128 });
-    check(ImageDataFormat::BGRAPremultiplied, { 16, 32, 64, 128 }, { 64, 32, 16, 128 });
+    check(ImageFormat::RGBAPremultiplied, { 64, 32, 16, 128 }, { 64, 32, 16, 128 });
+    check(ImageFormat::BGRAPremultiplied, { 16, 32, 64, 128 }, { 64, 32, 16, 128 });
+}
+
+/* Queued uploads are sent together on the next use of the texture; every
+   queued region lands where it was written. */
+TEST(Image, SetDataQueuedRegionsAllLand) {
+    auto image = Image{ Vec2{ 2.0f, 2.0f } };
+    auto const red = std::vector<std::uint8_t>{ 255, 0, 0, 255 };
+    auto const green = std::vector<std::uint8_t>{ 0, 255, 0, 255 };
+    auto const blue = std::vector<std::uint8_t>{ 0, 0, 255, 255 };
+    auto const white = std::vector<std::uint8_t>{ 255, 255, 255, 255 };
+
+    image.setData(Vec2{ 1.0f, 1.0f }, red.data(), ImageFormat::RGBA, Vec2{ 0.0f, 0.0f }, ImageUpload::Queued);
+    image.setData(Vec2{ 1.0f, 1.0f }, green.data(), ImageFormat::RGBA, Vec2{ 1.0f, 0.0f }, ImageUpload::Queued);
+    image.setData(Vec2{ 1.0f, 1.0f }, blue.data(), ImageFormat::RGBA, Vec2{ 0.0f, 1.0f }, ImageUpload::Queued);
+    image.setData(Vec2{ 1.0f, 1.0f }, white.data(), ImageFormat::RGBA, Vec2{ 1.0f, 1.0f }, ImageUpload::Queued);
+
+    auto output = std::vector<std::uint8_t>();
+    image.getData(output);
+    EXPECT_EQ(output, (std::vector<std::uint8_t>{ 255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255 }));
+}
+
+/* copyFrom and setSize see uploads that are still queued, on either image. */
+TEST(Image, CopyFromAndSetSizeSeeQueuedUploads) {
+    auto const red = std::vector<std::uint8_t>{ 255, 0, 0, 255 };
+
+    auto source = Image{ Vec2{ 1.0f, 1.0f } };
+    auto destination = Image{ Vec2{ 1.0f, 1.0f } };
+    source.setData(Vec2{ 1.0f, 1.0f }, red.data(), ImageFormat::RGBA, Vec2{ 0.0f, 0.0f }, ImageUpload::Queued);
+    destination.copyFrom(source, Vec4{ 0.0f, 0.0f, 1.0f, 1.0f }, Vec2{ 0.0f, 0.0f });
+
+    auto copied = std::vector<std::uint8_t>();
+    destination.getData(copied);
+    EXPECT_EQ(copied, red);
+
+    auto resized = Image{ Vec2{ 1.0f, 1.0f } };
+    resized.setData(Vec2{ 1.0f, 1.0f }, red.data(), ImageFormat::RGBA, Vec2{ 0.0f, 0.0f }, ImageUpload::Queued);
+    resized.setSize(Vec2{ 2.0f, 1.0f });
+
+    auto scaled = std::vector<std::uint8_t>();
+    resized.getData(scaled);
+    EXPECT_EQ(scaled, (std::vector<std::uint8_t>{ 255, 0, 0, 255, 255, 0, 0, 255 }));
 }
 
 /* Uploaded pixels are premultiplied by alpha: c' = (c * a + 127) / 255. */
@@ -114,7 +155,7 @@ TEST(Image, SetDataPremultipliesAlpha) {
     auto image = Image{ Vec2{ 1.0f, 1.0f } };
 
     auto const input = std::vector<std::uint8_t>{ 255, 100, 0, 128 };
-    image.setData(Vec2{ 1.0f, 1.0f }, input.data(), ImageDataFormat::RGBA);
+    image.setData(Vec2{ 1.0f, 1.0f }, input.data(), ImageFormat::RGBA);
 
     auto output = std::vector<std::uint8_t>();
     image.getData(output);
