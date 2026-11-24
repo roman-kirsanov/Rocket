@@ -10,8 +10,8 @@
 #include <tuple>
 #include <vector>
 #include <string>
-#include <variant>
 #include <functional>
+#include <Rocket/Base/Enum.hpp>
 
 namespace Rocket {
 
@@ -25,7 +25,7 @@ struct OpenFileDialogOkResult {
 struct OpenFileDialogCancelResult {};
 
 /** Outcome of an open dialog: either OpenFileDialogOkResult or OpenFileDialogCancelResult. */
-using OpenFileDialogResult = std::variant<OpenFileDialogOkResult, OpenFileDialogCancelResult>;
+using OpenFileDialogResult = Enum<OpenFileDialogOkResult, OpenFileDialogCancelResult>;
 
 /** Invoked with the outcome when the open dialog is dismissed. */
 using OpenFileDialogCallback = std::function<void(OpenFileDialogResult const&)>;
@@ -49,7 +49,8 @@ struct OpenFileDialogOptions {
 
     /**
      * Allowed file types as (description, extension) pairs; empty allows any
-     * type. Only the extension is used on macOS; SDL3 and Win32 show the
+     * type. An extension is written without a dot and may list several,
+     * separated by ';' (e.g. "png;jpg"). Only the extension is used on macOS; SDL3 and Win32 show the
      * description as the filter's name.
      */
     std::vector<
@@ -69,22 +70,61 @@ struct OpenFileDialogOptions {
  */
 void OpenFileDialog(OpenFileDialogOptions const& options, OpenFileDialogCallback const& callback);
 
-/** Invoked with the chosen path when the save dialog is confirmed. */
-using SaveFileDialogCallback = std::function<void(std::string const&)>;
+/** Successful save-dialog outcome: the absolute path the user chose. */
+struct SaveFileDialogOkResult {
+    /** The absolute path the user chose; the file may or may not exist yet. */
+    std::string path;
+};
 
-/** Configuration for SaveFileDialog; currently empty (the dialog is not implemented yet). */
+/** The user dismissed the save dialog without choosing a path. */
+struct SaveFileDialogCancelResult {};
+
+/** Outcome of a save dialog: either SaveFileDialogOkResult or SaveFileDialogCancelResult. */
+using SaveFileDialogResult = Enum<SaveFileDialogOkResult, SaveFileDialogCancelResult>;
+
+/** Invoked with the outcome when the save dialog is dismissed. */
+using SaveFileDialogCallback = std::function<void(SaveFileDialogResult const&)>;
+
+/** Configuration for SaveFileDialog. */
 struct SaveFileDialogOptions {
+    /** Dialog window title. */
+    std::string title;
 
+    /** Explanatory text shown inside the dialog (ignored on SDL3 and Win32). */
+    std::string message;
+
+    /** Label of the confirm button (e.g. "Save"). */
+    std::string action;
+
+    /** File name the dialog starts with (e.g. "Untitled.png"); empty leaves the name field blank. */
+    std::string name;
+
+    /** Absolute path of the folder the dialog opens in; empty lets the system choose. */
+    std::string directory;
+
+    /**
+     * Allowed file types as (description, extension) pairs; empty allows any
+     * type. An extension is written without a dot and may list several,
+     * separated by ';' (e.g. "png;jpg"). Only the extension is used on macOS; SDL3 and Win32 show the
+     * description as the filter's name. On macOS and Win32 the extension of
+     * the selected type is appended to a name typed without one.
+     */
+    std::vector<
+        std::tuple<std::string, std::string>
+    > extensions;
 };
 
 /**
- * Shows a modal save-file dialog.
+ * Shows a modal save-file dialog. The dialog only picks a path: it neither
+ * creates nor writes the file. The system asks the user to confirm
+ * replacing a file that already exists.
  *
- * Note: not implemented yet — the backends are stubs and the callback
- * is never invoked.
+ * Runs the dialog synchronously: the callback is invoked with the result
+ * before this function returns, and the previously focused window regains
+ * key status afterwards.
  *
- * @param options  The dialog configuration; currently unused (not implemented).
- * @param callback Never invoked; the dialog is not implemented yet.
+ * @param options  The dialog configuration.
+ * @param callback Invoked synchronously with the outcome once the dialog is dismissed.
  */
 void SaveFileDialog(SaveFileDialogOptions const& options, SaveFileDialogCallback const& callback);
 
