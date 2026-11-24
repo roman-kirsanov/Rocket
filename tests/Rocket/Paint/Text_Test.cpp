@@ -92,7 +92,8 @@ TEST(Image, SetDataChannelMappingRoundTrips) {
     check(ImageFormat::BGRA,      { 30, 20, 10, 255 }, { 10, 20, 30, 255 });
     check(ImageFormat::RGB,       { 10, 20, 30 },      { 10, 20, 30, 255 });
     check(ImageFormat::BGR,       { 30, 20, 10 },      { 10, 20, 30, 255 });
-    check(ImageFormat::Grayscale, { 200 },             { 0, 0, 0, 200 });
+    check(ImageFormat::Grayscale, { 200 },             { 200, 200, 200, 255 });
+    check(ImageFormat::Alpha,     { 200 },             { 0, 0, 0, 200 });
 }
 
 /* The premultiplied formats are only reordered on upload, never premultiplied again. */

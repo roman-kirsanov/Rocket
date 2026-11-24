@@ -17,7 +17,10 @@ namespace Rocket {
 
 /** Pixel format of raw data passed to Image. */
 enum class ImageFormat {
+    /** One luminance channel per pixel, from black (0) to white (255); fully opaque. */
     Grayscale,
+    /** One alpha channel per pixel, from transparent (0) to opaque (255), over black; a coverage mask. */
+    Alpha,
     RGBA,
     BGRA,
     RGB,
@@ -128,8 +131,9 @@ public:
     /**
      * Writes new pixel data into a region of the image. Data is
      * converted to premultiplied RGBA before upload (the premultiplied
-     * formats are only reordered); Grayscale input is
-     * treated as a coverage mask (RGB set to 0, the source byte becomes
+     * formats are only reordered); Grayscale input becomes opaque gray
+     * (the source byte in every color channel, alpha 255), and Alpha input
+     * is treated as a coverage mask (RGB set to 0, the source byte becomes
      * alpha). With ImageUpload::Queued, uploads to overlapping regions
      * queued before the texture is next used land in no defined order; a
      * backend whose uploads have no per-upload cost may send them right

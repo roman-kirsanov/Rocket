@@ -72,6 +72,7 @@ static Pixel _BlendOne(Pixel const& destination, Pixel const& source, BitmapBlen
 TEST(Bitmap, CreateAllocatesZeroedPixelsForEveryFormat) {
     for (auto const& [ format, bytesPerPixel ] : {
         std::pair{ BitmapFormat::Grayscale, 1 },
+        std::pair{ BitmapFormat::Alpha, 1 },
         std::pair{ BitmapFormat::RGB, 3 },
         std::pair{ BitmapFormat::BGR, 3 },
         std::pair{ BitmapFormat::RGBA, 4 },
@@ -121,6 +122,22 @@ TEST(Bitmap, ConvertFromGrayscaleCopiesTheValueToEveryChannel) {
     auto const gray = Bytes{ 0, 128 };
     EXPECT_EQ(_Take(ConvertBitmap(gray.data(), 0, BitmapFormat::Grayscale, Vec2{ 2.0f, 1.0f }, BitmapFormat::RGBA), 8), (Bytes{ 0, 0, 0, 255, 128, 128, 128, 255 }));
     EXPECT_EQ(_Take(ConvertBitmap(gray.data(), 0, BitmapFormat::Grayscale, Vec2{ 2.0f, 1.0f }, BitmapFormat::Grayscale), 2), gray);
+}
+
+TEST(Bitmap, ConvertFromAlphaGivesBlackWithThatAlpha) {
+    auto const alpha = Bytes{ 0, 128 };
+    EXPECT_EQ(_Take(ConvertBitmap(alpha.data(), 0, BitmapFormat::Alpha, Vec2{ 2.0f, 1.0f }, BitmapFormat::RGBA), 8), (Bytes{ 0, 0, 0, 0, 0, 0, 0, 128 }));
+    EXPECT_EQ(_Take(ConvertBitmap(alpha.data(), 0, BitmapFormat::Alpha, Vec2{ 2.0f, 1.0f }, BitmapFormat::RGB), 6), (Bytes{ 0, 0, 0, 0, 0, 0 }));
+    EXPECT_EQ(_Take(ConvertBitmap(alpha.data(), 0, BitmapFormat::Alpha, Vec2{ 2.0f, 1.0f }, BitmapFormat::Alpha), 2), alpha);
+}
+
+TEST(Bitmap, ConvertToAlphaKeepsTheAlphaAlone) {
+    auto const rgba = Bytes{ 10, 20, 30, 40 };
+    auto const rgb = Bytes{ 10, 20, 30 };
+    auto const gray = Bytes{ 10 };
+    EXPECT_EQ(_Take(ConvertBitmap(rgba.data(), 0, BitmapFormat::RGBA, Vec2{ 1.0f, 1.0f }, BitmapFormat::Alpha), 1), (Bytes{ 40 }));
+    EXPECT_EQ(_Take(ConvertBitmap(rgb.data(), 0, BitmapFormat::RGB, Vec2{ 1.0f, 1.0f }, BitmapFormat::Alpha), 1), (Bytes{ 255 }));
+    EXPECT_EQ(_Take(ConvertBitmap(gray.data(), 0, BitmapFormat::Grayscale, Vec2{ 1.0f, 1.0f }, BitmapFormat::Alpha), 1), (Bytes{ 255 }));
 }
 
 TEST(Bitmap, ConvertReadsPaddedRows) {
@@ -540,6 +557,42 @@ TEST(Bitmap, BlitWritesLuminanceIntoAGrayscaleDestination) {
     options.dstFormat = BitmapFormat::Grayscale;
     BlitBitmap(options);
     EXPECT_EQ(dst, (Bytes{ 54, 255 }));
+}
+
+TEST(Bitmap, BlitDrawsAnAlphaSourceAsBlackCoverage) {
+    auto dst = _Pixels({ _white, _white });
+    auto const src = Bytes{ 255, 128 };
+    auto options = _Options(dst, Vec2{ 2.0f, 1.0f }, src, Vec2{ 2.0f, 1.0f });
+    options.srcFormat = BitmapFormat::Alpha;
+    BlitBitmap(options);
+    EXPECT_EQ(dst, _Pixels({ Pixel{ 0, 0, 0, 255 }, Pixel{ 127, 127, 127, 255 } }));
+}
+
+TEST(Bitmap, BlitTintsAnAlphaSourceWithTheColor) {
+    auto dst = Bytes(2 * 1 * 4, 0);
+    auto const src = Bytes{ 255, 128 };
+    auto options = _Options(dst, Vec2{ 2.0f, 1.0f }, src, Vec2{ 2.0f, 1.0f });
+    options.srcFormat = BitmapFormat::Alpha;
+    options.color = Vec4{ 1.0f, 0.0f, 0.0f, 1.0f };
+    BlitBitmap(options);
+    EXPECT_EQ(dst, _Pixels({ _red, Pixel{ 255, 0, 0, 128 } }));
+}
+
+TEST(Bitmap, BlitWritesCoverageIntoAnAlphaDestination) {
+    auto dst = Bytes{ 0, 0, 128 };
+    auto const src = _Pixels({ _red, Pixel{ 255, 255, 255, 128 }, Pixel{ 0, 0, 0, 128 } });
+    auto options = _Options(dst, Vec2{ 3.0f, 1.0f }, src, Vec2{ 3.0f, 1.0f });
+    options.dstFormat = BitmapFormat::Alpha;
+    BlitBitmap(options);
+    EXPECT_EQ(dst, (Bytes{ 255, 128, 192 }));
+
+    auto alpha = Bytes{ 128 };
+    auto const alphaSrc = Bytes{ 128 };
+    auto alphaOptions = _Options(alpha, Vec2{ 1.0f, 1.0f }, alphaSrc, Vec2{ 1.0f, 1.0f });
+    alphaOptions.srcFormat = BitmapFormat::Alpha;
+    alphaOptions.dstFormat = BitmapFormat::Alpha;
+    BlitBitmap(alphaOptions);
+    EXPECT_EQ(alpha, (Bytes{ 192 }));
 }
 
 TEST(Bitmap, BlitReadsEverySourceFormat) {

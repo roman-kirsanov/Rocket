@@ -14,6 +14,7 @@
 #include <optional>
 #include <algorithm>
 #include <stdexcept>
+#include <Rocket/Base/Profile.hpp>
 #include <Rocket/Paint/Bitmap.hpp>
 
 namespace Rocket {
@@ -57,6 +58,7 @@ static std::int32_t _ToPixels(float size) {
 static constexpr std::ptrdiff_t _GetBytesPerPixel(BitmapFormat format) {
     return (
         format == BitmapFormat::Grayscale ? 1 :
+        format == BitmapFormat::Alpha ? 1 :
         format == BitmapFormat::RGB ? 3 :
         format == BitmapFormat::BGR ? 3 :
                                       4
@@ -102,6 +104,8 @@ template<BitmapFormat Format>
 static _PixelBytes _ReadBytes(std::uint8_t const* pixel) {
     if constexpr (Format == BitmapFormat::Grayscale) {
         return { pixel[0], pixel[0], pixel[0], 255 };
+    } else if constexpr (Format == BitmapFormat::Alpha) {
+        return { 0, 0, 0, pixel[0] };
     } else if constexpr (Format == BitmapFormat::RGBA) {
         return { pixel[0], pixel[1], pixel[2], pixel[3] };
     } else if constexpr (Format == BitmapFormat::BGRA) {
@@ -117,6 +121,8 @@ template<BitmapFormat Format>
 static void _WriteBytes(std::uint8_t* pixel, _PixelBytes const& bytes) {
     if constexpr (Format == BitmapFormat::Grayscale) {
         pixel[0] = _GetLuminance(_ToFloat(bytes.red), _ToFloat(bytes.green), _ToFloat(bytes.blue));
+    } else if constexpr (Format == BitmapFormat::Alpha) {
+        pixel[0] = bytes.alpha;
     } else if constexpr (Format == BitmapFormat::RGBA) {
         pixel[0] = bytes.red;
         pixel[1] = bytes.green;
@@ -150,6 +156,7 @@ static void _WritePixel(std::uint8_t* pixel, Vec4 const& color) {
 static _PixelBytes _ReadBytes(std::uint8_t const* pixel, BitmapFormat format) {
     switch (format) {
         case BitmapFormat::Grayscale: return _ReadBytes<BitmapFormat::Grayscale>(pixel);
+        case BitmapFormat::Alpha: return _ReadBytes<BitmapFormat::Alpha>(pixel);
         case BitmapFormat::RGBA: return _ReadBytes<BitmapFormat::RGBA>(pixel);
         case BitmapFormat::BGRA: return _ReadBytes<BitmapFormat::BGRA>(pixel);
         case BitmapFormat::RGB: return _ReadBytes<BitmapFormat::RGB>(pixel);
@@ -162,6 +169,7 @@ static _PixelBytes _ReadBytes(std::uint8_t const* pixel, BitmapFormat format) {
 static void _WritePixel(std::uint8_t* pixel, BitmapFormat format, Vec4 const& color) {
     switch (format) {
         case BitmapFormat::Grayscale: _WritePixel<BitmapFormat::Grayscale>(pixel, color); break;
+        case BitmapFormat::Alpha: _WritePixel<BitmapFormat::Alpha>(pixel, color); break;
         case BitmapFormat::RGBA: _WritePixel<BitmapFormat::RGBA>(pixel, color); break;
         case BitmapFormat::BGRA: _WritePixel<BitmapFormat::BGRA>(pixel, color); break;
         case BitmapFormat::RGB: _WritePixel<BitmapFormat::RGB>(pixel, color); break;
@@ -185,6 +193,7 @@ template<BitmapFormat Src>
 static void _ConvertRowsTo(BitmapFormat newFormat, std::uint8_t const* data, std::ptrdiff_t bytesPerRow, std::uint8_t* result, std::int32_t width, std::int32_t height) {
     switch (newFormat) {
         case BitmapFormat::Grayscale: _ConvertRows<Src, BitmapFormat::Grayscale>(data, bytesPerRow, result, width, height); break;
+        case BitmapFormat::Alpha: _ConvertRows<Src, BitmapFormat::Alpha>(data, bytesPerRow, result, width, height); break;
         case BitmapFormat::RGBA: _ConvertRows<Src, BitmapFormat::RGBA>(data, bytesPerRow, result, width, height); break;
         case BitmapFormat::BGRA: _ConvertRows<Src, BitmapFormat::BGRA>(data, bytesPerRow, result, width, height); break;
         case BitmapFormat::RGB: _ConvertRows<Src, BitmapFormat::RGB>(data, bytesPerRow, result, width, height); break;
@@ -321,6 +330,7 @@ template<BitmapFormat Src>
 static void _BlitNearestTo(BitmapFormat dstFormat, _BlitRegion const& region, BitmapBlend blend) {
     switch (dstFormat) {
         case BitmapFormat::Grayscale: _BlitNearest<Src, BitmapFormat::Grayscale>(region, blend); break;
+        case BitmapFormat::Alpha: _BlitNearest<Src, BitmapFormat::Alpha>(region, blend); break;
         case BitmapFormat::RGBA: _BlitNearest<Src, BitmapFormat::RGBA>(region, blend); break;
         case BitmapFormat::BGRA: _BlitNearest<Src, BitmapFormat::BGRA>(region, blend); break;
         case BitmapFormat::RGB: _BlitNearest<Src, BitmapFormat::RGB>(region, blend); break;
@@ -356,20 +366,16 @@ static void _BlitGeneral(_BlitRegion const& region, BitmapFormat srcFormat, Bitm
     };
 
     for (auto i = 0uz; i < region.rows.size(); i++) {
-        auto const& row = region.rows[i];
-
-        if (row.inside == false) {
+        if (region.rows[i].inside == false) {
             continue;
         }
 
-        auto const srcRow = (region.srcData + row.first);
-        auto const srcNextRow = (region.srcData + row.second);
+        auto const srcRow = (region.srcData + region.rows[i].first);
+        auto const srcNextRow = (region.srcData + region.rows[i].second);
         auto const dstRow = (region.dstData + ((region.startY + static_cast<std::ptrdiff_t>(i)) * region.dstBytesPerRow) + (region.startX * dstBytesPerPixel));
 
         for (auto j = 0uz; j < region.columns.size(); j++) {
-            auto const& column = region.columns[j];
-
-            if (column.inside == false) {
+            if (region.columns[j].inside == false) {
                 continue;
             }
 
@@ -377,7 +383,7 @@ static void _BlitGeneral(_BlitRegion const& region, BitmapFormat srcFormat, Bitm
             auto pixel = Vec4{};
 
             if (filter == BitmapFilter::Nearest) {
-                auto const bytes = _ReadBytes((srcRow + column.first), srcFormat);
+                auto const bytes = _ReadBytes((srcRow + region.columns[j].first), srcFormat);
 
                 if ((blend != BitmapBlend::Replace) && (bytes.alpha == 0)) {
                     continue;
@@ -385,7 +391,7 @@ static void _BlitGeneral(_BlitRegion const& region, BitmapFormat srcFormat, Bitm
 
                 pixel = _ToColor(bytes);
             } else {
-                pixel = interpolate(srcRow, srcNextRow, row, column);
+                pixel = interpolate(srcRow, srcNextRow, region.rows[i], region.columns[j]);
             }
 
             if ((pixel.alpha > 0.0f) && isTinted) {
@@ -398,10 +404,14 @@ static void _BlitGeneral(_BlitRegion const& region, BitmapFormat srcFormat, Bitm
 }
 
 std::uint8_t* CreateBitmap(BitmapFormat format, Vec2 const& size) {
+    PROFILE
+
     return new std::uint8_t[_GetByteCount(format, size)]();
 }
 
 std::uint8_t* ConvertBitmap(std::uint8_t const* data, std::ptrdiff_t bytesPerRow, BitmapFormat format, Vec2 const& size, BitmapFormat newFormat) {
+    PROFILE
+
     if (data == nullptr) {
         throw std::runtime_error("Failed to convert a bitmap: no pixel data");
     }
@@ -421,6 +431,7 @@ std::uint8_t* ConvertBitmap(std::uint8_t const* data, std::ptrdiff_t bytesPerRow
 
     switch (format) {
         case BitmapFormat::Grayscale: _ConvertRowsTo<BitmapFormat::Grayscale>(newFormat, data, srcBytesPerRow, result, width, height); break;
+        case BitmapFormat::Alpha: _ConvertRowsTo<BitmapFormat::Alpha>(newFormat, data, srcBytesPerRow, result, width, height); break;
         case BitmapFormat::RGBA: _ConvertRowsTo<BitmapFormat::RGBA>(newFormat, data, srcBytesPerRow, result, width, height); break;
         case BitmapFormat::BGRA: _ConvertRowsTo<BitmapFormat::BGRA>(newFormat, data, srcBytesPerRow, result, width, height); break;
         case BitmapFormat::RGB: _ConvertRowsTo<BitmapFormat::RGB>(newFormat, data, srcBytesPerRow, result, width, height); break;
@@ -431,6 +442,8 @@ std::uint8_t* ConvertBitmap(std::uint8_t const* data, std::ptrdiff_t bytesPerRow
 }
 
 void BlitBitmap(BitmapBlitOptions const& options) {
+    PROFILE
+
     if ((options.dstData == nullptr) || (options.srcData == nullptr)) {
         throw std::runtime_error("Failed to blit a bitmap: no pixel data");
     }
@@ -461,7 +474,6 @@ void BlitBitmap(BitmapBlitOptions const& options) {
         srcBytesPerRow = packedBytesPerRow;
     }
 
-    auto const& bounds = options.dstRect;
     auto const nPatch = options.nPatch.value_or(Vec4{});
     auto const color = options.color.value_or(Vec4{});
     auto const blend = options.blend.value_or(BitmapBlend::Normal);
@@ -476,19 +488,19 @@ void BlitBitmap(BitmapBlitOptions const& options) {
     auto imageDst = Vec4{ 0.0f, 0.0f, imageSrc.width, imageSrc.height };
 
     if (positionX == BitmapPosition::Center) {
-        imageDst.x = ((bounds.width - imageDst.width) / 2.0f);
+        imageDst.x = ((options.dstRect.width - imageDst.width) / 2.0f);
     } else if (positionX == BitmapPosition::End) {
-        imageDst.x = (bounds.width - imageDst.width);
+        imageDst.x = (options.dstRect.width - imageDst.width);
     } else if (positionX == BitmapPosition::Stretch) {
-        imageDst.width = bounds.width;
+        imageDst.width = options.dstRect.width;
     }
 
     if (positionY == BitmapPosition::Center) {
-        imageDst.y = ((bounds.height - imageDst.height) / 2.0f);
+        imageDst.y = ((options.dstRect.height - imageDst.height) / 2.0f);
     } else if (positionY == BitmapPosition::End) {
-        imageDst.y = (bounds.height - imageDst.height);
+        imageDst.y = (options.dstRect.height - imageDst.height);
     } else if (positionY == BitmapPosition::Stretch) {
-        imageDst.height = bounds.height;
+        imageDst.height = options.dstRect.height;
     }
 
     if ((imageSrc.width <= 0.0f) || (imageSrc.height <= 0.0f) || (imageDst.width <= 0.0f) || (imageDst.height <= 0.0f)) {
@@ -509,28 +521,31 @@ void BlitBitmap(BitmapBlitOptions const& options) {
 
     auto const mapAxis = [&](std::int32_t axis, std::int32_t start, std::int32_t end, bool repeat, bool flip, std::int32_t sampleMin, std::int32_t sampleMax, std::ptrdiff_t stride) {
         auto samples = std::vector<_AxisSample>(std::max(0, (end - start)));
-        auto const srcOrigin = imageSrc.data[axis];
-        auto const srcSize = imageSrc.data[axis + 2];
-        auto const dstSize = imageDst.data[axis + 2];
-        auto const nPatchStart = nPatch.data[axis];
-        auto const nPatchEnd = nPatch.data[axis + 2];
-        auto const nPatchSize = std::max((nPatchStart + nPatchEnd), 0.0001f);
-        auto const srcFit = std::min(1.0f, (srcSize / nPatchSize));
-        auto const dstFit = std::min(1.0f, (dstSize / nPatchSize));
+        auto const nPatchSize = std::max((nPatch.data[axis] + nPatch.data[axis + 2]), 0.0001f);
+        auto const srcFit = std::min(1.0f, (imageSrc.data[axis + 2] / nPatchSize));
+        auto const dstFit = std::min(1.0f, (imageDst.data[axis + 2] / nPatchSize));
 
         for (auto i = start; i < end; i++) {
-            auto local = (((static_cast<float>(i) + 0.5f) - bounds.data[axis]) - imageDst.data[axis]);
+            auto local = (((static_cast<float>(i) + 0.5f) - options.dstRect.data[axis]) - imageDst.data[axis]);
 
             if (repeat) {
-                local -= (dstSize * std::floor(local / dstSize));
+                local -= (imageDst.data[axis + 2] * std::floor(local / imageDst.data[axis + 2]));
             }
 
-            if (((local >= 0.0f) && (local < dstSize)) == false) {
+            if (((local >= 0.0f) && (local < imageDst.data[axis + 2])) == false) {
                 continue;
             }
 
-            auto const position = _NPatchAxis(local, srcSize, dstSize, (nPatchStart * srcFit), (nPatchEnd * srcFit), (nPatchStart * dstFit), (nPatchEnd * dstFit));
-            auto const coordinate = (flip ? ((srcOrigin + srcSize) - position) : (srcOrigin + position));
+            auto const position = _NPatchAxis(
+                local,
+                imageSrc.data[axis + 2],
+                imageDst.data[axis + 2],
+                (nPatch.data[axis] * srcFit),
+                (nPatch.data[axis + 2] * srcFit),
+                (nPatch.data[axis] * dstFit),
+                (nPatch.data[axis + 2] * dstFit)
+            );
+            auto const coordinate = (flip ? ((imageSrc.data[axis] + imageSrc.data[axis + 2]) - position) : (imageSrc.data[axis] + position));
 
             if (filter == BitmapFilter::Nearest) {
                 auto const index = (std::clamp(_ToInt(std::floor(coordinate)), sampleMin, sampleMax) * stride);
@@ -551,10 +566,10 @@ void BlitBitmap(BitmapBlitOptions const& options) {
         return samples;
     };
 
-    auto const startX = std::max(0, _ToInt(std::ceil(bounds.x - 0.5f)));
-    auto const startY = std::max(0, _ToInt(std::ceil(bounds.y - 0.5f)));
-    auto const endX = std::min(dstWidth, _ToInt(std::ceil(bounds.getMaxX() - 0.5f)));
-    auto const endY = std::min(dstHeight, _ToInt(std::ceil(bounds.getMaxY() - 0.5f)));
+    auto const startX = std::max(0, _ToInt(std::ceil(options.dstRect.x - 0.5f)));
+    auto const startY = std::max(0, _ToInt(std::ceil(options.dstRect.y - 0.5f)));
+    auto const endX = std::min(dstWidth, _ToInt(std::ceil(options.dstRect.getMaxX() - 0.5f)));
+    auto const endY = std::min(dstHeight, _ToInt(std::ceil(options.dstRect.getMaxY() - 0.5f)));
     auto const columns = mapAxis(0, startX, endX, repeatX, options.flipX.value_or(false), sampleMinX, sampleMaxX, srcBytesPerPixel);
     auto const rows = mapAxis(1, startY, endY, repeatY, options.flipY.value_or(false), sampleMinY, sampleMaxY, srcBytesPerRow);
     auto const region = _BlitRegion{ srcData, options.dstData, dstBytesPerRow, startX, startY, columns, rows };
@@ -571,6 +586,7 @@ void BlitBitmap(BitmapBlitOptions const& options) {
     if (isPlain) {
         switch (options.srcFormat) {
             case BitmapFormat::Grayscale: _BlitNearestTo<BitmapFormat::Grayscale>(options.dstFormat, region, blend); break;
+            case BitmapFormat::Alpha: _BlitNearestTo<BitmapFormat::Alpha>(options.dstFormat, region, blend); break;
             case BitmapFormat::RGBA: _BlitNearestTo<BitmapFormat::RGBA>(options.dstFormat, region, blend); break;
             case BitmapFormat::BGRA: _BlitNearestTo<BitmapFormat::BGRA>(options.dstFormat, region, blend); break;
             case BitmapFormat::RGB: _BlitNearestTo<BitmapFormat::RGB>(options.dstFormat, region, blend); break;

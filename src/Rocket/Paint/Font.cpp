@@ -460,7 +460,7 @@ FontGlyph const& Font::getGlyph(std::uint32_t codepoint, float size) const {
         };
 
         auto const colored = (_impl->face->glyph->bitmap.pixel_mode == ::FT_PIXEL_MODE_BGRA);
-        auto bitmapFormat = (colored ? ImageFormat::BGRAPremultiplied : ImageFormat::Grayscale);
+        auto bitmapFormat = (colored ? ImageFormat::BGRAPremultiplied : ImageFormat::Alpha);
         auto bitmapData = _impl->face->glyph->bitmap.buffer;
 
         if (_impl->face->glyph->bitmap.buffer != nullptr) {

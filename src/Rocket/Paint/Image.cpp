@@ -165,6 +165,13 @@ void Image::setData(Vec2 const& size, std::uint8_t const* data, ImageFormat form
 
     if (format == ImageFormat::Grayscale) {
         for (auto i = 0; i < pSize; i++) {
+            _buffer[(i * 4) + 0] = data[i];
+            _buffer[(i * 4) + 1] = data[i];
+            _buffer[(i * 4) + 2] = data[i];
+            _buffer[(i * 4) + 3] = 255;
+        }
+    } else if (format == ImageFormat::Alpha) {
+        for (auto i = 0; i < pSize; i++) {
             _buffer[(i * 4) + 0] = 0;
             _buffer[(i * 4) + 1] = 0;
             _buffer[(i * 4) + 2] = 0;

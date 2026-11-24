@@ -33,6 +33,8 @@ namespace Rocket {
 enum class BitmapFormat {
     /** One luminance channel per pixel, from black (0) to white (255); fully opaque. */
     Grayscale,
+    /** One alpha channel per pixel, from transparent (0) to opaque (255), over black; a coverage mask. */
+    Alpha,
     /** Red, green, blue and alpha. */
     RGBA,
     /** Blue, green, red and alpha. */
@@ -154,7 +156,8 @@ std::uint8_t* CreateBitmap(BitmapFormat format, Vec2 const& size);
  * format. Alpha is dropped when the new format has none and is opaque when
  * the old one has none. Color becomes Grayscale as its luminance
  * (0.2126 R + 0.7152 G + 0.0722 B), and Grayscale becomes color with the
- * value in every channel. The new bitmap has no gap between rows. The caller
+ * value in every channel. Alpha becomes black with that alpha, and any
+ * format becomes Alpha by keeping its alpha alone. The new bitmap has no gap between rows. The caller
  * owns the buffer and releases it with delete[]. Throws std::runtime_error
  * if data is null.
  *
