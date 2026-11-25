@@ -140,6 +140,22 @@ static void KeyedB(Props const& props) {
     keyedBName = UseComponentName();
 }
 
+/* Component ids. */
+
+static std::vector<std::string> seenIDs;
+
+static void IDProbe(Props const& props) {
+    COMPONENT
+
+    seenIDs.push_back(UseComponentID());
+}
+
+static void OtherIDProbe(Props const& props) {
+    COMPONENT
+
+    seenIDs.push_back(UseComponentID());
+}
+
 /* Teardown. */
 
 static void Leaf() {
@@ -575,4 +591,37 @@ TEST(Reconciler, KeyedSiblingInsertedInTheMiddle) {
     reconciler.update();
     ASSERT_TRUE(itemValues["mx"] == 2);
     ASSERT_TRUE(itemValues["m3"] == 4);
+}
+
+TEST(Reconciler, ComponentIDs) {
+    auto reconciler = Reconciler();
+
+    reconciler.setUpdateFn([] {
+        IDProbe({});
+        OtherIDProbe({});
+        IDProbe({ .key = "k" });
+        IDProbe({});
+        OtherIDProbe({});
+    });
+
+    for (auto i = 0; i < 2; i++) {
+        seenIDs.clear();
+        reconciler.update();
+        ASSERT_EQ(seenIDs, (std::vector<std::string>{ "IDProbe0", "OtherIDProbe0", "k", "IDProbe1", "OtherIDProbe1" }));
+    }
+}
+
+TEST(Reconciler, KeyEqualToAKeylessIDIsADifferentComponent) {
+    auto reconciler = Reconciler();
+
+    reconciler.setUpdateFn([] {
+        Item({});
+        Item({ .key = "Item0" });
+    });
+
+    itemValues.clear();
+    reconciler.update();
+    reconciler.update();
+    ASSERT_EQ(itemValues[""], 2);
+    ASSERT_EQ(itemValues["Item0"], 2);
 }

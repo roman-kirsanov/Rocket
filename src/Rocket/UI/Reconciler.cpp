@@ -25,6 +25,7 @@ struct Reconciler::_Component {
     _Component* nextSibling = nullptr;
     _Component* prevSibling = nullptr;
     _Component* expectedNextChild = nullptr;
+    std::int64_t seq = -1;
     std::int64_t type = 0;
     std::int64_t index = 0;
     std::string id;
@@ -252,13 +253,11 @@ void Reconciler::_openComponent(std::int64_t type, std::string const& name, std:
         throw std::runtime_error("Reconciler is not updating");
     }
 
-    auto id = std::string();
+    auto seq = std::int64_t(-1);
 
     if (key.empty()) {
-        id = (name + std::to_string(_currentComponent->keySeq[type]++));
+        seq = _currentComponent->keySeq[type]++;
     } else {
-        id = key;
-
         auto [ _, inserted ] = _currentComponent->usedKeys.insert(key);
         if (inserted == false) {
             throw std::runtime_error(
@@ -271,13 +270,18 @@ void Reconciler::_openComponent(std::int64_t type, std::string const& name, std:
 
     if (
         (_currentComponent->expectedNextChild != nullptr) &&
-        (_currentComponent->expectedNextChild->id == id) &&
-        (_currentComponent->expectedNextChild->type == type)
+        (_currentComponent->expectedNextChild->type == type) &&
+        (_currentComponent->expectedNextChild->seq == seq) &&
+        (_currentComponent->expectedNextChild->key == key)
     ) {
         component = _currentComponent->expectedNextChild;
     } else {
         for (auto child = _currentComponent->firstChild; child != nullptr; child = child->nextSibling) {
-            if ((child->id == id) && (child->type == type)) {
+            if (
+                (child->type == type) &&
+                (child->seq == seq) &&
+                (child->key == key)
+            ) {
                 component = child;
                 break;
             }
@@ -286,8 +290,9 @@ void Reconciler::_openComponent(std::int64_t type, std::string const& name, std:
 
     if (component == nullptr) {
         component = new _Component();
-        component->id = id;
+        component->id = key.empty() ? (name + std::to_string(seq)) : key;
         component->key = key;
+        component->seq = seq;
         component->type = type;
         component->name = name;
         _addComponentChild(_currentComponent, component);
