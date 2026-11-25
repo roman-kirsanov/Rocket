@@ -156,6 +156,34 @@ static void OtherIDProbe(Props const& props) {
     seenIDs.push_back(UseComponentID());
 }
 
+/* State destruction order. */
+
+static std::vector<int> destroyedSlots;
+static bool renderOrdered = true;
+
+struct OrderedSlot {
+    int slot = 0;
+    ~OrderedSlot() { destroyedSlots.push_back(slot); }
+};
+
+static void OrderedState() {
+    COMPONENT_NO_KEY
+
+    for (auto i = 0; i < 12; i++) {
+        UseState<OrderedSlot>().slot = i;
+    }
+}
+
+static void WrongStateType() {
+    COMPONENT_NO_KEY
+
+    if (renderOrdered) {
+        UseState<int>(0);
+    } else {
+        UseState<float>(0.0f);
+    }
+}
+
 /* Teardown. */
 
 static void Leaf() {
@@ -624,4 +652,40 @@ TEST(Reconciler, KeyEqualToAKeylessIDIsADifferentComponent) {
     reconciler.update();
     ASSERT_EQ(itemValues[""], 2);
     ASSERT_EQ(itemValues["Item0"], 2);
+}
+
+TEST(Reconciler, UnmountDestroysStateInReverseOrder) {
+    auto reconciler = Reconciler();
+
+    reconciler.setUpdateFn([] {
+        if (renderOrdered) {
+            OrderedState();
+        }
+    });
+
+    destroyedSlots.clear();
+    renderOrdered = true;
+    reconciler.update();
+    reconciler.update();
+    ASSERT_TRUE(destroyedSlots.empty());
+
+    renderOrdered = false;
+    reconciler.update();
+    ASSERT_EQ(destroyedSlots, (std::vector<int>{ 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 }));
+    renderOrdered = true;
+}
+
+TEST(Reconciler, StateOfAnotherTypeInTheSameSlotThrows) {
+    auto reconciler = Reconciler();
+
+    reconciler.setUpdateFn([] {
+        WrongStateType();
+    });
+
+    renderOrdered = true;
+    reconciler.update();
+
+    renderOrdered = false;
+    ASSERT_THROW(reconciler.update(), std::runtime_error);
+    renderOrdered = true;
 }

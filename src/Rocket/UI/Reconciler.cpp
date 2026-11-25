@@ -1,5 +1,6 @@
 #include <stack>
 #include <string>
+#include <vector>
 #include <stdexcept>
 #include <unordered_set>
 #include <unordered_map>
@@ -34,8 +35,8 @@ struct Reconciler::_Component {
     std::int64_t revision = 0;
     std::int64_t nextChildIndex = 0;
     std::int64_t nextStateIndex = 0;
+    std::vector<std::any> state;
     std::unordered_set<std::string> usedKeys;
-    std::unordered_map<std::int64_t, std::any> state;
     std::unordered_map<std::int64_t, std::int64_t> keySeq;
     lyn::inplace_vector<_Context, _contextCapacity> contexts;
 };
@@ -152,9 +153,11 @@ std::any& Reconciler::_useState() {
         throw std::runtime_error("Current component not found");
     }
 
-    auto [ it, _ ] = _currentComponent->state.insert({ _currentComponent->nextStateIndex++, {} });
+    if (_currentComponent->nextStateIndex == std::ssize(_currentComponent->state)) {
+        _currentComponent->state.emplace_back();
+    }
 
-    return it->second;
+    return _currentComponent->state[_currentComponent->nextStateIndex++];
 }
 
 void* Reconciler::_useContext(std::type_index const& typeIndex) {
@@ -317,7 +320,10 @@ void Reconciler::_openComponent(std::int64_t type, std::string const& name, std:
 void Reconciler::_closeComponent() {
     PROFILE
 
-    if ((_currentComponent == nullptr) || (_currentComponent == _rootComponent)) {
+    if (
+        _currentComponent == nullptr ||
+        _currentComponent == _rootComponent
+    ) {
         throw std::runtime_error("Current component not found");
     }
 
@@ -382,9 +388,12 @@ void Reconciler::_unmountComponent(_Component* component) {
     }
 
     if (component->revision < _rootComponent->revision) {
-        component->state.clear();
+        while (component->state.empty() == false) {
+            component->state.pop_back();
+        }
 
         _removeComponentFromParent(component);
+
         delete component;
     }
 }
