@@ -321,6 +321,167 @@ TEST(Node, WrapLayout) {
     expectSingleLine();
 }
 
+TEST(Node, WrapJustifyLayout) {
+    Window window;
+    window.setSize({ 640.0f, 480.0f });
+
+    Document document(window);
+
+    Node row;
+    row.setDirection(NodeDirection::Horizontal);
+    row.setWrap(NodeWrap::Wrap);
+    row.setWidth(100.0f);
+    row.setHeight(58.0f);
+    row.setGapY(2.0f);
+    document.appendChild(row);
+
+    Node a;
+    Node b;
+    Node c;
+    Node d;
+    Node e;
+    for (auto node : { &a, &b, &c, &d, &e }) {
+        node->setWidth(40.0f);
+        node->setHeight(10.0f);
+        row.appendChild(*node);
+    }
+
+    auto const expectLines = [&](float first, float second, float third) {
+        document.update();
+        ASSERT_FLOAT_EQ(a.getComputedBorderRect().y, first);
+        ASSERT_FLOAT_EQ(b.getComputedBorderRect().y, first);
+        ASSERT_FLOAT_EQ(c.getComputedBorderRect().y, second);
+        ASSERT_FLOAT_EQ(d.getComputedBorderRect().y, second);
+        ASSERT_FLOAT_EQ(e.getComputedBorderRect().y, third);
+        ASSERT_FLOAT_EQ(e.getComputedBorderRect().height, 10.0f);
+    };
+
+    ASSERT_TRUE(row.getWrapJustify().has_value() == false);
+    expectLines(0.0f, 12.0f, 24.0f);
+
+    row.setWrapJustify(NodeWrapJustify::Start);
+    ASSERT_EQ(row.getWrapJustify(), NodeWrapJustify::Start);
+    expectLines(0.0f, 12.0f, 24.0f);
+
+    row.setWrapJustify(NodeWrapJustify::Center);
+    expectLines(12.0f, 24.0f, 36.0f);
+
+    row.setWrapJustify(NodeWrapJustify::End);
+    expectLines(24.0f, 36.0f, 48.0f);
+
+    row.setWrapJustify(NodeWrapJustify::SpaceBetween);
+    expectLines(0.0f, 24.0f, 48.0f);
+
+    row.setWrapJustify(NodeWrapJustify::SpaceAround);
+    expectLines(4.0f, 24.0f, 44.0f);
+
+    row.setWrapJustify(NodeWrapJustify::SpaceEvenly);
+    expectLines(6.0f, 24.0f, 42.0f);
+
+    row.setWrapJustify(NodeWrapJustify::Stretch);
+    expectLines(0.0f, 20.0f, 40.0f);
+
+    for (auto node : { &a, &b, &c, &d, &e }) {
+        node->setHeight(std::nullopt);
+    }
+
+    row.setAlignment(NodeAlignment::Stretch);
+    document.update();
+    ASSERT_FLOAT_EQ(a.getComputedBorderRect().y, 0.0f);
+    ASSERT_FLOAT_EQ(a.getComputedBorderRect().height, 18.0f);
+    ASSERT_FLOAT_EQ(c.getComputedBorderRect().y, 20.0f);
+    ASSERT_FLOAT_EQ(e.getComputedBorderRect().y, 40.0f);
+    ASSERT_FLOAT_EQ(e.getComputedBorderRect().height, 18.0f);
+
+    for (auto node : { &a, &b, &c, &d, &e }) {
+        node->setHeight(10.0f);
+    }
+
+    row.setAlignment(std::nullopt);
+    row.setWrapJustify(NodeWrapJustify::Center);
+    row.setWrap(std::nullopt);
+    document.update();
+    ASSERT_FLOAT_EQ(a.getComputedBorderRect().y, 0.0f);
+    ASSERT_FLOAT_EQ(e.getComputedBorderRect().y, 0.0f);
+
+    row.setWrap(NodeWrap::Wrap);
+    row.setWrapJustify(std::nullopt);
+    ASSERT_TRUE(row.getWrapJustify().has_value() == false);
+    expectLines(0.0f, 12.0f, 24.0f);
+}
+
+TEST(Node, AspectRatioLayout) {
+    Window window;
+    window.setSize({ 640.0f, 480.0f });
+
+    Document document(window);
+
+    Node column;
+    column.setDirection(NodeDirection::Vertical);
+    column.setWidth(200.0f);
+    column.setHeight(300.0f);
+    document.appendChild(column);
+
+    Node node;
+    column.appendChild(node);
+
+    ASSERT_TRUE(node.getAspectRatio().has_value() == false);
+
+    node.setWidth(160.0f);
+    node.setAspectRatio(2.0f);
+    ASSERT_EQ(node.getAspectRatio(), 2.0f);
+    document.update();
+    ASSERT_FLOAT_EQ(node.getComputedBorderRect().width, 160.0f);
+    ASSERT_FLOAT_EQ(node.getComputedBorderRect().height, 80.0f);
+
+    node.setMaxHeight(50.0f);
+    document.update();
+    ASSERT_FLOAT_EQ(node.getComputedBorderRect().height, 50.0f);
+    node.setMaxHeight(std::nullopt);
+
+    node.setWidth(std::nullopt);
+    node.setHeight(50.0f);
+    document.update();
+    ASSERT_FLOAT_EQ(node.getComputedBorderRect().width, 100.0f);
+    ASSERT_FLOAT_EQ(node.getComputedBorderRect().height, 50.0f);
+
+    node.setWidth(30.0f);
+    document.update();
+    ASSERT_FLOAT_EQ(node.getComputedBorderRect().width, 100.0f);
+    ASSERT_FLOAT_EQ(node.getComputedBorderRect().height, 50.0f);
+
+    node.setWidth(std::nullopt);
+    node.setHeight(std::nullopt);
+    node.setAspectRatio(4.0f);
+    column.setAlignment(NodeAlignment::Stretch);
+    document.update();
+    ASSERT_FLOAT_EQ(node.getComputedBorderRect().width, 200.0f);
+    ASSERT_FLOAT_EQ(node.getComputedBorderRect().height, 50.0f);
+
+    column.setAlignment(std::nullopt);
+    column.setDirection(NodeDirection::Horizontal);
+    node.setFlex(true);
+    node.setAspectRatio(2.0f);
+    document.update();
+    ASSERT_FLOAT_EQ(node.getComputedBorderRect().width, 200.0f);
+    ASSERT_FLOAT_EQ(node.getComputedBorderRect().height, 100.0f);
+
+    node.setFlex(false);
+    node.setWidth(160.0f);
+    node.setAspectRatio(0.0f);
+    document.update();
+    ASSERT_FLOAT_EQ(node.getComputedBorderRect().height, 0.0f);
+
+    node.setAspectRatio(2.0f);
+    document.update();
+    ASSERT_FLOAT_EQ(node.getComputedBorderRect().height, 80.0f);
+
+    node.setAspectRatio(std::nullopt);
+    ASSERT_TRUE(node.getAspectRatio().has_value() == false);
+    document.update();
+    ASSERT_FLOAT_EQ(node.getComputedBorderRect().height, 0.0f);
+}
+
 /* insertChild attaches the inserted subtree to the parent's document, a
    move within the parent keeps it attached, and the no-op path (already at
    the index) does not disturb focus. */
@@ -522,6 +683,8 @@ TEST(Node, StyleDefaults) {
     ASSERT_TRUE(!node.getAlignment().has_value());
     ASSERT_TRUE(!node.getJustify().has_value());
     ASSERT_TRUE(!node.getWrap().has_value());
+    ASSERT_TRUE(node.getWrapJustify().has_value() == false);
+    ASSERT_TRUE(node.getAspectRatio().has_value() == false);
     ASSERT_TRUE(!node.getScrollbarX().has_value());
     ASSERT_TRUE(!node.getScrollbarY().has_value());
     ASSERT_TRUE(!node.getPosition().has_value());

@@ -76,6 +76,9 @@ struct NodeProps {
     /** Whether children that do not fit the main axis flow onto further lines (default NoWrap). */
     std::optional<NodeWrap> wrap;
 
+    /** Cross-axis distribution of wrapped lines (default Start); no effect unless children wrap. */
+    std::optional<NodeWrapJustify> wrapJustify;
+
     /** Explicit width. */
     std::optional<NodeValue> width;
 
@@ -144,6 +147,9 @@ struct NodeProps {
 
     /** Vertical gap between children. */
     std::optional<NodeValue> gapY;
+
+    /** Width-to-height ratio; derives the unknown dimension from the known one. */
+    std::optional<float> aspectRatio;
 
     /** Border width in points for all edges; a per-edge border width overrides it on that edge. */
     std::optional<float> borderWidth;

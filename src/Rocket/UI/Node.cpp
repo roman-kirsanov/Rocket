@@ -36,6 +36,7 @@ void Node(NodeProps const& props, std::function<void()> const& children) {
         Effect<std::optional<NodeAlignment>> shouldUpdateSelfAlignment;
         Effect<std::optional<NodeJustify>> shouldUpdateJustify;
         Effect<std::optional<NodeWrap>> shouldUpdateWrap;
+        Effect<std::optional<NodeWrapJustify>> shouldUpdateWrapJustify;
         Effect<std::optional<NodeValue>> shouldUpdateWidth;
         Effect<std::optional<NodeValue>> shouldUpdateHeight;
         Effect<std::optional<NodeValue>> shouldUpdateMinWidth;
@@ -59,6 +60,7 @@ void Node(NodeProps const& props, std::function<void()> const& children) {
         Effect<std::optional<NodeValue>> shouldUpdateGap;
         Effect<std::optional<NodeValue>> shouldUpdateGapX;
         Effect<std::optional<NodeValue>> shouldUpdateGapY;
+        Effect<std::optional<float>> shouldUpdateAspectRatio;
         Effect<std::optional<float>> shouldUpdateBorderWidth;
         Effect<std::optional<float>> shouldUpdateBorderTopWidth;
         Effect<std::optional<float>> shouldUpdateBorderLeftWidth;
@@ -163,6 +165,7 @@ void Node(NodeProps const& props, std::function<void()> const& children) {
     if (state.shouldUpdateSelfAlignment(props.selfAlignment)) state.node.setSelfAlignment(props.selfAlignment);
     if (state.shouldUpdateJustify(props.justify)) state.node.setJustify(props.justify);
     if (state.shouldUpdateWrap(props.wrap)) state.node.setWrap(props.wrap);
+    if (state.shouldUpdateWrapJustify(props.wrapJustify)) state.node.setWrapJustify(props.wrapJustify);
     if (state.shouldUpdateWidth(props.width)) state.node.setWidth(props.width);
     if (state.shouldUpdateHeight(props.height)) state.node.setHeight(props.height);
     if (state.shouldUpdateMinWidth(props.minWidth)) state.node.setMinWidth(props.minWidth);
@@ -186,6 +189,7 @@ void Node(NodeProps const& props, std::function<void()> const& children) {
     if (state.shouldUpdateGap(props.gap)) state.node.setGap(props.gap);
     if (state.shouldUpdateGapX(props.gapX)) state.node.setGapX(props.gapX);
     if (state.shouldUpdateGapY(props.gapY)) state.node.setGapY(props.gapY);
+    if (state.shouldUpdateAspectRatio(props.aspectRatio)) state.node.setAspectRatio(props.aspectRatio);
     if (state.shouldUpdateBorderWidth(props.borderWidth)) state.node.setBorderWidth(props.borderWidth);
     if (state.shouldUpdateBorderTopWidth(props.borderTopWidth)) state.node.setBorderTopWidth(props.borderTopWidth);
     if (state.shouldUpdateBorderLeftWidth(props.borderLeftWidth)) state.node.setBorderLeftWidth(props.borderLeftWidth);

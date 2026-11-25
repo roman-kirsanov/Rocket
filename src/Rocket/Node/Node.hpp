@@ -87,6 +87,21 @@ enum class NodeWrap {
     WrapReverse
 };
 
+/** Distribution of the lines of a wrapping flex container along its cross axis. Has no effect on a container that does not wrap. */
+enum class NodeWrapJustify {
+    Start,
+    Center,
+    End,
+    /** Lines grow to share the free cross-axis space equally. */
+    Stretch,
+    /** Equal space between lines; none at edges. */
+    SpaceBetween,
+    /** Equal space around each line. */
+    SpaceAround,
+    /** Equal space between lines and edges. */
+    SpaceEvenly
+};
+
 /** Clipping/scrolling behaviour when content overflows the node's bounds. A node with no overflow set behaves as Hidden. */
 enum class NodeOverflow {
     /** Overflow is clipped. */
@@ -257,6 +272,9 @@ public:
     /** Returns the wrapping mode of children if set, otherwise std::nullopt. */
     std::optional<NodeWrap> const& getWrap() const;
 
+    /** Returns the cross-axis distribution of wrapped lines if set, otherwise std::nullopt. */
+    std::optional<NodeWrapJustify> const& getWrapJustify() const;
+
     /** Returns the horizontal overflow mode if set, otherwise std::nullopt. */
     std::optional<NodeOverflow> const& getOverflowX() const;
 
@@ -343,6 +361,9 @@ public:
 
     /** Returns the vertical gap between children if set, otherwise std::nullopt. */
     std::optional<NodeValue> const& getGapY() const;
+
+    /** Returns the width-to-height aspect ratio if set, otherwise std::nullopt. */
+    std::optional<float> const& getAspectRatio() const;
 
     /** Returns the all-edge border width in pixels if set, otherwise std::nullopt. */
     std::optional<float> const& getBorderWidth() const;
@@ -519,12 +540,21 @@ public:
 
     /**
      * Sets whether children wrap onto further lines when they do not fit
-     * the main axis. Lines are packed at the start of the cross axis, and
-     * the cross-axis gap separates them.
+     * the main axis. The lines are distributed along the cross axis as
+     * setWrapJustify sets, and the cross-axis gap separates them.
      *
      * Passing std::nullopt resets to the default (NoWrap).
      */
     void setWrap(std::optional<NodeWrap> const&);
+
+    /**
+     * Sets how the lines of a wrapping container are distributed along the
+     * cross axis when the container is larger than its lines. The alignment
+     * of children places each child inside its own line.
+     *
+     * Passing std::nullopt resets to the default (Start).
+     */
+    void setWrapJustify(std::optional<NodeWrapJustify> const&);
 
     /** Sets the horizontal overflow mode. Passing std::nullopt resets to the default (Hidden). */
     void setOverflowX(std::optional<NodeOverflow> const&);
@@ -623,6 +653,17 @@ public:
 
     /** Sets the vertical (row) gap between children. Passing std::nullopt reverts to the shorthand gap, if any. */
     void setGapY(std::optional<NodeValue> const&);
+
+    /**
+     * Sets the width-to-height aspect ratio. When one dimension is known,
+     * from an explicit size, from flex or from stretch alignment, the other
+     * is derived from it; min/max constraints still apply. When both width
+     * and height are set, the ratio overrides the cross-axis one. Zero and
+     * infinite ratios act as unset.
+     *
+     * Passing std::nullopt clears the ratio.
+     */
+    void setAspectRatio(std::optional<float> const&);
 
     /** Sets the border width in pixels for all edges; a per-edge border width, when set, overrides it on that edge.
      *  Passing std::nullopt clears the border. */
@@ -898,6 +939,7 @@ private:
     std::optional<NodeAlignment> _alignment;
     std::optional<NodeJustify> _justify;
     std::optional<NodeWrap> _wrap;
+    std::optional<NodeWrapJustify> _wrapJustify;
     std::optional<NodeAlignment> _selfAlignment;
     std::optional<NodeValue> _width;
     std::optional<NodeValue> _height;
@@ -922,6 +964,7 @@ private:
     std::optional<NodeValue> _gap;
     std::optional<NodeValue> _gapX;
     std::optional<NodeValue> _gapY;
+    std::optional<float> _aspectRatio;
     std::optional<float> _borderWidth;
     std::optional<float> _borderTopWidth;
     std::optional<float> _borderLeftWidth;
@@ -989,9 +1032,9 @@ private:
     std::optional<Vec4> _shadowImageRadius;
     std::optional<Vec4> _shadowImageClipRect;
     std::optional<float> _shadowImageScale;
+    std::int64_t _scrollbarTime;
     Vec2 _scrollOverflow;
     Vec2 _scrollPosition;
-    std::int64_t _scrollbarTime;
 
     void* _layoutNode;
     void* _textNode;

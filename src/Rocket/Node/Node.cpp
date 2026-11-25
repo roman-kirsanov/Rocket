@@ -54,6 +54,16 @@ static auto _wrapMap = std::map<NodeWrap, ::YGWrap>{
     { NodeWrap::WrapReverse, ::YGWrapWrapReverse }
 };
 
+static auto _wrapJustifyMap = std::map<NodeWrapJustify, ::YGAlign>{
+    { NodeWrapJustify::Start,        ::YGAlignFlexStart },
+    { NodeWrapJustify::Center,       ::YGAlignCenter },
+    { NodeWrapJustify::End,          ::YGAlignFlexEnd },
+    { NodeWrapJustify::Stretch,      ::YGAlignStretch },
+    { NodeWrapJustify::SpaceBetween, ::YGAlignSpaceBetween },
+    { NodeWrapJustify::SpaceAround,  ::YGAlignSpaceAround },
+    { NodeWrapJustify::SpaceEvenly,  ::YGAlignSpaceEvenly }
+};
+
 bool NodeTransform::operator==(NodeTransform const& other) const {
     PROFILE
 
@@ -104,6 +114,7 @@ Node::Node()
     , _alignment(std::nullopt)
     , _justify(std::nullopt)
     , _wrap(std::nullopt)
+    , _wrapJustify(std::nullopt)
     , _selfAlignment(std::nullopt)
     , _width(std::nullopt)
     , _height(std::nullopt)
@@ -128,6 +139,7 @@ Node::Node()
     , _gap(std::nullopt)
     , _gapX(std::nullopt)
     , _gapY(std::nullopt)
+    , _aspectRatio(std::nullopt)
     , _borderWidth(std::nullopt)
     , _borderTopWidth(std::nullopt)
     , _borderLeftWidth(std::nullopt)
@@ -195,9 +207,9 @@ Node::Node()
     , _shadowImageRadius()
     , _shadowImageClipRect()
     , _shadowImageScale()
+    , _scrollbarTime(0)
     , _scrollOverflow()
     , _scrollPosition()
-    , _scrollbarTime(0)
     , _layoutNode(nullptr)
     , _textNode(nullptr)
 {
@@ -373,6 +385,12 @@ std::optional<NodeWrap> const& Node::getWrap() const {
     return _wrap;
 }
 
+std::optional<NodeWrapJustify> const& Node::getWrapJustify() const {
+    PROFILE
+
+    return _wrapJustify;
+}
+
 std::optional<NodeOverflow> const& Node::getOverflowX() const {
     PROFILE
 
@@ -545,6 +563,12 @@ std::optional<NodeValue> const& Node::getGapY() const {
     PROFILE
 
     return _gapY;
+}
+
+std::optional<float> const& Node::getAspectRatio() const {
+    PROFILE
+
+    return _aspectRatio;
 }
 
 std::optional<float> const& Node::getBorderWidth() const {
@@ -888,6 +912,17 @@ void Node::setWrap(std::optional<NodeWrap> const& wrap) {
         _invalidateLayout();
 
         ::YGNodeStyleSetFlexWrap((::YGNode*)_layoutNode, wrap.has_value() ? _wrapMap[wrap.value()] : ::YGWrapNoWrap);
+    }
+}
+
+void Node::setWrapJustify(std::optional<NodeWrapJustify> const& wrapJustify) {
+    PROFILE
+
+    if (_wrapJustify != wrapJustify) {
+        _wrapJustify = wrapJustify;
+        _invalidateLayout();
+
+        ::YGNodeStyleSetAlignContent((::YGNode*)_layoutNode, wrapJustify.has_value() ? _wrapJustifyMap[wrapJustify.value()] : ::YGAlignFlexStart);
     }
 }
 
@@ -1256,6 +1291,17 @@ void Node::setGapY(std::optional<NodeValue> const& gapY) {
         _gapY = gapY;
         _invalidateLayout();
         _setNodeGap();
+    }
+}
+
+void Node::setAspectRatio(std::optional<float> const& aspectRatio) {
+    PROFILE
+
+    if (_aspectRatio != aspectRatio) {
+        _aspectRatio = aspectRatio;
+        _invalidateLayout();
+
+        ::YGNodeStyleSetAspectRatio((::YGNode*)_layoutNode, aspectRatio.value_or(::YGUndefined));
     }
 }
 

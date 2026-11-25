@@ -573,3 +573,32 @@ TEST(UINode, ScrollbarPropsSyncToNode) {
     ASSERT_TRUE(node->getScrollbarX().has_value() == false);
     ASSERT_TRUE(node->getScrollbarY() == NodeScrollbar::Hidden);
 }
+
+TEST(UINode, WrapJustifyAndAspectRatioPropsSyncToNode) {
+    Window window;
+    window.setSize({ 640.0f, 480.0f });
+
+    class Document document(window);
+
+    class Node* node = nullptr;
+    auto wrapJustify = std::optional<NodeWrapJustify>(NodeWrapJustify::SpaceBetween);
+    auto aspectRatio = std::optional<float>();
+
+    auto reconciler = Reconciler();
+    reconciler.setUpdateFn([&] {
+        Context(document, [&] {
+            Node({ .ref = &node, .wrapJustify = wrapJustify, .aspectRatio = aspectRatio });
+        });
+    });
+
+    reconciler.update();
+    ASSERT_TRUE(node != nullptr);
+    ASSERT_TRUE(node->getWrapJustify() == NodeWrapJustify::SpaceBetween);
+    ASSERT_TRUE(node->getAspectRatio().has_value() == false);
+
+    wrapJustify = std::nullopt;
+    aspectRatio = 1.5f;
+    reconciler.update();
+    ASSERT_TRUE(node->getWrapJustify().has_value() == false);
+    ASSERT_TRUE(node->getAspectRatio() == 1.5f);
+}
