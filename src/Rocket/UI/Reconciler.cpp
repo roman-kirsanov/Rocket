@@ -1,4 +1,3 @@
-#include <stack>
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -13,7 +12,7 @@ namespace Rocket {
 static auto constexpr _contextCapacity = 5;
 static auto constexpr _maxUpdatePasses = 5;
 
-static auto _reconcilerStack = std::stack<Reconciler*>();
+static auto _currentReconciler = static_cast<Reconciler*>(nullptr);
 
 struct _KeySeq {
     std::int64_t type;
@@ -50,11 +49,11 @@ struct Reconciler::_Component {
 static Reconciler& _GetCurrentReconciler() {
     PROFILE
 
-    if (_reconcilerStack.empty()) {
+    if (_currentReconciler == nullptr) {
         throw std::runtime_error("No reconciler is currently updating");
     }
 
-    return *_reconcilerStack.top();
+    return *_currentReconciler;
 }
 
 _ComponentScope::_ComponentScope(std::int64_t type, std::string const& name, std::string const& key) {
@@ -84,6 +83,7 @@ Reconciler::Reconciler()
     , _updateFn(nullptr)
     , _currentComponent(nullptr)
     , _rootComponent(new _Component())
+    , _prevReconciler(nullptr)
     , _isUpdating(false)
     , _keepUpdate(false) {}
 
@@ -93,6 +93,7 @@ Reconciler::Reconciler(ReconcilerUpdateMode updateMode, std::function<void()> co
     , _updateFn(updateFn)
     , _currentComponent(nullptr)
     , _rootComponent(new _Component())
+    , _prevReconciler(nullptr)
     , _isUpdating(false)
     , _keepUpdate(false) {}
 
@@ -410,7 +411,8 @@ void Reconciler::_unmountComponent(_Component* component) {
 void Reconciler::_beginUpdate() {
     PROFILE
 
-    _reconcilerStack.push(this);
+    _prevReconciler = _currentReconciler;
+    _currentReconciler = this;
 
     _rootComponent->revision += 1;
     _rootComponent->nextChildIndex = 0;
@@ -432,14 +434,14 @@ void Reconciler::_endUpdate() {
     _currentComponent = nullptr;
     _unmountComponent(_rootComponent);
 
-    _reconcilerStack.pop();
+    _currentReconciler = _prevReconciler;
 }
 
 void Reconciler::_abortUpdate() {
     PROFILE
 
     _currentComponent = nullptr;
-    _reconcilerStack.pop();
+    _currentReconciler = _prevReconciler;
 }
 
 void SetContextAny(std::type_index const& typeIndex, void* pointer) {

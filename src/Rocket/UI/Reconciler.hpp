@@ -153,6 +153,7 @@ private:
     std::function<void()> _updateFn;
     _Component* _currentComponent;
     _Component* _rootComponent;
+    Reconciler* _prevReconciler;
     bool _isUpdating;
     bool _keepUpdate;
 

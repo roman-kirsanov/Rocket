@@ -782,3 +782,46 @@ TEST(Reconciler, NestedProvidersShadowAndSiblingProvidersKeepState) {
     reconciler.update();
     ASSERT_EQ(seenInts, (std::vector<int>{ 102, 202, 102, 302 }));
 }
+
+TEST(Reconciler, NestedUpdateRestoresTheOuterReconciler) {
+    auto outer = Reconciler();
+    auto inner = Reconciler();
+    auto innerThrows = false;
+    auto outerValue = 7;
+    auto innerValue = 8;
+
+    inner.setUpdateFn([&] {
+        Context(innerValue, [&] {
+            IntRecorder();
+
+            if (innerThrows) {
+                throw std::runtime_error("inner render failed");
+            }
+        });
+    });
+
+    outer.setUpdateFn([&] {
+        Context(outerValue, [&] {
+            IntRecorder();
+
+            try {
+                inner.update();
+            } catch (std::exception const&) {
+            }
+
+            IntRecorder();
+        });
+    });
+
+    seenInts.clear();
+    outer.update();
+    ASSERT_EQ(seenInts, (std::vector<int>{ 701, 801, 701 }));
+
+    innerThrows = true;
+    seenInts.clear();
+    outer.update();
+    ASSERT_EQ(seenInts, (std::vector<int>{ 702, 802, 702 }));
+
+    seenInts.clear();
+    ASSERT_THROW(UseState<int>(), std::runtime_error);
+}
