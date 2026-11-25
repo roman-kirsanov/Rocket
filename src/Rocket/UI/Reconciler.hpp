@@ -203,10 +203,12 @@ void SetContextAny(std::type_index const& typeIndex, void* pointer);
  * Type-erased core of Context: mounts a provider component exposing the value and renders `children` inside it.
  *
  * @param typeIndex The key the context is looked up by.
+ * @param type      The provider's component type id (from GetComponentType).
+ * @param name      The provider's component name.
  * @param pointer   The context value; only the pointer is stored.
  * @param children  The function that renders the descendants that can see the context.
  */
-void ContextAny(std::type_index const& typeIndex, void* pointer, std::function<void()> const& children);
+void ContextAny(std::type_index const& typeIndex, std::int64_t type, std::string const& name, void* pointer, std::function<void()> const& children);
 
 /** Type-erased core of UseState: returns the current component's next state slot (empty on first render). */
 std::any& UseStateAny();
@@ -331,7 +333,10 @@ template<typename Type>
 inline void Context(Type& value, std::function<void()> const& children) {
     PROFILE
 
-    ContextAny(std::type_index(typeid(Type*)), const_cast<void*>(static_cast<void const*>(&value)), children);
+    static auto const name = std::string(typeid(Type*).name());
+    static auto const type = GetComponentType(name);
+
+    ContextAny(std::type_index(typeid(Type*)), type, name, const_cast<void*>(static_cast<void const*>(&value)), children);
 }
 
 template<typename Type, typename... Arguments>

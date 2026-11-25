@@ -195,6 +195,16 @@ static void TypedD() { COMPONENT_NO_KEY typedValues[UseComponentID()] = ++UseSta
 static void TypedE() { COMPONENT_NO_KEY typedValues[UseComponentID()] = ++UseState<int>(0); }
 static void TypedF() { COMPONENT_NO_KEY typedValues[UseComponentID()] = ++UseState<int>(0); }
 
+/* Nested providers. */
+
+static std::vector<int> seenInts;
+
+static void IntRecorder() {
+    COMPONENT_NO_KEY
+
+    seenInts.push_back(UseContext<int>() * 100 + (++UseState<int>(0)));
+}
+
 /* Teardown. */
 
 static void Leaf() {
@@ -740,4 +750,35 @@ TEST(Reconciler, KeylessSiblingsOfManyTypesMatchByOrdinalPerType) {
         { "TypedC0", 3 }, { "TypedD0", 3 }, { "TypedE0", 3 },
         { "TypedF0", 3 }, { "TypedF1", 3 }
     }));
+}
+
+TEST(Reconciler, NestedProvidersShadowAndSiblingProvidersKeepState) {
+    auto reconciler = Reconciler();
+    auto outer = 1;
+    auto inner = 2;
+    auto sibling = 3;
+
+    reconciler.setUpdateFn([&] {
+        Context(outer, [&] {
+            IntRecorder();
+
+            Context(inner, [] {
+                IntRecorder();
+            });
+
+            IntRecorder();
+        });
+
+        Context(sibling, [] {
+            IntRecorder();
+        });
+    });
+
+    seenInts.clear();
+    reconciler.update();
+    ASSERT_EQ(seenInts, (std::vector<int>{ 101, 201, 101, 301 }));
+
+    seenInts.clear();
+    reconciler.update();
+    ASSERT_EQ(seenInts, (std::vector<int>{ 102, 202, 102, 302 }));
 }

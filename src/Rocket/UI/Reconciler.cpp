@@ -448,11 +448,9 @@ void SetContextAny(std::type_index const& typeIndex, void* pointer) {
     _GetCurrentReconciler()._setContext(typeIndex, pointer);
 }
 
-void ContextAny(std::type_index const& typeIndex, void* pointer, std::function<void()> const& children) {
+void ContextAny(std::type_index const& typeIndex, std::int64_t type, std::string const& name, void* pointer, std::function<void()> const& children) {
     PROFILE
 
-    auto name = std::string(typeIndex.name());
-    auto type = GetComponentType(name);
     auto scope = _ComponentScope(type, name, {});
 
     SetContextAny(typeIndex, pointer);
