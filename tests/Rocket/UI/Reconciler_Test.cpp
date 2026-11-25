@@ -184,6 +184,17 @@ static void WrongStateType() {
     }
 }
 
+/* Keyless ordinals per type. */
+
+static std::unordered_map<std::string, int> typedValues;
+
+static void TypedA() { COMPONENT_NO_KEY typedValues[UseComponentID()] = ++UseState<int>(0); }
+static void TypedB() { COMPONENT_NO_KEY typedValues[UseComponentID()] = ++UseState<int>(0); }
+static void TypedC() { COMPONENT_NO_KEY typedValues[UseComponentID()] = ++UseState<int>(0); }
+static void TypedD() { COMPONENT_NO_KEY typedValues[UseComponentID()] = ++UseState<int>(0); }
+static void TypedE() { COMPONENT_NO_KEY typedValues[UseComponentID()] = ++UseState<int>(0); }
+static void TypedF() { COMPONENT_NO_KEY typedValues[UseComponentID()] = ++UseState<int>(0); }
+
 /* Teardown. */
 
 static void Leaf() {
@@ -688,4 +699,45 @@ TEST(Reconciler, StateOfAnotherTypeInTheSameSlotThrows) {
     renderOrdered = false;
     ASSERT_THROW(reconciler.update(), std::runtime_error);
     renderOrdered = true;
+}
+
+TEST(Reconciler, KeylessSiblingsOfManyTypesMatchByOrdinalPerType) {
+    auto reconciler = Reconciler();
+    auto renderFirstA = true;
+
+    reconciler.setUpdateFn([&] {
+        if (renderFirstA) {
+            TypedA();
+        }
+
+        TypedB();
+        TypedA();
+        TypedC();
+        TypedD();
+        TypedB();
+        TypedE();
+        TypedF();
+        TypedA();
+        TypedF();
+    });
+
+    typedValues.clear();
+    reconciler.update();
+    reconciler.update();
+    ASSERT_EQ(typedValues, (std::unordered_map<std::string, int>{
+        { "TypedA0", 2 }, { "TypedA1", 2 }, { "TypedA2", 2 },
+        { "TypedB0", 2 }, { "TypedB1", 2 },
+        { "TypedC0", 2 }, { "TypedD0", 2 }, { "TypedE0", 2 },
+        { "TypedF0", 2 }, { "TypedF1", 2 }
+    }));
+
+    renderFirstA = false;
+    typedValues.clear();
+    reconciler.update();
+    ASSERT_EQ(typedValues, (std::unordered_map<std::string, int>{
+        { "TypedA0", 3 }, { "TypedA1", 3 },
+        { "TypedB0", 3 }, { "TypedB1", 3 },
+        { "TypedC0", 3 }, { "TypedD0", 3 }, { "TypedE0", 3 },
+        { "TypedF0", 3 }, { "TypedF1", 3 }
+    }));
 }

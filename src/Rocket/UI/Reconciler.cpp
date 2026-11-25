@@ -1,4 +1,5 @@
 #include <stack>
+#include <algorithm>
 #include <string>
 #include <vector>
 #include <stdexcept>
@@ -13,6 +14,11 @@ static auto constexpr _contextCapacity = 5;
 static auto constexpr _maxUpdatePasses = 5;
 
 static auto _reconcilerStack = std::stack<Reconciler*>();
+
+struct _KeySeq {
+    std::int64_t type;
+    std::int64_t next;
+};
 
 struct Reconciler::_Context {
     std::type_index typeIndex;
@@ -36,8 +42,8 @@ struct Reconciler::_Component {
     std::int64_t nextChildIndex = 0;
     std::int64_t nextStateIndex = 0;
     std::vector<std::any> state;
+    std::vector<_KeySeq> keySeq;
     std::unordered_set<std::string> usedKeys;
-    std::unordered_map<std::int64_t, std::int64_t> keySeq;
     lyn::inplace_vector<_Context, _contextCapacity> contexts;
 };
 
@@ -259,7 +265,13 @@ void Reconciler::_openComponent(std::int64_t type, std::string const& name, std:
     auto seq = std::int64_t(-1);
 
     if (key.empty()) {
-        seq = _currentComponent->keySeq[type]++;
+        auto entry = std::ranges::find(_currentComponent->keySeq, type, &_KeySeq::type);
+
+        if (entry == _currentComponent->keySeq.end()) {
+            entry = _currentComponent->keySeq.insert(entry, { type, 0 });
+        }
+
+        seq = entry->next++;
     } else {
         auto [ _, inserted ] = _currentComponent->usedKeys.insert(key);
         if (inserted == false) {
@@ -307,11 +319,8 @@ void Reconciler::_openComponent(std::int64_t type, std::string const& name, std:
     component->nextStateIndex = 0;
     component->contexts.clear();
     component->usedKeys.clear();
+    component->keySeq.clear();
     component->expectedNextChild = component->firstChild;
-
-    for (auto& entry : component->keySeq) {
-        entry.second = 0;
-    }
 
     _currentComponent->expectedNextChild = component->nextSibling;
     _currentComponent = component;
