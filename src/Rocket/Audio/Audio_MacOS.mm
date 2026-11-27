@@ -6,12 +6,14 @@
  */
 
 #include <cmath>
+#include <cstddef>
 #include <cstring>
 #include <cassert>
 #include <stdexcept>
 #include <algorithm>
-#include <unistd.h>
+#include <vector>
 #import <AVFoundation/AVFoundation.h>
+#import <AudioToolbox/AudioToolbox.h>
 #include <Rocket/Base/Profile.hpp>
 #include <Rocket/Audio/Audio.hpp>
 
@@ -46,7 +48,118 @@ struct Sound::_Sound {
     void scheduleFrom(bool loop, float from);
 };
 
+struct _AudioBytes {
+    std::uint8_t const* data = nullptr;
+    std::size_t size = 0;
+    ::AudioFileID file = nullptr;
+    ::ExtAudioFileRef reader = nullptr;
+
+    ~_AudioBytes();
+};
+
 static AVAudioEngine* _engine = nil;
+
+_AudioBytes::~_AudioBytes() {
+    if (reader != nullptr) {
+        ::ExtAudioFileDispose(reader);
+    }
+
+    if (file != nullptr) {
+        ::AudioFileClose(file);
+    }
+}
+
+static ::OSStatus _ReadAudioBytes(void* client, ::SInt64 position, ::UInt32 count, void* buffer, ::UInt32* read) {
+    auto const source = static_cast<_AudioBytes const*>(client);
+
+    if (
+        position < 0 ||
+        static_cast<std::size_t>(position) >= source->size
+    ) {
+        *read = 0;
+        return ::noErr;
+    }
+
+    *read = static_cast<::UInt32>(std::min<std::size_t>(count, (source->size - static_cast<std::size_t>(position))));
+    std::memcpy(buffer, (source->data + position), *read);
+
+    return ::noErr;
+}
+
+static ::SInt64 _GetAudioBytesSize(void* client) {
+    return static_cast<::SInt64>(static_cast<_AudioBytes const*>(client)->size);
+}
+
+static AVAudioPCMBuffer* _DecodeAudioBytes(::ExtAudioFileRef reader) {
+    auto fileFormat = ::AudioStreamBasicDescription{};
+    auto propertySize = static_cast<::UInt32>(sizeof(fileFormat));
+
+    if (::ExtAudioFileGetProperty(reader, ::kExtAudioFileProperty_FileDataFormat, &propertySize, &fileFormat) != ::noErr) {
+        throw std::runtime_error("Failed to decode audio: audio data");
+    }
+
+    auto length = ::SInt64(0);
+    propertySize = static_cast<::UInt32>(sizeof(length));
+
+    if (
+        ::ExtAudioFileGetProperty(reader, ::kExtAudioFileProperty_FileLengthFrames, &propertySize, &length) != ::noErr ||
+        length <= 0
+    ) {
+        throw std::runtime_error("Failed to decode audio: audio data");
+    }
+
+    auto format = [[AVAudioFormat alloc]
+        initStandardFormatWithSampleRate: fileFormat.mSampleRate
+                                channels: fileFormat.mChannelsPerFrame];
+
+    if (
+        format == nil ||
+        ::ExtAudioFileSetProperty(reader, ::kExtAudioFileProperty_ClientDataFormat, sizeof(::AudioStreamBasicDescription), format.streamDescription) != ::noErr
+    ) {
+        throw std::runtime_error("Failed to decode audio: audio data");
+    }
+
+    auto buffer = [[AVAudioPCMBuffer alloc]
+        initWithPCMFormat: format
+            frameCapacity: static_cast<::AVAudioFrameCount>(length)];
+
+    assert(buffer != nil);
+
+    auto const channels = format.channelCount;
+    auto list = std::vector<std::uint8_t>(offsetof(::AudioBufferList, mBuffers) + (sizeof(::AudioBuffer) * channels));
+    auto const part = reinterpret_cast<::AudioBufferList*>(list.data());
+    auto done = ::AVAudioFrameCount(0);
+
+    while (done < buffer.frameCapacity) {
+        auto frames = static_cast<::UInt32>(buffer.frameCapacity - done);
+
+        part->mNumberBuffers = channels;
+
+        for (auto channel = ::AVAudioChannelCount(0); channel < channels; channel++) {
+            part->mBuffers[channel].mNumberChannels = 1;
+            part->mBuffers[channel].mDataByteSize = static_cast<::UInt32>(frames * sizeof(float));
+            part->mBuffers[channel].mData = (buffer.floatChannelData[channel] + done);
+        }
+
+        if (::ExtAudioFileRead(reader, &frames, part) != ::noErr) {
+            throw std::runtime_error("Failed to decode audio: audio data");
+        }
+
+        if (frames == 0) {
+            break;
+        }
+
+        done += frames;
+    }
+
+    if (done == 0) {
+        throw std::runtime_error("Failed to decode audio: audio data");
+    }
+
+    buffer.frameLength = done;
+
+    return buffer;
+}
 
 static AVAudioEngine* _Engine() {
     PROFILE
@@ -187,24 +300,21 @@ void Audio::__init(std::string const& path) {
 void Audio::__init(std::uint8_t const* data, std::size_t size) {
     PROFILE
 
-    // AVAudioFile has no in-memory API, so the bytes take a round trip
-    // through a temporary file.
-    auto path = [::NSTemporaryDirectory() stringByAppendingPathComponent:
-        [NSString stringWithFormat: @"rocket-audio-%d-%p.bin", ::getpid(), (void const*)data]];
-    auto contents = [NSData dataWithBytes: data length: size];
+    auto source = _AudioBytes{ .data = data, .size = size };
 
-    if ([contents writeToFile: path atomically: YES] == NO) {
-        throw std::runtime_error("Failed to stage audio data");
+    if (
+        ::AudioFileOpenWithCallbacks(&source, _ReadAudioBytes, nullptr, _GetAudioBytesSize, nullptr, 0, &source.file) != ::noErr &&
+        ::AudioFileOpenWithCallbacks(&source, _ReadAudioBytes, nullptr, _GetAudioBytesSize, nullptr, ::kAudioFileMP3Type, &source.file) != ::noErr
+    ) {
+        throw std::runtime_error("Failed to load audio: audio data");
     }
 
-    try {
-        __init(std::string([path fileSystemRepresentation]));
-    } catch (...) {
-        [[NSFileManager defaultManager] removeItemAtPath: path error: nil];
-        throw;
+    if (::ExtAudioFileWrapAudioFileID(source.file, false, &source.reader) != ::noErr) {
+        throw std::runtime_error("Failed to load audio: audio data");
     }
 
-    [[NSFileManager defaultManager] removeItemAtPath: path error: nil];
+    _impl = new _Audio{};
+    _impl->buffer = _DecodeAudioBytes(source.reader);
 }
 
 void Audio::__done() {

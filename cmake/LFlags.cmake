@@ -14,6 +14,7 @@ block()
     if(APPLE)
         target_link_libraries(Rocket
             PRIVATE
+                "-framework AudioToolbox"
                 "-framework AVFoundation"
                 "-framework Carbon"
                 "-framework Cocoa"
